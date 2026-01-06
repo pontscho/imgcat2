@@ -272,3 +272,49 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 	*out_size = total_size;
 	return true;
 }
+
+target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset)
+{
+	/* Resize factors:
+	 * - RESIZE_FACTOR_X = 1: Horizontal 1:1 (1 pixel per column)
+	 * - RESIZE_FACTOR_Y = 2: Vertical 2:1 (half-block doubles vertical resolution)
+	 */
+	const uint32_t RESIZE_FACTOR_X = 1;
+	const uint32_t RESIZE_FACTOR_Y = 2;
+	const uint32_t MAX_TERMINAL_WIDTH = 1000; /* Prevent excessive memory use */
+
+	/* Initialize result to invalid dimensions */
+	target_dimensions_t result = { 0, 0 };
+
+	/* Validate inputs */
+	if (cols == 0 || rows == 0) {
+		fprintf(stderr, "calculate_target_dimensions: invalid terminal size %u×%u\n", cols, rows);
+		return result;
+	}
+
+	if (top_offset >= rows) {
+		fprintf(stderr, "calculate_target_dimensions: top_offset %u >= rows %u\n", top_offset, rows);
+		return result;
+	}
+
+	/* Calculate target dimensions */
+	uint32_t available_rows = rows - top_offset;
+	uint32_t target_width = cols * RESIZE_FACTOR_X;
+	uint32_t target_height = available_rows * RESIZE_FACTOR_Y;
+
+	/* Clamp width to prevent excessive memory use */
+	if (target_width > MAX_TERMINAL_WIDTH) {
+		target_width = MAX_TERMINAL_WIDTH;
+	}
+
+	/* Validate calculated dimensions */
+	if (target_width == 0 || target_height == 0) {
+		fprintf(stderr, "calculate_target_dimensions: calculated invalid dimensions %u×%u\n", target_width, target_height);
+		return result;
+	}
+
+	/* Return valid dimensions */
+	result.width = target_width;
+	result.height = target_height;
+	return result;
+}

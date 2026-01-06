@@ -68,4 +68,40 @@ bool read_file_secure(const char *path, uint8_t **out_data, size_t *out_size);
  */
 bool read_stdin_secure(uint8_t **out_data, size_t *out_size);
 
+/**
+ * @struct target_dimensions_t
+ * @brief Terminal-aware target dimensions for image scaling
+ */
+typedef struct {
+	uint32_t width; /**< Target width in pixels */
+	uint32_t height; /**< Target height in pixels */
+} target_dimensions_t;
+
+/**
+ * @brief Calculate target dimensions based on terminal size
+ *
+ * Calculates image target dimensions for terminal rendering using
+ * half-block characters (▀ ▄). Takes into account:
+ * - Terminal columns and rows
+ * - Vertical doubling factor (half-block renders 2 pixels per row)
+ * - Top offset for status line/header
+ *
+ * Formula:
+ * - target_width = cols × RESIZE_FACTOR_X (1:1 horizontal)
+ * - target_height = (rows - top_offset) × RESIZE_FACTOR_Y (2:1 vertical)
+ *
+ * @param cols Terminal columns (character width)
+ * @param rows Terminal rows (character height)
+ * @param top_offset Reserved rows at top (e.g., for status line)
+ * @return Target dimensions struct, or {0, 0} on invalid input
+ *
+ * @note Returns {0, 0} if calculated dimensions are invalid
+ * @note Clamps width to maximum 1000 columns to prevent excessive memory use
+ *
+ * @example
+ * target_dimensions_t dims = calculate_target_dimensions(80, 24, 0);
+ * // dims.width = 80, dims.height = 48 (24 * 2)
+ */
+target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset);
+
 #endif /* IMGCAT2_PIPELINE_H */

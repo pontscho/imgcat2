@@ -127,4 +127,71 @@ static inline bool image_set_pixel(image_t *img, uint32_t x, uint32_t y, uint8_t
  */
 bool image_calculate_size(uint32_t width, uint32_t height, size_t *out_size);
 
+/**
+ * @brief Scale image to fit within target dimensions (maintain aspect ratio)
+ *
+ * Scales the image to fit within the specified dimensions while maintaining
+ * the original aspect ratio. The resulting image will be no larger than
+ * target_width × target_height, but may be smaller on one axis.
+ *
+ * @param src Source image to scale
+ * @param target_width Maximum width of scaled image
+ * @param target_height Maximum height of scaled image
+ * @return Scaled image, or NULL on error
+ *
+ * @note Caller must free with image_destroy()
+ * @note Uses high-quality resampling (Mitchell filter for downsampling)
+ * @note Returns NULL if src is NULL or allocation fails
+ */
+image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t target_height);
+
+/**
+ * @brief Scale image to exact dimensions (may distort aspect ratio)
+ *
+ * Scales the image to exactly the specified dimensions, stretching or
+ * squashing the image if necessary. Aspect ratio is not preserved.
+ *
+ * @param src Source image to scale
+ * @param target_width Exact width of scaled image
+ * @param target_height Exact height of scaled image
+ * @return Scaled image, or NULL on error
+ *
+ * @note Caller must free with image_destroy()
+ * @note Uses high-quality resampling
+ * @note Returns NULL if src is NULL or allocation fails
+ */
+image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t target_height);
+
+/**
+ * @brief Convert RGB pixel data to RGBA
+ *
+ * Converts RGB (3 bytes per pixel) to RGBA8888 (4 bytes per pixel) by
+ * adding an opaque alpha channel (255).
+ *
+ * @param rgb Source RGB pixel data (width × height × 3 bytes)
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @return New image_t with RGBA data, or NULL on error
+ *
+ * @note Caller must free with image_destroy()
+ * @note Alpha channel is set to 255 (opaque) for all pixels
+ */
+image_t *convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height);
+
+/**
+ * @brief Convert grayscale pixel data to RGBA
+ *
+ * Converts grayscale (1 byte per pixel) to RGBA8888 (4 bytes per pixel) by
+ * replicating the gray value to R, G, B and setting alpha to 255.
+ *
+ * @param gray Source grayscale pixel data (width × height bytes)
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @return New image_t with RGBA data, or NULL on error
+ *
+ * @note Caller must free with image_destroy()
+ * @note Alpha channel is set to 255 (opaque) for all pixels
+ */
+image_t *convert_grayscale_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height);
+
 #endif /* IMGCAT2_IMAGE_H */
