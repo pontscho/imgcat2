@@ -190,11 +190,12 @@ if(RAW_FOUND)
 	include_directories(${RAW_INCLUDE_DIRS})
 endif()
 
-# Source files (PHASE 1-9 implemented)
+# Source files (PHASE 1-11 implemented)
 set(IMGCAT2_SOURCES
 	# Core module
 	src/imgcat2/core/image.c
 	src/imgcat2/core/pipeline.c
+	src/imgcat2/core/cli.c
 
 	# Decoders module
 	src/imgcat2/decoders/decoder.c
@@ -207,10 +208,6 @@ set(IMGCAT2_SOURCES
 	# ANSI module
 	src/imgcat2/ansi/ansi.c
 	src/imgcat2/ansi/escape.c
-
-	# TODO: Add these files as they are implemented:
-	# - src/imgcat2/core/main.c (PHASE 11)
-	# - src/imgcat2/core/cli.c (PHASE 10)
 )
 
 # Platform-specific terminal module (PHASE 8)
@@ -220,46 +217,59 @@ else()
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_unix.c)
 endif()
 
-# Main library (for now, until main.c is implemented)
+# Main executable
+add_executable(imgcat2 ${IMGCAT2_SOURCES} src/imgcat2/core/main.c)
+
+# Library for tests (without main.c)
 add_library(imgcat2_lib STATIC ${IMGCAT2_SOURCES})
 
-# TODO: Uncomment when main.c is implemented
-# add_executable(imgcat2 ${IMGCAT2_SOURCES})
+# Link libraries for executable
+target_link_libraries(imgcat2 PRIVATE
+	${PNG_LDFLAGS}
+	${ZLIB_LIBRARIES}
+	${JPEG_LIBRARIES}
+)
 
-# Link libraries
+# Link libraries for library
 target_link_libraries(imgcat2_lib PUBLIC
-	${PNG_LIBRARIES}
+	${PNG_LDFLAGS}
 	${ZLIB_LIBRARIES}
 	${JPEG_LIBRARIES}
 )
 
 if(GIF_FOUND)
+	target_link_libraries(imgcat2 PUBLIC ${GIF_LIBRARY})
 	target_link_libraries(imgcat2_lib PUBLIC ${GIF_LIBRARY})
 endif()
 
 if(WEBP_FOUND)
-	target_link_libraries(imgcat2_lib PUBLIC ${WEBP_LIBRARIES})
+	target_link_libraries(imgcat2 PRIVATE ${WEBP_LDFLAGS})
+	target_link_libraries(imgcat2_lib PUBLIC ${WEBP_LDFLAGS})
 endif()
 
 if(HEIF_FOUND)
-	target_link_libraries(imgcat2_lib PUBLIC ${HEIF_LIBRARIES})
+	target_link_libraries(imgcat2 PRIVATE ${HEIF_LDFLAGS})
+	target_link_libraries(imgcat2_lib PUBLIC ${HEIF_LDFLAGS})
 endif()
 
 if(TIFF_FOUND)
+	target_link_libraries(imgcat2 PRIVATE ${TIFF_LIBRARIES})
 	target_link_libraries(imgcat2_lib PUBLIC ${TIFF_LIBRARIES})
 endif()
 
 if(RAW_FOUND)
-	target_link_libraries(imgcat2_lib PUBLIC ${RAW_LIBRARIES})
+	target_link_libraries(imgcat2 PRIVATE ${RAW_LDFLAGS})
+	target_link_libraries(imgcat2_lib PUBLIC ${RAW_LDFLAGS})
 endif()
 
 # Platform-specific libraries
 if(UNIX AND NOT APPLE)
+	target_link_libraries(imgcat2 PUBLIC m)  # Math library
 	target_link_libraries(imgcat2_lib PUBLIC m)  # Math library
 endif()
 
-# Install target (disabled until main executable is built)
-# install(TARGETS imgcat2 DESTINATION bin)
+# Install target
+install(TARGETS imgcat2 DESTINATION bin)
 
 # Testing
 if(BUILD_TESTING)

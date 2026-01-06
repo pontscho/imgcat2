@@ -1,31 +1,71 @@
 /**
  * @file pipeline.c
- * @brief Image processing pipeline - file I/O with security checks
+ * @brief Image processing pipeline - file I/O with security checks and orchestration
  *
- * Handles secure file and stdin reading with path traversal protection
- * and size limit enforcement.
+ * Handles secure file and stdin reading with path traversal protection,
+ * size limit enforcement, and high-level pipeline orchestration.
  */
 
 #include <sys/stat.h>
 
 #include <errno.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "../ansi/ansi.h"
+#include "../ansi/escape.h"
+#include "../decoders/decoder.h"
+#include "../decoders/magic.h"
+#include "../terminal/terminal.h"
+#include "cli.h"
 #include "image.h"
 #include "pipeline.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #define PATH_MAX MAX_PATH
+/* usleep implementation for Windows */
+static void usleep(unsigned int microseconds)
+{
+	Sleep(microseconds / 1000);
+}
 #else
 #include <unistd.h>
 #endif
 
 /** Read chunk size for stdin (4KB) */
 #define STDIN_CHUNK_SIZE 4096
+
+/** Animation running flag for signal handler */
+static volatile sig_atomic_t animation_running = 1;
+
+/**
+ * @brief Signal handler for SIGINT (Ctrl+C)
+ *
+ * Sets animation_running flag to 0 to gracefully exit animation loop.
+ */
+static void signal_handler(int sig)
+{
+	(void)sig;
+	animation_running = 0;
+}
+
+/**
+ * @brief Setup signal handler for SIGINT
+ *
+ * Installs signal handler for Ctrl+C and returns pointer to animation_running flag.
+ *
+ * @return Pointer to animation_running flag
+ */
+static volatile sig_atomic_t *setup_signal_handler(void)
+{
+	animation_running = 1;
+	signal(SIGINT, signal_handler);
+	return &animation_running;
+}
 
 /**
  * @brief Validate file path against path traversal attacks
@@ -317,4 +357,289 @@ target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, ui
 	result.width = target_width;
 	result.height = target_height;
 	return result;
+}
+
+/**
+ * @brief Read input (file or stdin) based on CLI options
+ */
+int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_size)
+{
+	if (opts == NULL || out_data == NULL || out_size == NULL) {
+		fprintf(stderr, "pipeline_read: invalid parameters\n");
+		return -1;
+	}
+
+	bool success;
+	if (opts->input_file != NULL) {
+		/* Read from file */
+		success = read_file_secure(opts->input_file, out_data, out_size);
+	} else {
+		/* Read from stdin */
+		success = read_stdin_secure(out_data, out_size);
+	}
+
+	return success ? 0 : -1;
+}
+
+/**
+ * @brief Decode image with MIME type detection
+ */
+int pipeline_decode(const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count)
+{
+	if (buffer == NULL || out_frames == NULL || out_frame_count == NULL) {
+		fprintf(stderr, "pipeline_decode: invalid parameters\n");
+		return -1;
+	}
+
+	/* Detect MIME type */
+	mime_type_t mime = detect_mime_type(buffer, size);
+	if (mime == MIME_UNKNOWN) {
+		fprintf(stderr, "pipeline_decode: unknown image format\n");
+		return -1;
+	}
+
+	/* Decode with registry */
+	image_t **frames = decoder_decode(buffer, size, mime, out_frame_count);
+	if (frames == NULL || *out_frame_count <= 0) {
+		fprintf(stderr, "pipeline_decode: failed to decode image\n");
+		return -1;
+	}
+
+	*out_frames = frames;
+	return 0;
+}
+
+/**
+ * @brief Scale images to terminal dimensions
+ */
+int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts, image_t ***out_scaled)
+{
+	if (frames == NULL || frame_count <= 0 || opts == NULL || out_scaled == NULL) {
+		fprintf(stderr, "pipeline_scale: invalid parameters\n");
+		return -1;
+	}
+
+	/* Get terminal size */
+	int rows, cols;
+	if (terminal_get_size(&rows, &cols) != 0) {
+		fprintf(stderr, "pipeline_scale: failed to get terminal size, using defaults\n");
+		rows = DEFAULT_TERM_ROWS;
+		cols = DEFAULT_TERM_COLS;
+	}
+
+	/* Calculate target dimensions */
+	target_dimensions_t target = calculate_target_dimensions(cols, rows, opts->top_offset);
+	if (target.width == 0 || target.height == 0) {
+		fprintf(stderr, "pipeline_scale: invalid target dimensions\n");
+		return -1;
+	}
+
+	/* Allocate scaled frames array */
+	image_t **scaled = malloc(sizeof(image_t *) * frame_count);
+	if (scaled == NULL) {
+		fprintf(stderr, "pipeline_scale: failed to allocate scaled frames array\n");
+		return -1;
+	}
+
+	/* Scale each frame */
+	for (int i = 0; i < frame_count; i++) {
+		image_t *scaled_frame;
+		if (opts->fit_mode) {
+			scaled_frame = image_scale_fit(frames[i], target.width, target.height);
+		} else {
+			scaled_frame = image_scale_resize(frames[i], target.width, target.height);
+		}
+
+		if (scaled_frame == NULL) {
+			fprintf(stderr, "pipeline_scale: failed to scale frame %d\n", i);
+			/* Free previously scaled frames */
+			for (int j = 0; j < i; j++) {
+				image_destroy(scaled[j]);
+			}
+			free(scaled);
+			return -1;
+		}
+
+		scaled[i] = scaled_frame;
+	}
+
+	*out_scaled = scaled;
+	return 0;
+}
+
+/**
+ * @brief Render single static frame
+ *
+ * Renders a single frame to the terminal with cursor control.
+ *
+ * @param frame Image frame to render
+ * @return 0 on success, -1 on error
+ */
+static int render_static_frame(image_t *frame)
+{
+	if (frame == NULL) {
+		fprintf(stderr, "render_static_frame: invalid frame\n");
+		return -1;
+	}
+
+	/* Generate ANSI escape sequences */
+	size_t line_count;
+	char **lines = generate_frame_ansi(frame, &line_count);
+	if (lines == NULL) {
+		fprintf(stderr, "render_static_frame: failed to generate ANSI\n");
+		return -1;
+	}
+
+	/* Hide cursor for cleaner output */
+	ansi_cursor_hide();
+
+	/* Print newline before image */
+	printf("\n");
+
+	/* Output lines to stdout */
+	for (size_t i = 0; i < line_count; i++) {
+		printf("%s", lines[i]);
+	}
+
+	/* Show cursor and reset */
+	ansi_cursor_show();
+	ansi_reset();
+
+	/* Cleanup */
+	free_frame_lines(lines, line_count);
+	return 0;
+}
+
+/**
+ * @brief Render animated frames with loop
+ *
+ * Renders multiple frames in a loop with timing control.
+ * Supports Ctrl+C for graceful exit.
+ *
+ * @param frames Array of frames to render
+ * @param frame_count Number of frames
+ * @param opts CLI options (fps, silent)
+ * @return 0 on success, -1 on error
+ */
+static int render_animated(image_t **frames, int frame_count, const cli_options_t *opts)
+{
+	if (frames == NULL || frame_count <= 0 || opts == NULL) {
+		fprintf(stderr, "render_animated: invalid parameters\n");
+		return -1;
+	}
+
+	/* Setup signal handler for Ctrl+C */
+	volatile sig_atomic_t *running = setup_signal_handler();
+
+	/* Pre-generate all frame ANSI sequences */
+	char ***all_lines = malloc(sizeof(char **) * frame_count);
+	size_t *all_line_counts = malloc(sizeof(size_t) * frame_count);
+	if (all_lines == NULL || all_line_counts == NULL) {
+		fprintf(stderr, "render_animated: failed to allocate frame arrays\n");
+		free(all_lines);
+		free(all_line_counts);
+		return -1;
+	}
+
+	/* Generate ANSI for each frame */
+	for (int i = 0; i < frame_count; i++) {
+		all_lines[i] = generate_frame_ansi(frames[i], &all_line_counts[i]);
+		if (all_lines[i] == NULL) {
+			fprintf(stderr, "render_animated: failed to generate ANSI for frame %d\n", i);
+			/* Free previously generated frames */
+			for (int j = 0; j < i; j++) {
+				free_frame_lines(all_lines[j], all_line_counts[j]);
+			}
+			free(all_lines);
+			free(all_line_counts);
+			return -1;
+		}
+	}
+
+	/* Calculate frame delay in microseconds */
+	unsigned int usleep_duration = 1000000 / opts->fps;
+
+	/* Get frame height for cursor positioning */
+	size_t frame_height = all_line_counts[0];
+
+	/* Hide cursor and disable echo */
+	ansi_cursor_hide();
+	void *echo_state = terminal_disable_echo();
+
+	/* Print newline before animation */
+	printf("\n");
+
+	/* Animation loop */
+	bool first_iteration = true;
+	while (*running) {
+		for (int frame_idx = 0; frame_idx < frame_count; frame_idx++) {
+			/* Check running flag */
+			if (!*running) {
+				break;
+			}
+
+			/* Move cursor up if not first iteration */
+			if (!first_iteration) {
+				ansi_cursor_up(frame_height + (opts->silent ? 0 : 1));
+			}
+
+			/* Print frame lines */
+			for (size_t line_idx = 0; line_idx < all_line_counts[frame_idx]; line_idx++) {
+				printf("%s", all_lines[frame_idx][line_idx]);
+			}
+
+			/* Print control message if not silent */
+			if (!opts->silent) {
+				printf("Press Ctrl+C to exit\n");
+			}
+
+			/* Flush output */
+			fflush(stdout);
+
+			/* Wait for next frame */
+			usleep(usleep_duration);
+
+			first_iteration = false;
+		}
+	}
+
+	/* Show cursor, enable echo, reset */
+	ansi_cursor_show();
+	terminal_enable_echo(echo_state);
+	ansi_reset();
+
+	/* Print newline after animation */
+	printf("\n");
+
+	/* Cleanup all generated frames */
+	for (int i = 0; i < frame_count; i++) {
+		free_frame_lines(all_lines[i], all_line_counts[i]);
+	}
+	free(all_lines);
+	free(all_line_counts);
+
+	return 0;
+}
+
+/**
+ * @brief Render frames to terminal
+ */
+int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts)
+{
+	if (frames == NULL || frame_count <= 0 || opts == NULL) {
+		fprintf(stderr, "pipeline_render: invalid parameters\n");
+		return -1;
+	}
+
+	/* Dispatch to static or animated rendering */
+	if (frame_count == 1) {
+		/* Single frame - always render as static */
+		return render_static_frame(frames[0]);
+	} else if (opts->animate) {
+		/* Multiple frames and animation requested */
+		return render_animated(frames, frame_count, opts);
+	} else {
+		/* Multiple frames but no animation - show first frame only */
+		return render_static_frame(frames[0]);
+	}
 }

@@ -207,6 +207,58 @@ image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
 }
 
 /**
+ * @brief Compose GIF frame onto accumulator canvas
+ *
+ * Composites a single GIF frame onto the accumulator canvas.
+ * Handles transparency: pixels with alpha >= 128 overwrite accumulator,
+ * transparent pixels (alpha < 128) leave accumulator unchanged.
+ *
+ * @param accumulator Accumulator canvas (modified in-place)
+ * @param raster Frame raster data (indexed pixels)
+ * @param color_map Color map for frame
+ * @param transparent_color Transparent color index (-1 if none)
+ * @param img_left Frame left offset on canvas
+ * @param img_top Frame top offset on canvas
+ * @param img_width Frame width
+ * @param img_height Frame height
+ * @param canvas_width Canvas width (for bounds checking)
+ * @param canvas_height Canvas height (for bounds checking)
+ */
+static void frame_composition(
+    image_t *accumulator, const GifByteType *raster, const ColorMapObject *color_map, int transparent_color, uint32_t img_left, uint32_t img_top, uint32_t img_width, uint32_t img_height,
+    uint32_t canvas_width, uint32_t canvas_height
+)
+{
+	if (accumulator == NULL || raster == NULL || color_map == NULL) {
+		return;
+	}
+
+	for (uint32_t y = 0; y < img_height; y++) {
+		for (uint32_t x = 0; x < img_width; x++) {
+			int index = raster[y * img_width + x];
+
+			// Skip transparent pixels (don't overwrite accumulator)
+			if (index == transparent_color) {
+				continue;
+			}
+
+			uint8_t rgba[4];
+			gif_index_to_rgba(color_map, index, transparent_color, rgba);
+
+			// Only composite if alpha >= 128 (opaque enough)
+			if (rgba[3] >= 128) {
+				// Composite onto accumulator (bounds check)
+				uint32_t canvas_x = img_left + x;
+				uint32_t canvas_y = img_top + y;
+				if (canvas_x < canvas_width && canvas_y < canvas_height) {
+					image_set_pixel(accumulator, canvas_x, canvas_y, rgba[0], rgba[1], rgba[2], rgba[3]);
+				}
+			}
+		}
+	}
+}
+
+/**
  * @brief Decode animated GIF with all frames
  *
  * Decodes all frames of an animated GIF with proper frame composition.
@@ -342,26 +394,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 		uint32_t img_width = desc->Width;
 		uint32_t img_height = desc->Height;
 
-		for (uint32_t y = 0; y < img_height; y++) {
-			for (uint32_t x = 0; x < img_width; x++) {
-				int index = raster[y * img_width + x];
-
-				// Skip transparent pixels (don't overwrite accumulator)
-				if (index == transparent_color) {
-					continue;
-				}
-
-				uint8_t rgba[4];
-				gif_index_to_rgba(color_map, index, transparent_color, rgba);
-
-				// Composite onto accumulator (bounds check)
-				uint32_t canvas_x = img_left + x;
-				uint32_t canvas_y = img_top + y;
-				if (canvas_x < canvas_width && canvas_y < canvas_height) {
-					image_set_pixel(accumulator, canvas_x, canvas_y, rgba[0], rgba[1], rgba[2], rgba[3]);
-				}
-			}
-		}
+		frame_composition(accumulator, raster, color_map, transparent_color, img_left, img_top, img_width, img_height, canvas_width, canvas_height);
 
 		// Copy composed frame to output
 		frames[frame_idx] = image_create(canvas_width, canvas_height);

@@ -1,9 +1,10 @@
 /**
  * @file pipeline.h
- * @brief Image processing pipeline API - secure file I/O
+ * @brief Image processing pipeline API - secure file I/O and orchestration
  *
  * Provides secure file and stdin reading with path traversal protection,
- * size limit enforcement, and safe memory management.
+ * size limit enforcement, safe memory management, and high-level pipeline
+ * orchestration functions for reading, decoding, scaling, and rendering.
  */
 
 #ifndef IMGCAT2_PIPELINE_H
@@ -12,6 +13,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#include "cli.h"
+#include "image.h"
 
 /**
  * @brief Read file with path traversal protection and size limits
@@ -103,5 +107,59 @@ typedef struct {
  * // dims.width = 80, dims.height = 48 (24 * 2)
  */
 target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset);
+
+/**
+ * @brief Read input (file or stdin) based on CLI options
+ *
+ * Dispatches to read_file_secure() or read_stdin_secure() based on
+ * opts->input_file value.
+ *
+ * @param opts CLI options structure
+ * @param out_data Output parameter for file data (caller must free)
+ * @param out_size Output parameter for data size
+ * @return 0 on success, -1 on error
+ */
+int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_size);
+
+/**
+ * @brief Decode image with MIME type detection
+ *
+ * Detects image format using magic bytes and decodes using appropriate
+ * decoder from registry.
+ *
+ * @param buffer Input data buffer
+ * @param size Input data size
+ * @param out_frames Output parameter for decoded frames array (caller must free)
+ * @param out_frame_count Output parameter for frame count
+ * @return 0 on success, -1 on error
+ */
+int pipeline_decode(const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count);
+
+/**
+ * @brief Scale images to terminal dimensions
+ *
+ * Scales all frames to fit terminal size based on CLI options.
+ * Uses terminal_get_size() and calculate_target_dimensions().
+ *
+ * @param frames Input frames array
+ * @param frame_count Number of frames
+ * @param opts CLI options (fit_mode, top_offset)
+ * @param out_scaled Output parameter for scaled frames array (caller must free)
+ * @return 0 on success, -1 on error
+ */
+int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts, image_t ***out_scaled);
+
+/**
+ * @brief Render frames to terminal
+ *
+ * Renders frames to terminal. Dispatches to static or animated rendering
+ * based on frame count and CLI options.
+ *
+ * @param frames Scaled frames array
+ * @param frame_count Number of frames
+ * @param opts CLI options (animate, fps)
+ * @return 0 on success, -1 on error
+ */
+int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts);
 
 #endif /* IMGCAT2_PIPELINE_H */
