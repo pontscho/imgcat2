@@ -78,29 +78,34 @@ else()
 	set(ZLIB_INCLUDE_DIRS ${ZLIB_NG_INCLUDE_DIRS})
 endif()
 
-# libjpeg-turbo (preferred) or libjpeg
+# libjpeg-turbo (preferred) or libjpeg (REQUIRED)
 pkg_check_modules(JPEG libjpeg-turbo)
 if(NOT JPEG_FOUND)
-	find_package(JPEG REQUIRED)
-	set(JPEG_LIBRARIES ${JPEG_LIBRARIES})
-	set(JPEG_INCLUDE_DIRS ${JPEG_INCLUDE_DIRS})
-else()
-	set(JPEG_LIBRARIES ${JPEG_LIBRARIES})
-	set(JPEG_INCLUDE_DIRS ${JPEG_INCLUDE_DIRS})
+	find_package(JPEG)
 endif()
 
-# libpng (required)
-pkg_check_modules(PNG REQUIRED libpng16)
-if(NOT PNG_FOUND)
-	pkg_check_modules(PNG REQUIRED libpng)
+if(NOT JPEG_FOUND)
+	message(FATAL_ERROR "libjpeg or libjpeg-turbo is required but not found")
 endif()
+add_definitions(-DHAVE_LIBJPEG)
+
+# libpng (REQUIRED)
+pkg_check_modules(PNG libpng16)
+if(NOT PNG_FOUND)
+	pkg_check_modules(PNG libpng)
+endif()
+
+if(NOT PNG_FOUND)
+	message(FATAL_ERROR "libpng is required but not found")
+endif()
+add_definitions(-DHAVE_LIBPNG)
 
 # giflib (optional)
 if(ENABLE_GIF)
 	find_library(GIF_LIBRARY NAMES gif)
 	find_path(GIF_INCLUDE_DIR gif_lib.h)
 	if(GIF_LIBRARY AND GIF_INCLUDE_DIR)
-		add_definitions(-DENABLE_GIF)
+		add_definitions(-DHAVE_GIFLIB)
 		set(GIF_FOUND TRUE)
 	else()
 		message(WARNING "giflib not found, GIF support disabled")
@@ -195,13 +200,13 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder.c
 	src/imgcat2/decoders/magic.c
 	src/imgcat2/decoders/decoder_stb.c
+	src/imgcat2/decoders/decoder_png.c
+	src/imgcat2/decoders/decoder_jpeg.c
+	src/imgcat2/decoders/decoder_gif.c
 
 	# TODO: Add these files as they are implemented:
 	# - src/imgcat2/core/main.c (PHASE 11)
 	# - src/imgcat2/core/cli.c (PHASE 10)
-	# - src/imgcat2/decoders/decoder_png.c (PHASE 6)
-	# - src/imgcat2/decoders/decoder_jpeg.c (PHASE 6)
-	# - src/imgcat2/decoders/decoder_gif.c (PHASE 6)
 	# - src/imgcat2/ansi/ansi.c (PHASE 9)
 	# - src/imgcat2/ansi/escape.c (PHASE 9)
 	# - src/imgcat2/terminal/terminal_unix.c (PHASE 8)
