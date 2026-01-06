@@ -151,6 +151,12 @@ IncludeCategories:
   - Regex: '^<[^/].*\.h'
     Priority: 6
     SortPriority: 60
+  - Regex: '^<jpeglib\.h>'
+    Priority: 7
+    SortPriority: 65
+  - Regex: '^<png\.h>'
+    Priority: 7
+    SortPriority: 65
   - Regex: 'poluah-internal.h'
     Priority: 7
     SortPriority: 70
