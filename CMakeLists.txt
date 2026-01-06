@@ -1,0 +1,283 @@
+cmake_minimum_required(VERSION 3.15)
+project(imgcat2 VERSION 1.0.0 LANGUAGES C)
+
+# Set default build type to RelWithDebInfo if not specified
+if(NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Choose the type of build (Debug, Release, RelWithDebInfo, MinSizeRel)" FORCE)
+endif()
+
+# Export compile_commands.json for clang-tidy
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)  # GNU extensions for gnu11
+
+# Build options
+option(ENABLE_GIF "Enable GIF support (giflib)" ON)
+option(ENABLE_WEBP "Enable WebP support" ON)
+option(ENABLE_HEIF "Enable HEIF support" ON)
+option(ENABLE_TIFF "Enable TIFF support" ON)
+option(ENABLE_RAW "Enable RAW support (libraw)" ON)
+option(BUILD_TESTING "Build tests" ON)
+option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" ON)
+option(ENABLE_CLANG_FORMAT "Enable clang-format code formatting" ON)
+
+# Static linking preference
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+
+# clang-tidy detection
+if(ENABLE_CLANG_TIDY)
+	find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+	if(CLANG_TIDY_EXE)
+		set(CMAKE_C_CLANG_TIDY "${CLANG_TIDY_EXE}")
+		message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
+	else()
+		message(STATUS "clang-tidy not found, static analysis disabled")
+		set(ENABLE_CLANG_TIDY OFF)
+	endif()
+endif()
+
+# clang-format detection
+if(ENABLE_CLANG_FORMAT)
+	find_program(CLANG_FORMAT_EXE NAMES clang-format)
+	if(CLANG_FORMAT_EXE)
+		message(STATUS "clang-format found: ${CLANG_FORMAT_EXE}")
+	else()
+		message(STATUS "clang-format not found, code formatting disabled")
+		set(ENABLE_CLANG_FORMAT OFF)
+	endif()
+endif()
+
+# Compiler flags
+add_compile_options(-Wall -Wextra -Werror -O2 -g)
+
+# Stack size linker flags
+if(UNIX AND NOT APPLE)
+	# Linux
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,stack-size=8388608")
+elseif(APPLE)
+	# macOS
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-stack_size,0x800000")
+elseif(WIN32)
+	# Windows
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8388608")
+endif()
+
+# pkg-config
+find_package(PkgConfig REQUIRED)
+
+# zlib-ng (preferred) or zlib
+pkg_check_modules(ZLIB_NG zlib-ng)
+if(NOT ZLIB_NG_FOUND)
+	find_package(ZLIB REQUIRED)
+	set(ZLIB_LIBRARIES ${ZLIB_LIBRARIES})
+	set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS})
+else()
+	set(ZLIB_LIBRARIES ${ZLIB_NG_LIBRARIES})
+	set(ZLIB_INCLUDE_DIRS ${ZLIB_NG_INCLUDE_DIRS})
+endif()
+
+# libjpeg-turbo (preferred) or libjpeg
+pkg_check_modules(JPEG libjpeg-turbo)
+if(NOT JPEG_FOUND)
+	find_package(JPEG REQUIRED)
+	set(JPEG_LIBRARIES ${JPEG_LIBRARIES})
+	set(JPEG_INCLUDE_DIRS ${JPEG_INCLUDE_DIRS})
+else()
+	set(JPEG_LIBRARIES ${JPEG_LIBRARIES})
+	set(JPEG_INCLUDE_DIRS ${JPEG_INCLUDE_DIRS})
+endif()
+
+# libpng (required)
+pkg_check_modules(PNG REQUIRED libpng16)
+if(NOT PNG_FOUND)
+	pkg_check_modules(PNG REQUIRED libpng)
+endif()
+
+# giflib (optional)
+if(ENABLE_GIF)
+	find_library(GIF_LIBRARY NAMES gif)
+	find_path(GIF_INCLUDE_DIR gif_lib.h)
+	if(GIF_LIBRARY AND GIF_INCLUDE_DIR)
+		add_definitions(-DENABLE_GIF)
+		set(GIF_FOUND TRUE)
+	else()
+		message(WARNING "giflib not found, GIF support disabled")
+		set(GIF_FOUND FALSE)
+		set(ENABLE_GIF OFF)
+	endif()
+endif()
+
+# WebP (optional)
+if(ENABLE_WEBP)
+	pkg_check_modules(WEBP libwebp)
+	if(WEBP_FOUND)
+		add_definitions(-DENABLE_WEBP)
+	else()
+		message(WARNING "libwebp not found, WebP support disabled")
+		set(ENABLE_WEBP OFF)
+	endif()
+endif()
+
+# HEIF (optional)
+if(ENABLE_HEIF)
+	pkg_check_modules(HEIF libheif)
+	if(HEIF_FOUND)
+		add_definitions(-DENABLE_HEIF)
+	else()
+		message(WARNING "libheif not found, HEIF support disabled")
+		set(ENABLE_HEIF OFF)
+	endif()
+endif()
+
+# TIFF (optional)
+if(ENABLE_TIFF)
+	find_package(TIFF)
+	if(TIFF_FOUND)
+		add_definitions(-DENABLE_TIFF)
+	else()
+		message(WARNING "libtiff not found, TIFF support disabled")
+		set(ENABLE_TIFF OFF)
+	endif()
+endif()
+
+# RAW (optional)
+if(ENABLE_RAW)
+	pkg_check_modules(RAW libraw)
+	if(RAW_FOUND)
+		add_definitions(-DENABLE_RAW)
+	else()
+		message(WARNING "libraw not found, RAW support disabled")
+		set(ENABLE_RAW OFF)
+	endif()
+endif()
+
+# STB headers (vendored)
+set(STB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/stb)
+
+# Add include directories
+include_directories(
+	${CMAKE_SOURCE_DIR}/src
+	${STB_INCLUDE_DIR}
+	${PNG_INCLUDE_DIRS}
+	${ZLIB_INCLUDE_DIRS}
+	${JPEG_INCLUDE_DIRS}
+)
+
+if(GIF_FOUND)
+	include_directories(${GIF_INCLUDE_DIR})
+endif()
+
+if(WEBP_FOUND)
+	include_directories(${WEBP_INCLUDE_DIRS})
+endif()
+
+if(HEIF_FOUND)
+	include_directories(${HEIF_INCLUDE_DIRS})
+endif()
+
+if(TIFF_FOUND)
+	include_directories(${TIFF_INCLUDE_DIRS})
+endif()
+
+if(RAW_FOUND)
+	include_directories(${RAW_INCLUDE_DIRS})
+endif()
+
+# Source files (PHASE 1-5 implemented)
+set(IMGCAT2_SOURCES
+	# Core module
+	src/imgcat2/core/image.c
+	src/imgcat2/core/pipeline.c
+
+	# Decoders module
+	src/imgcat2/decoders/decoder.c
+	src/imgcat2/decoders/magic.c
+	src/imgcat2/decoders/decoder_stb.c
+
+	# TODO: Add these files as they are implemented:
+	# - src/imgcat2/core/main.c (PHASE 11)
+	# - src/imgcat2/core/cli.c (PHASE 10)
+	# - src/imgcat2/decoders/decoder_png.c (PHASE 6)
+	# - src/imgcat2/decoders/decoder_jpeg.c (PHASE 6)
+	# - src/imgcat2/decoders/decoder_gif.c (PHASE 6)
+	# - src/imgcat2/ansi/ansi.c (PHASE 9)
+	# - src/imgcat2/ansi/escape.c (PHASE 9)
+	# - src/imgcat2/terminal/terminal_unix.c (PHASE 8)
+	# - src/imgcat2/terminal/terminal_windows.c (PHASE 8)
+)
+
+# Main library (for now, until main.c is implemented)
+add_library(imgcat2_lib STATIC ${IMGCAT2_SOURCES})
+
+# TODO: Uncomment when main.c is implemented
+# add_executable(imgcat2 ${IMGCAT2_SOURCES})
+
+# Link libraries
+target_link_libraries(imgcat2_lib PUBLIC
+	${PNG_LIBRARIES}
+	${ZLIB_LIBRARIES}
+	${JPEG_LIBRARIES}
+)
+
+if(GIF_FOUND)
+	target_link_libraries(imgcat2_lib PUBLIC ${GIF_LIBRARY})
+endif()
+
+if(WEBP_FOUND)
+	target_link_libraries(imgcat2_lib PUBLIC ${WEBP_LIBRARIES})
+endif()
+
+if(HEIF_FOUND)
+	target_link_libraries(imgcat2_lib PUBLIC ${HEIF_LIBRARIES})
+endif()
+
+if(TIFF_FOUND)
+	target_link_libraries(imgcat2_lib PUBLIC ${TIFF_LIBRARIES})
+endif()
+
+if(RAW_FOUND)
+	target_link_libraries(imgcat2_lib PUBLIC ${RAW_LIBRARIES})
+endif()
+
+# Platform-specific libraries
+if(UNIX AND NOT APPLE)
+	target_link_libraries(imgcat2_lib PUBLIC m)  # Math library
+endif()
+
+# Install target (disabled until main executable is built)
+# install(TARGETS imgcat2 DESTINATION bin)
+
+# Testing
+if(BUILD_TESTING)
+	enable_testing()
+	add_subdirectory(src/tests)
+endif()
+
+# Print configuration summary
+message(STATUS "")
+message(STATUS "imgcat2 Configuration Summary")
+message(STATUS "============================")
+message(STATUS "Version: ${PROJECT_VERSION}")
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C compiler: ${CMAKE_C_COMPILER}")
+message(STATUS "C standard: C${CMAKE_C_STANDARD}")
+message(STATUS "")
+message(STATUS "Core Dependencies (required):")
+message(STATUS "  libpng: ${PNG_LIBRARIES}")
+message(STATUS "  zlib: ${ZLIB_LIBRARIES}")
+message(STATUS "  libjpeg: ${JPEG_LIBRARIES}")
+message(STATUS "")
+message(STATUS "Optional Format Support:")
+message(STATUS "  GIF:  ${ENABLE_GIF}")
+message(STATUS "  WebP: ${ENABLE_WEBP}")
+message(STATUS "  HEIF: ${ENABLE_HEIF}")
+message(STATUS "  TIFF: ${ENABLE_TIFF}")
+message(STATUS "  RAW:  ${ENABLE_RAW}")
+message(STATUS "")
+message(STATUS "Other Options:")
+message(STATUS "  Testing: ${BUILD_TESTING}")
+message(STATUS "  clang-tidy: ${ENABLE_CLANG_TIDY}")
+message(STATUS "  clang-format: ${ENABLE_CLANG_FORMAT}")
+message(STATUS "")
