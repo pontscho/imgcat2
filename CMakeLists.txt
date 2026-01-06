@@ -190,7 +190,7 @@ if(RAW_FOUND)
 	include_directories(${RAW_INCLUDE_DIRS})
 endif()
 
-# Source files (PHASE 1-5 implemented)
+# Source files (PHASE 1-9 implemented)
 set(IMGCAT2_SOURCES
 	# Core module
 	src/imgcat2/core/image.c
@@ -204,14 +204,21 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_jpeg.c
 	src/imgcat2/decoders/decoder_gif.c
 
+	# ANSI module
+	src/imgcat2/ansi/ansi.c
+	src/imgcat2/ansi/escape.c
+
 	# TODO: Add these files as they are implemented:
 	# - src/imgcat2/core/main.c (PHASE 11)
 	# - src/imgcat2/core/cli.c (PHASE 10)
-	# - src/imgcat2/ansi/ansi.c (PHASE 9)
-	# - src/imgcat2/ansi/escape.c (PHASE 9)
-	# - src/imgcat2/terminal/terminal_unix.c (PHASE 8)
-	# - src/imgcat2/terminal/terminal_windows.c (PHASE 8)
 )
+
+# Platform-specific terminal module (PHASE 8)
+if(WIN32)
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_windows.c)
+else()
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_unix.c)
+endif()
 
 # Main library (for now, until main.c is implemented)
 add_library(imgcat2_lib STATIC ${IMGCAT2_SOURCES})
