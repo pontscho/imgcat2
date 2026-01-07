@@ -1,14 +1,24 @@
 BasedOnStyle: LLVM
 
-ColumnLimit: 200
+ColumnLimit: 270
 InsertBraces: true
 InsertNewlineAtEOF: true
-#InsertTrailingCommas: true
+InsertTrailingCommas: Wrapped
 
 LineEnding: LF
 
 UseTab: ForIndentation
-BreakBeforeBraces: Linux
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: true
+  AfterStruct: false
+  AfterUnion: false
+  BeforeElse: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
 AlignConsecutiveMacros: AcrossEmptyLines
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
@@ -16,8 +26,10 @@ AlignEscapedNewlines: Left
 AlignOperands: false
 AlignTrailingComments: false
 AlignArrayOfStructures: Left
-AllowAllArgumentsOnNextLine: true
+AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
+BinPackArguments: false
+BinPackParameters: false
 AllowShortBlocksOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortEnumsOnASingleLine: false
@@ -30,7 +42,8 @@ AlwaysBreakTemplateDeclarations: MultiLine
 IndentCaseLabels: true
 IndentCaseBlocks: true
 IndentGotoLabels: false
-AlignAfterOpenBracket: BlockIndent
+AlignAfterOpenBracket: AlwaysBreak
+PackConstructorInitializers: Never
 SpacesBeforeTrailingComments: 1
 Cpp11BracedListStyle: false
 SpacesInContainerLiterals: true
