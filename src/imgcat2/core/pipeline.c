@@ -577,11 +577,15 @@ static int render_static_frame(image_t *frame)
 	ansi_cursor_hide();
 
 	/* Print newline before image */
-	write(STDOUT_FILENO, "\n", 1);
+	if (write(STDOUT_FILENO, "\n", 1) < 0) {
+		return -1;
+	}
 
 	/* Output lines to stdout */
 	for (size_t i = 0; i < line_count; i++) {
-		write(STDOUT_FILENO, lines[i], strlen(lines[i]));
+		if (write(STDOUT_FILENO, lines[i], strlen(lines[i])) < 0) {
+			return -1;
+		}
 	}
 
 	/* Show cursor and reset */

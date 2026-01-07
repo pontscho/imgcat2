@@ -312,7 +312,7 @@ void CTEST_LOG(const char *fmt, ...)
 	msg_end();
 }
 
-CTEST_IMPL_DIAG_PUSH_IGNORED(missing - noreturn)
+CTEST_IMPL_DIAG_PUSH_IGNORED(missing-noreturn)
 
 void CTEST_ERR(const char *fmt, ...)
 {

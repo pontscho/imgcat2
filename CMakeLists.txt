@@ -50,7 +50,7 @@ if(ENABLE_CLANG_FORMAT)
 endif()
 
 # Compiler flags
-add_compile_options(-Wall -Wextra -Werror -O2 -g)
+add_compile_options(-Wall -Wextra -Werror -Wno-error=unused-but-set-variable -O3 -g)
 
 # Stack size linker flags
 if(UNIX AND NOT APPLE)
@@ -203,12 +203,15 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_stb.c
 	src/imgcat2/decoders/decoder_png.c
 	src/imgcat2/decoders/decoder_jpeg.c
-	src/imgcat2/decoders/decoder_gif.c
 
 	# ANSI module
 	src/imgcat2/ansi/ansi.c
 	src/imgcat2/ansi/escape.c
 )
+
+if(GIF_FOUND)
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_gif.c)
+endif()
 
 # Platform-specific terminal module (PHASE 8)
 if(WIN32)

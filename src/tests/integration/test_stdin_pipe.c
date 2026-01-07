@@ -112,10 +112,10 @@ CTEST(integration, stdin_size_limit)
 CTEST(integration, stdin_empty_input)
 {
 	/* Empty buffer should be rejected by pipeline */
-	uint8_t *empty_data = malloc(1);
-	size_t size = 0;
-
+	uint8_t *empty_data = calloc(1, sizeof(uint8_t));
 	ASSERT_NOT_NULL(empty_data);
+
+	size_t size = 0;
 
 	/* pipeline_decode should fail with empty data */
 	image_t **frames = NULL;

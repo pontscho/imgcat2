@@ -67,7 +67,7 @@ CTEST(integration, animation_fps_validation)
 CTEST(integration, animation_multi_frame_array)
 {
 	/* Simulate 3-frame animation */
-	image_t **frames = malloc(3 * sizeof(image_t *));
+	image_t **frames = calloc(3, sizeof(image_t *));
 	ASSERT_NOT_NULL(frames);
 
 	/* Create 3 frames */
