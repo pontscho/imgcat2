@@ -11,10 +11,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../terminal/terminal.h"
 #include "cli.h"
 
 /** Project version from CMake */
 #define VERSION_STRING "1.0.0"
+
+/** Resize factors (must match pipeline.c) */
+#define RESIZE_FACTOR_X 1
+#define RESIZE_FACTOR_Y 2
 
 /**
  * @brief Print usage help message
@@ -33,6 +38,11 @@ void print_usage(const char *program_name)
 	printf("                            Available: lanczos, bilinear, nearest, cubic\n");
 	printf("  -f, --fit                 Fit image to terminal (maintain aspect ratio, default)\n");
 	printf("  -r, --resize              Resize to exact terminal dimensions (may distort)\n");
+	printf("  -w, --width N             Target width in pixels\n");
+	printf("  -H, --height N            Target height in pixels\n");
+	printf("                            If both: exact dimensions\n");
+	printf("                            If one: aspect ratio preserved\n");
+	printf("                            If neither: fit to terminal (default)\n");
 	printf("  -v, --verbose             Verbose mode (show non-error messages)\n");
 	printf("      --fps N               Animation FPS (1-15, default: 15)\n");
 	printf("  -a, --animate             Animate GIF frames\n");
@@ -104,22 +114,24 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	/* Long options definition */
 	static struct option long_options[] = {
 		{ "help",          no_argument,       0, 'h' },
-		{ "version",       no_argument,       0, 'b' },
-		{ "top-offset",    required_argument, 0, 'o' },
-		{ "interpolation", required_argument, 0, 'i' },
+        { "version",       no_argument,       0, 'b' },
+        { "top-offset",    required_argument, 0, 'o' },
+        { "interpolation", required_argument, 0, 'i' },
 		{ "fit",           no_argument,       0, 'f' },
-		{ "resize",        no_argument,       0, 'r' },
-		{ "verbose",       no_argument,       0, 'v' },
-		{ "fps",           required_argument, 0, 'F' },
+        { "resize",        no_argument,       0, 'r' },
+        { "verbose",       no_argument,       0, 'v' },
+        { "fps",           required_argument, 0, 'F' },
 		{ "animate",       no_argument,       0, 'a' },
-		{ 0,		       0,		         0, 0   }
+        { "width",         required_argument, 0, 'w' },
+        { "height",        required_argument, 0, 'H' },
+        { 0,               0,                 0, 0   }
 	};
 
 	/* Parse options */
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:", long_options, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:w:H:", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;
@@ -130,6 +142,14 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			case 'v': opts->silent = false; break;
 			case 'F': opts->fps = atoi(optarg); break;
 			case 'a': opts->animate = true; break;
+			case 'w':
+				opts->target_width = atoi(optarg);
+				opts->has_custom_dimensions = true;
+				break;
+			case 'H':
+				opts->target_height = atoi(optarg);
+				opts->has_custom_dimensions = true;
+				break;
 			case '?':
 				/* getopt_long already printed error message */
 				fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
@@ -192,6 +212,43 @@ int validate_options(cli_options_t *opts)
 		if (strcmp(opts->interpolation, "lanczos") != 0 && strcmp(opts->interpolation, "bilinear") != 0 && strcmp(opts->interpolation, "nearest") != 0 && strcmp(opts->interpolation, "cubic") != 0) {
 			fprintf(stderr, "Error: Invalid interpolation method '%s'\n", opts->interpolation);
 			fprintf(stderr, "Valid methods: lanczos, bilinear, nearest, cubic\n");
+			return -1;
+		}
+	}
+
+	/* Validate custom dimensions if specified */
+	if (opts->has_custom_dimensions) {
+		int rows, cols;
+
+		/* Get terminal dimensions for bounds checking */
+		if (terminal_get_size(&rows, &cols) != 0) {
+			/* Use defaults if unable to detect */
+			rows = 24; /* DEFAULT_TERM_ROWS */
+			cols = 80; /* DEFAULT_TERM_COLS */
+		}
+
+		int max_width = cols * RESIZE_FACTOR_X;
+		int max_height = (rows - opts->top_offset) * RESIZE_FACTOR_Y;
+
+		/* Check width bounds */
+		if (opts->target_width > 0) {
+			if (opts->target_width < 1 || opts->target_width > max_width) {
+				fprintf(stderr, "Error: Width must be between 1 and %d pixels (got %d)\n", max_width, opts->target_width);
+				return -1;
+			}
+		}
+
+		/* Check height bounds */
+		if (opts->target_height > 0) {
+			if (opts->target_height < 1 || opts->target_height > max_height) {
+				fprintf(stderr, "Error: Height must be between 1 and %d pixels (got %d)\n", max_height, opts->target_height);
+				return -1;
+			}
+		}
+
+		/* At least one dimension must be positive */
+		if (opts->target_width <= 0 && opts->target_height <= 0) {
+			fprintf(stderr, "Error: At least one of -w or -h must be positive\n");
 			return -1;
 		}
 	}

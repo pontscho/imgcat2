@@ -26,6 +26,9 @@ typedef struct {
 	bool silent; /**< true = suppress non-error messages */
 	int fps; /**< Animation frames per second (1-15, default: 15) */
 	bool animate; /**< true = animate GIF frames */
+	int target_width; /**< Target width in pixels (-1 = not specified) */
+	int target_height; /**< Target height in pixels (-1 = not specified) */
+	bool has_custom_dimensions; /**< true if -w or -h specified */
 } cli_options_t;
 
 /**

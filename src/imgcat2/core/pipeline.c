@@ -10,6 +10,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -360,6 +361,59 @@ target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, ui
 }
 
 /**
+ * @brief Calculate dimensions from -w/-h with aspect ratio preservation
+ *
+ * Handles three cases:
+ * 1. Both width and height specified: return exact dimensions
+ * 2. Only width specified: calculate height from aspect ratio
+ * 3. Only height specified: calculate width from aspect ratio
+ *
+ * @param src Source image for aspect ratio calculation
+ * @param target_width Target width (-1 if not specified)
+ * @param target_height Target height (-1 if not specified)
+ * @param out_dims Output dimensions
+ * @return true on success, false on error
+ */
+static bool calculate_custom_dimensions(const image_t *src, int target_width, int target_height, target_dimensions_t *out_dims)
+{
+	if (src == NULL || src->width == 0 || src->height == 0 || out_dims == NULL) {
+		fprintf(stderr, "calculate_custom_dimensions: invalid parameters\n");
+		return false;
+	}
+
+	/* Calculate aspect ratio */
+	float src_aspect = (float)src->width / (float)src->height;
+	uint32_t final_width, final_height;
+
+	if (target_width > 0 && target_height > 0) {
+		/* Both specified: use exact dimensions */
+		final_width = (uint32_t)target_width;
+		final_height = (uint32_t)target_height;
+	} else if (target_width > 0) {
+		/* Only width specified: calculate height from aspect ratio */
+		final_width = (uint32_t)target_width;
+		final_height = (uint32_t)roundf((float)final_width / src_aspect);
+	} else if (target_height > 0) {
+		/* Only height specified: calculate width from aspect ratio */
+		final_height = (uint32_t)target_height;
+		final_width = (uint32_t)roundf((float)final_height * src_aspect);
+	} else {
+		fprintf(stderr, "calculate_custom_dimensions: no dimensions specified\n");
+		return false;
+	}
+
+	/* Validate calculated dimensions */
+	if (final_width == 0 || final_height == 0) {
+		fprintf(stderr, "calculate_custom_dimensions: calculated invalid dimensions %u×%u\n", final_width, final_height);
+		return false;
+	}
+
+	out_dims->width = final_width;
+	out_dims->height = final_height;
+	return true;
+}
+
+/**
  * @brief Read input (file or stdin) based on CLI options
  */
 int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_size)
@@ -427,11 +481,34 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 		cols = DEFAULT_TERM_COLS;
 	}
 
-	/* Calculate target dimensions */
-	target_dimensions_t target = calculate_target_dimensions(cols, rows, opts->top_offset);
-	if (target.width == 0 || target.height == 0) {
-		fprintf(stderr, "pipeline_scale: invalid target dimensions\n");
-		return -1;
+	/* Determine target dimensions based on priority */
+	target_dimensions_t target;
+
+	if (opts->has_custom_dimensions) {
+		/* Custom dimensions take priority over fit/resize */
+		if (!calculate_custom_dimensions(frames[0], opts->target_width, opts->target_height, &target)) {
+			fprintf(stderr, "pipeline_scale: failed to calculate custom dimensions\n");
+			return -1;
+		}
+
+		/* Debug log (if not silent) */
+		if (!opts->silent) {
+			fprintf(stderr, "Using custom dimensions: ");
+			if (opts->target_width > 0) {
+				fprintf(stderr, "width=%d ", opts->target_width);
+			}
+			if (opts->target_height > 0) {
+				fprintf(stderr, "height=%d ", opts->target_height);
+			}
+			fprintf(stderr, "(final: %u×%u)\n", target.width, target.height);
+		}
+	} else {
+		/* Default: terminal-aware scaling */
+		target = calculate_target_dimensions(cols, rows, opts->top_offset);
+		if (target.width == 0 || target.height == 0) {
+			fprintf(stderr, "pipeline_scale: invalid target dimensions\n");
+			return -1;
+		}
 	}
 
 	/* Allocate scaled frames array */
@@ -444,9 +521,15 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 	/* Scale each frame */
 	for (int i = 0; i < frame_count; i++) {
 		image_t *scaled_frame;
-		if (opts->fit_mode) {
+
+		if (opts->has_custom_dimensions) {
+			/* Custom dimensions: always exact (resize) */
+			scaled_frame = image_scale_resize(frames[i], target.width, target.height);
+		} else if (opts->fit_mode) {
+			/* Fit mode: maintain aspect ratio */
 			scaled_frame = image_scale_fit(frames[i], target.width, target.height);
 		} else {
+			/* Resize mode: exact dimensions */
 			scaled_frame = image_scale_resize(frames[i], target.width, target.height);
 		}
 
