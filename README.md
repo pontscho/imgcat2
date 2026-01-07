@@ -12,6 +12,8 @@
 
 A command-line tool that displays images and animated GIFs directly in terminal emulators using standard ANSI escape sequences and Unicode characters.
 
+![imgcat2 in action](docs/example.gif)
+
 ## Features
 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
