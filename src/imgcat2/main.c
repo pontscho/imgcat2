@@ -23,16 +23,18 @@ int main(int argc, char **argv)
 	int exit_code = EXIT_FAILURE;
 
 	/* Initialize CLI options with defaults */
-	cli_options_t opts = { .input_file = NULL,
-		                   .top_offset = 8,
-		                   .interpolation = "lanczos",
-		                   .fit_mode = true,
-		                   .silent = true,
-		                   .fps = 15,
-		                   .animate = false,
-		                   .target_width = -1,
-		                   .target_height = -1,
-		                   .has_custom_dimensions = false };
+	cli_options_t opts = {
+		.input_file = NULL,
+		.top_offset = 8,
+		.interpolation = "lanczos",
+		.fit_mode = true,
+		.silent = true,
+		.fps = 15,
+		.animate = false,
+		.target_width = -1,
+		.target_height = -1,
+		.has_custom_dimensions = false,
+	};
 
 	/* Parse command-line arguments */
 	if (parse_arguments(argc, argv, &opts) != 0) {

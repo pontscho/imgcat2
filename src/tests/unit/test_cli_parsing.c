@@ -369,7 +369,13 @@ CTEST(cli, print_version_function)
 CTEST(cli, parse_no_animate)
 {
 	cli_options_t opts = {
-		.input_file = NULL, .top_offset = 8, .interpolation = "lanczos", .fit_mode = true, .silent = false, .fps = 15, .animate = false, /* Start with animate false */
+		.input_file = NULL,
+		.top_offset = 8,
+		.interpolation = "lanczos",
+		.fit_mode = true,
+		.silent = false,
+		.fps = 15,
+		.animate = false, /* Start with animate false */
 	};
 
 	/* Reset getopt state */

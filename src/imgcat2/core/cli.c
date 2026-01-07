@@ -117,14 +117,14 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
         { "version",       no_argument,       0, 'b' },
         { "top-offset",    required_argument, 0, 'o' },
         { "interpolation", required_argument, 0, 'i' },
-		{ "fit",           no_argument,       0, 'f' },
+        { "fit",           no_argument,       0, 'f' },
         { "resize",        no_argument,       0, 'r' },
-        { "verbose",       no_argument,       0, 'v' },
+		{ "verbose",       no_argument,       0, 'v' },
         { "fps",           required_argument, 0, 'F' },
-		{ "animate",       no_argument,       0, 'a' },
+        { "animate",       no_argument,       0, 'a' },
         { "width",         required_argument, 0, 'w' },
         { "height",        required_argument, 0, 'H' },
-        { 0,               0,                 0, 0   }
+        { 0,               0,                 0, 0   },
 	};
 
 	/* Parse options */

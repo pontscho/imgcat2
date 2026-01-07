@@ -224,10 +224,7 @@ image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
  * @param canvas_width Canvas width (for bounds checking)
  * @param canvas_height Canvas height (for bounds checking)
  */
-static void frame_composition(
-    image_t *accumulator, const GifByteType *raster, const ColorMapObject *color_map, int transparent_color, uint32_t img_left, uint32_t img_top, uint32_t img_width, uint32_t img_height,
-    uint32_t canvas_width, uint32_t canvas_height
-)
+static void frame_composition(image_t *accumulator, const GifByteType *raster, const ColorMapObject *color_map, int transparent_color, uint32_t img_left, uint32_t img_top, uint32_t img_width, uint32_t img_height, uint32_t canvas_width, uint32_t canvas_height)
 {
 	if (accumulator == NULL || raster == NULL || color_map == NULL) {
 		return;
