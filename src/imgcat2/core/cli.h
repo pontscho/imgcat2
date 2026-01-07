@@ -29,6 +29,7 @@ typedef struct {
 	int target_width; /**< Target width in pixels (-1 = not specified) */
 	int target_height; /**< Target height in pixels (-1 = not specified) */
 	bool has_custom_dimensions; /**< true if -w or -h specified */
+	bool force_ansi; /**< true = force ANSI rendering (disable iTerm2 protocol) */
 } cli_options_t;
 
 /**

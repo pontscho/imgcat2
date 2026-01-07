@@ -14,6 +14,8 @@
 #include "core/image.h"
 #include "core/pipeline.h"
 #include "decoders/decoder.h"
+#include "iterm2/iterm2.h"
+#include "terminal/terminal.h"
 
 /**
  * @brief Main program entry point
@@ -34,6 +36,7 @@ int main(int argc, char **argv)
 		.target_width = -1,
 		.target_height = -1,
 		.has_custom_dimensions = false,
+		.force_ansi = false,
 	};
 
 	/* Parse command-line arguments */
@@ -65,6 +68,43 @@ int main(int argc, char **argv)
 	if (!opts.silent) {
 		fprintf(stderr, "Read %zu bytes from %s\n", buffer_size, opts.input_file ? opts.input_file : "stdin");
 	}
+
+	/* DECISION POINT: iTerm2 vs ANSI rendering */
+	bool use_iterm2 = false;
+
+	if (!opts.force_ansi && terminal_is_iterm2()) {
+		/* Check if format is supported by iTerm2 protocol */
+		if (iterm2_is_format_supported(buffer, buffer_size)) {
+			use_iterm2 = true;
+
+			if (!opts.silent) {
+				fprintf(stderr, "Using iTerm2 inline images protocol\n");
+			}
+
+		} else {
+			if (!opts.silent) {
+				fprintf(stderr, "Format not supported by iTerm2, using ANSI rendering\n");
+			}
+		}
+	}
+
+	/* iTerm2 rendering path - bypass decode/scale pipeline */
+	if (use_iterm2) {
+		if (pipeline_render_iterm2(buffer, buffer_size, &opts) < 0) {
+			/* iTerm2 rendering failed, fall back to ANSI */
+			if (!opts.silent) {
+				fprintf(stderr, "iTerm2 rendering failed, falling back to ANSI\n");
+			}
+			use_iterm2 = false;
+
+		} else {
+			/* Success - skip ANSI pipeline */
+			exit_code = EXIT_SUCCESS;
+			goto cleanup;
+		}
+	}
+
+	/* ANSI rendering path (or fallback from iTerm2 failure) */
 
 	/* STEP 2: Decode image with MIME detection */
 	if (pipeline_decode(&opts, buffer, buffer_size, &frames, &frame_count) < 0) {

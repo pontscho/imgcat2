@@ -148,3 +148,24 @@ bool terminal_supports_truecolor(void)
 	/* No true color support detected */
 	return false;
 }
+
+/**
+ * @brief Check if terminal is iTerm2
+ */
+bool terminal_is_iterm2(void)
+{
+	/* Primary detection: TERM_PROGRAM environment variable */
+	const char *term_program = getenv("TERM_PROGRAM");
+	if (term_program != NULL && strcmp(term_program, "iTerm.app") == 0) {
+		return true;
+	}
+
+	/* Fallback detection: LC_TERMINAL environment variable */
+	const char *lc_terminal = getenv("LC_TERMINAL");
+	if (lc_terminal != NULL && strcmp(lc_terminal, "iTerm2") == 0) {
+		return true;
+	}
+
+	/* Not iTerm2 */
+	return false;
+}

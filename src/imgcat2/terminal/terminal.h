@@ -99,4 +99,17 @@ void terminal_enable_echo(void *state);
  */
 bool terminal_supports_truecolor(void);
 
+/**
+ * @brief Check if terminal is iTerm2
+ *
+ * Detects if the current terminal is iTerm2 by checking environment variables.
+ * iTerm2 sets TERM_PROGRAM="iTerm.app" and optionally LC_TERMINAL="iTerm2".
+ *
+ * @return true if running in iTerm2, false otherwise
+ *
+ * @note macOS/Unix only - returns false on Windows
+ * @note Used to enable iTerm2 inline images protocol (OSC 1337)
+ */
+bool terminal_is_iterm2(void);
+
 #endif /* IMGCAT2_TERMINAL_H */

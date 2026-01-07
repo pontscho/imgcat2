@@ -21,13 +21,14 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
 - **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, and optionally WebP, HEIF, TIFF, RAW
+- **iTerm2 Native Support** - Automatically uses iTerm2's inline images protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
-- **Animation Support** - Displays animated GIFs with smooth playback
+- **Animation Support** - Displays animated GIFs with smooth playback (native in iTerm2)
 - **High-Quality Scaling** - Uses advanced interpolation for photographic images
 - **Pure C Implementation** - Fast, efficient, and lightweight (C11 standard)
 - **Static Linking** - Produces fully static binaries where possible
-- **No Proprietary Protocols** - Uses standard ANSI sequences, not terminal-specific features
+- **Intelligent Fallback** - Automatically falls back to ANSI rendering when needed
 
 ## How It Works
 
@@ -172,6 +173,55 @@ cmake -DENABLE_CLANG_TIDY=OFF -DENABLE_CLANG_FORMAT=OFF ..
 cmake -DCMAKE_BUILD_TYPE=Release ..
 ```
 
+## iTerm2 Native Support
+
+When running in iTerm2, imgcat2 automatically uses the native inline images protocol for significantly better quality:
+
+### Advantages in iTerm2
+- **Higher Quality** - Native image rendering without ANSI approximation
+- **Better Colors** - No color quantization or dithering
+- **Faster Rendering** - Direct image display without pixel-by-pixel processing
+- **Native Animations** - Smooth GIF playback handled by iTerm2
+- **Original Image Size** - Displays images at their native resolution by default
+- **Custom Sizing** - Supports `-w` and `-H` flags for pixel-perfect sizing
+
+### How It Works
+imgcat2 automatically detects iTerm2 by checking the `TERM_PROGRAM` environment variable. When detected:
+1. Validates image format is supported (PNG, JPEG, GIF, BMP)
+2. Sends image data via iTerm2's OSC 1337 protocol
+3. **Default behavior**: Displays image at original size (no scaling)
+4. **With `-w` or `-H`**: Scales to specified pixel dimensions
+5. Automatically falls back to ANSI rendering if protocol fails
+
+### Force ANSI Rendering
+To disable iTerm2 protocol and use ANSI rendering:
+```bash
+imgcat2 --force-ansi image.png
+```
+
+This is useful for:
+- Testing ANSI rendering in iTerm2
+- Compatibility with tools that expect ANSI output
+- Scenarios where iTerm2 protocol may not work (e.g., remote sessions)
+
+### iTerm2 Sizing Examples
+```bash
+# Display at original size (default in iTerm2)
+imgcat2 image.png
+
+# Scale to 800px width, preserve aspect ratio
+imgcat2 -w 800 image.png
+
+# Scale to 600px height, preserve aspect ratio
+imgcat2 -H 600 image.png
+
+# Exact dimensions (may distort)
+imgcat2 -w 800 -H 600 image.png
+
+# Animated GIF at original size
+imgcat2 animation.gif
+```
+
 ## Usage
 
 ### Basic Usage
@@ -206,6 +256,7 @@ Options:
   --top-offset=<n>   Number of lines to reserve at top (default: 8)
   --animate          Display animated GIFs (default for .gif files)
   --fps=<n>          Animation frame rate (default: 15)
+  --force-ansi       Force ANSI rendering (disable iTerm2 protocol)
   --silent           Suppress exit message during animation
   -h, --help         Show this help message
   -v, --version      Show version information

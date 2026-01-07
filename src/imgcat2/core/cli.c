@@ -46,6 +46,7 @@ void print_usage(const char *program_name)
 	printf("  -v, --verbose             Verbose mode (show non-error messages)\n");
 	printf("      --fps N               Animation FPS (1-15, default: 15)\n");
 	printf("  -a, --animate             Animate GIF frames\n");
+	printf("      --force-ansi          Force ANSI rendering (disable iTerm2 protocol)\n");
 	printf("\n");
 	printf("Arguments:\n");
 	printf("  FILE                      Input image file (omit or '-' for stdin)\n");
@@ -114,24 +115,30 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	/* Long options definition */
 	static struct option long_options[] = {
 		{ "help",          no_argument,       0, 'h' },
-        { "version",       no_argument,       0, 'b' },
-        { "top-offset",    required_argument, 0, 'o' },
-        { "interpolation", required_argument, 0, 'i' },
-        { "fit",           no_argument,       0, 'f' },
-        { "resize",        no_argument,       0, 'r' },
+		{ "version",       no_argument,       0, 'b' },
+		{ "top-offset",    required_argument, 0, 'o' },
+		{ "interpolation", required_argument, 0, 'i' },
+		{ "fit",           no_argument,       0, 'f' },
+		{ "resize",        no_argument,       0, 'r' },
 		{ "verbose",       no_argument,       0, 'v' },
-        { "fps",           required_argument, 0, 'F' },
-        { "animate",       no_argument,       0, 'a' },
-        { "width",         required_argument, 0, 'w' },
-        { "height",        required_argument, 0, 'H' },
-        { 0,               0,                 0, 0   },
+		{ "fps",           required_argument, 0, 'F' },
+		{ "animate",       no_argument,       0, 'a' },
+		{ "width",         required_argument, 0, 'w' },
+		{ "height",        required_argument, 0, 'H' },
+		{ "force-ansi",    no_argument,       0, 'A' },
+		{ 0,		       0,		         0, 0   },
 	};
 
 	/* Parse options */
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:w:H:", long_options, &option_index)) != -1) {
+	bool is_iterm2 = terminal_is_iterm2();
+	if (is_iterm2) {
+		opts->fit_mode = false;
+	}
+
+	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:w:H:A", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;
@@ -142,6 +149,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			case 'v': opts->silent = false; break;
 			case 'F': opts->fps = atoi(optarg); break;
 			case 'a': opts->animate = true; break;
+			case 'A': opts->force_ansi = true; break;
 			case 'w':
 				opts->target_width = atoi(optarg);
 				opts->has_custom_dimensions = true;
@@ -220,6 +228,8 @@ int validate_options(cli_options_t *opts)
 	if (opts->has_custom_dimensions) {
 		int rows, cols;
 
+		bool is_iterm2 = terminal_is_iterm2();
+
 		/* Get terminal dimensions for bounds checking */
 		if (terminal_get_size(&rows, &cols) != 0) {
 			/* Use defaults if unable to detect */
@@ -232,7 +242,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check width bounds */
 		if (opts->target_width > 0) {
-			if (opts->target_width < 1 || opts->target_width > max_width) {
+			if ((opts->target_width < 1 || opts->target_width > max_width) && !is_iterm2) {
 				fprintf(stderr, "Error: Width must be between 1 and %d pixels (got %d)\n", max_width, opts->target_width);
 				return -1;
 			}
@@ -240,7 +250,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check height bounds */
 		if (opts->target_height > 0) {
-			if (opts->target_height < 1 || opts->target_height > max_height) {
+			if ((opts->target_height < 1 || opts->target_height > max_height) && !is_iterm2) {
 				fprintf(stderr, "Error: Height must be between 1 and %d pixels (got %d)\n", max_height, opts->target_height);
 				return -1;
 			}

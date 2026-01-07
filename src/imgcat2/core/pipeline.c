@@ -20,6 +20,7 @@
 #include "../ansi/escape.h"
 #include "../decoders/decoder.h"
 #include "../decoders/magic.h"
+#include "../iterm2/iterm2.h"
 #include "../terminal/terminal.h"
 #include "cli.h"
 #include "image.h"
@@ -724,4 +725,27 @@ int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts
 		/* Multiple frames but no animation - show first frame only */
 		return render_static_frame(frames[0]);
 	}
+}
+
+/**
+ * @brief Render using iTerm2 inline images protocol
+ */
+int pipeline_render_iterm2(const uint8_t *buffer, size_t buffer_size, const cli_options_t *opts)
+{
+	/* Validate inputs */
+	if (buffer == NULL || buffer_size == 0 || opts == NULL) {
+		fprintf(stderr, "pipeline_render_iterm2: invalid parameters\n");
+		return -1;
+	}
+
+	/* Extract filename for metadata (NULL for stdin) */
+	const char *filename = opts->input_file;
+
+	/* Extract sizing parameters from CLI options */
+	int target_width = opts->target_width;
+	int target_height = opts->target_height;
+
+	/* Render using iTerm2 protocol with sizing parameters */
+	/* Note: iTerm2 uses original image size by default unless dimensions specified */
+	return iterm2_render(buffer, buffer_size, filename, opts->fit_mode, target_width, target_height);
 }

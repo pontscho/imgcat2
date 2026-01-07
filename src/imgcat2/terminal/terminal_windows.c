@@ -168,4 +168,10 @@ bool terminal_supports_truecolor(void)
 	return false;
 }
 
+bool terminal_is_iterm2(void)
+{
+	/* iTerm2 is not available on Windows */
+	return false;
+}
+
 #endif /* _WIN32 */

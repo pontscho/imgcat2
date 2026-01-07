@@ -261,6 +261,10 @@ set(IMGCAT2_SOURCES
 	# ANSI module
 	src/imgcat2/ansi/ansi.c
 	src/imgcat2/ansi/escape.c
+
+	# iTerm2 inline images protocol module
+	src/imgcat2/iterm2/base64.c
+	src/imgcat2/iterm2/iterm2.c
 )
 
 if(GIF_FOUND)
