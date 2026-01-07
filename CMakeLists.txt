@@ -27,8 +27,8 @@ option(ENABLE_CLANG_FORMAT "Enable clang-format code formatting" ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
 
 # clang-tidy detection
+find_program(CLANG_TIDY_EXE NAMES clang-tidy)
 if(ENABLE_CLANG_TIDY)
-	find_program(CLANG_TIDY_EXE NAMES clang-tidy)
 	if(CLANG_TIDY_EXE)
 		set(CMAKE_C_CLANG_TIDY "${CLANG_TIDY_EXE}")
 		message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
@@ -39,8 +39,8 @@ if(ENABLE_CLANG_TIDY)
 endif()
 
 # clang-format detection
+find_program(CLANG_FORMAT_EXE NAMES clang-format)
 if(ENABLE_CLANG_FORMAT)
-	find_program(CLANG_FORMAT_EXE NAMES clang-format)
 	if(CLANG_FORMAT_EXE)
 		message(STATUS "clang-format found: ${CLANG_FORMAT_EXE}")
 	else()
@@ -218,7 +218,7 @@ else()
 endif()
 
 # Main executable
-add_executable(imgcat2 ${IMGCAT2_SOURCES} src/imgcat2/core/main.c)
+add_executable(imgcat2 ${IMGCAT2_SOURCES} src/imgcat2/main.c)
 
 # Library for tests (without main.c)
 add_library(imgcat2_lib STATIC ${IMGCAT2_SOURCES})

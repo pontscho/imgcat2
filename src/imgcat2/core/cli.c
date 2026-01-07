@@ -27,13 +27,13 @@ void print_usage(const char *program_name)
 	printf("\n");
 	printf("Options:\n");
 	printf("  -h, --help                Show this help message and exit\n");
-	printf("  -v, --version             Show version information and exit\n");
+	printf("      --version             Show version information and exit\n");
 	printf("  -o, --top-offset N        Top offset in terminal rows (default: 8)\n");
 	printf("  -i, --interpolation TYPE  Interpolation method (default: lanczos)\n");
 	printf("                            Available: lanczos, bilinear, nearest, cubic\n");
 	printf("  -f, --fit                 Fit image to terminal (maintain aspect ratio, default)\n");
 	printf("  -r, --resize              Resize to exact terminal dimensions (may distort)\n");
-	printf("  -s, --silent              Silent mode (suppress non-error messages)\n");
+	printf("  -v, --verbose             Verbose mode (show non-error messages)\n");
 	printf("      --fps N               Animation FPS (1-15, default: 15)\n");
 	printf("  -a, --animate             Animate GIF frames\n");
 	printf("\n");
@@ -81,6 +81,19 @@ void print_version(void)
 
 /**
  * @brief Parse command-line arguments
+ *
+ * Parses command-line arguments using getopt_long() and populates
+ * the cli_options_t structure with parsed values. Handles --help
+ * and --version flags by printing and exiting.
+ *
+ * @param argc Argument count from main()
+ * @param argv Argument vector from main()
+ * @param opts Output parameter for parsed options
+ *
+ * @return 0 on success, -1 on error, 1 if help/version was
+ *
+ * @note Caller must initialize opts with default values before calling
+ * @note Sets opts->input_file to NULL for stdin or argv[optind] for file
  */
 int parse_arguments(int argc, char **argv, cli_options_t *opts)
 {
@@ -91,12 +104,12 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	/* Long options definition */
 	static struct option long_options[] = {
 		{ "help",          no_argument,       0, 'h' },
-		{ "version",       no_argument,       0, 'v' },
+		{ "version",       no_argument,       0, 'b' },
 		{ "top-offset",    required_argument, 0, 'o' },
 		{ "interpolation", required_argument, 0, 'i' },
 		{ "fit",           no_argument,       0, 'f' },
 		{ "resize",        no_argument,       0, 'r' },
-		{ "silent",        no_argument,       0, 's' },
+		{ "verbose",       no_argument,       0, 'v' },
 		{ "fps",           required_argument, 0, 'F' },
 		{ "animate",       no_argument,       0, 'a' },
 		{ 0,		       0,		         0, 0   }
@@ -106,26 +119,17 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hvo:i:frsaF:", long_options, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:", long_options, &option_index)) != -1) {
 		switch (opt) {
-			case 'h': print_usage(argv[0]); exit(0);
-
-			case 'v': print_version(); exit(0);
-
+			case 'h': print_usage(argv[0]); return 1;
+			case 'b': print_version(); return 1;
 			case 'o': opts->top_offset = atoi(optarg); break;
-
 			case 'i': opts->interpolation = optarg; break;
-
 			case 'f': opts->fit_mode = true; break;
-
 			case 'r': opts->fit_mode = false; break;
-
-			case 's': opts->silent = true; break;
-
+			case 'v': opts->silent = false; break;
 			case 'F': opts->fps = atoi(optarg); break;
-
 			case 'a': opts->animate = true; break;
-
 			case '?':
 				/* getopt_long already printed error message */
 				fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
@@ -140,6 +144,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		/* Check if input is "-" (stdin) */
 		if (strcmp(argv[optind], "-") == 0) {
 			opts->input_file = NULL;
+
 		} else {
 			opts->input_file = argv[optind];
 		}
@@ -153,6 +158,16 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 
 /**
  * @brief Validate CLI options
+ *
+ * Validates parsed command-line options for correctness:
+ * - fps in range [1, 15]
+ * - interpolation is valid method
+ * - top_offset is non-negative
+ * - fit_mode and resize_mode are not both set
+ *
+ * @param opts Options structure to validate
+ *
+ * @return 0 if valid, -1 if invalid (error printed to stderr)
  */
 int validate_options(cli_options_t *opts)
 {

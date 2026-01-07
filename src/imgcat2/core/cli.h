@@ -38,7 +38,8 @@ typedef struct {
  * @param argc Argument count from main()
  * @param argv Argument vector from main()
  * @param opts Output parameter for parsed options
- * @return 0 on success, -1 on error
+ *
+ * @return 0 on success, -1 on error, 1 if help/version was
  *
  * @note Caller must initialize opts with default values before calling
  * @note Sets opts->input_file to NULL for stdin or argv[optind] for file
@@ -73,6 +74,7 @@ void print_version(void);
  * - fit_mode and resize_mode are not both set
  *
  * @param opts Options structure to validate
+ *
  * @return 0 if valid, -1 if invalid (error printed to stderr)
  */
 int validate_options(cli_options_t *opts);
