@@ -116,7 +116,7 @@ image_t **decode_png(const uint8_t *data, size_t len, int *frame_count)
 	frames[0] = img;
 	*frame_count = 1;
 
-	fprintf(stderr, "PNG decoded: %ux%u, %u-bit RGBA\n", image.width, image.height, PNG_IMAGE_SAMPLE_SIZE(image.format) * 8);
+	// fprintf(stderr, "PNG decoded: %ux%u, %u-bit RGBA\n", image.width, image.height, PNG_IMAGE_SAMPLE_SIZE(image.format) * 8);
 
 	return frames;
 }

@@ -20,11 +20,15 @@ option(ENABLE_HEIF "Enable HEIF support" ON)
 option(ENABLE_TIFF "Enable TIFF support" ON)
 option(ENABLE_RAW "Enable RAW support (libraw)" ON)
 option(BUILD_TESTING "Build tests" ON)
-option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" ON)
+option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" OFF)
 option(ENABLE_CLANG_FORMAT "Enable clang-format code formatting" ON)
 
 # Static linking preference
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+
+# Force static linking for all libraries
+set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
 
 # clang-tidy detection
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
