@@ -12,7 +12,9 @@
 
 A command-line tool that displays images and animated GIFs directly in terminal emulators using standard ANSI escape sequences and Unicode characters.
 
-![imgcat2 in action](docs/example.gif)
+<p align="center">
+  <img src="docs/example.gif" alt="imgcat2 in action">
+</p>
 
 ## Features
 
