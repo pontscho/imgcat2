@@ -186,7 +186,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	frames[0] = img;
 	*frame_count = 1;
 
-	fprintf(stderr, "JPEG decoded: %ux%u, RGB→RGBA\n", width, height);
+	// fprintf(stderr, "JPEG decoded: %ux%u, RGB→RGBA\n", width, height);
 
 	return frames;
 }

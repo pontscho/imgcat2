@@ -29,6 +29,7 @@
  * @param path File path to read
  * @param out_data Output parameter for file data (caller must free with free())
  * @param out_size Output parameter for file size in bytes
+ *
  * @return true on success, false on error
  *
  * @note Caller must free *out_data with free() when done
@@ -56,6 +57,7 @@ bool read_file_secure(const char *path, uint8_t **out_data, size_t *out_size);
  *
  * @param out_data Output parameter for stdin data (caller must free with free())
  * @param out_size Output parameter for data size in bytes
+ *
  * @return true on success, false on error
  *
  * @note Caller must free *out_data with free() when done
@@ -97,6 +99,7 @@ typedef struct {
  * @param cols Terminal columns (character width)
  * @param rows Terminal rows (character height)
  * @param top_offset Reserved rows at top (e.g., for status line)
+ *
  * @return Target dimensions struct, or {0, 0} on invalid input
  *
  * @note Returns {0, 0} if calculated dimensions are invalid
@@ -117,6 +120,7 @@ target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, ui
  * @param opts CLI options structure
  * @param out_data Output parameter for file data (caller must free)
  * @param out_size Output parameter for data size
+ *
  * @return 0 on success, -1 on error
  */
 int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_size);
@@ -127,13 +131,15 @@ int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_siz
  * Detects image format using magic bytes and decodes using appropriate
  * decoder from registry.
  *
+ * @param opts CLI options structure (for logging verbosity)
  * @param buffer Input data buffer
  * @param size Input data size
  * @param out_frames Output parameter for decoded frames array (caller must free)
  * @param out_frame_count Output parameter for frame count
+ *
  * @return 0 on success, -1 on error
  */
-int pipeline_decode(const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count);
+int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count);
 
 /**
  * @brief Scale images to terminal dimensions
@@ -145,6 +151,7 @@ int pipeline_decode(const uint8_t *buffer, size_t size, image_t ***out_frames, i
  * @param frame_count Number of frames
  * @param opts CLI options (fit_mode, top_offset)
  * @param out_scaled Output parameter for scaled frames array (caller must free)
+ *
  * @return 0 on success, -1 on error
  */
 int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts, image_t ***out_scaled);
@@ -158,6 +165,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
  * @param frames Scaled frames array
  * @param frame_count Number of frames
  * @param opts CLI options (animate, fps)
+ *
  * @return 0 on success, -1 on error
  */
 int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts);

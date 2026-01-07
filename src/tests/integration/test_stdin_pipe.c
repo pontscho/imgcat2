@@ -120,7 +120,7 @@ CTEST(integration, stdin_empty_input)
 	/* pipeline_decode should fail with empty data */
 	image_t **frames = NULL;
 	int frame_count = 0;
-	int result = pipeline_decode(empty_data, size, &frames, &frame_count);
+	int result = pipeline_decode(NULL, empty_data, size, &frames, &frame_count);
 
 	ASSERT_EQUAL(-1, result);
 	ASSERT_NULL(frames);

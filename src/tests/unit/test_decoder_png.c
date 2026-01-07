@@ -142,7 +142,7 @@ CTEST(decoder_png, free_frames_null)
 CTEST(decoder_png, decode_through_registry)
 {
 	/* Initialize decoder registry */
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	/* 1x1 PNG */
 	static const uint8_t png_1x1_gray[] = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
@@ -150,7 +150,7 @@ CTEST(decoder_png, decode_through_registry)
 		                                    0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82 };
 
 	int frame_count;
-	image_t **frames = decoder_decode(png_1x1_gray, sizeof(png_1x1_gray), MIME_PNG, &frame_count);
+	image_t **frames = decoder_decode(NULL, png_1x1_gray, sizeof(png_1x1_gray), MIME_PNG, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -168,7 +168,7 @@ CTEST(decoder_png, decode_through_registry)
  */
 CTEST(decoder_png, find_by_mime)
 {
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	const decoder_t *decoder = decoder_find_by_mime(MIME_PNG);
 	ASSERT_NOT_NULL(decoder);

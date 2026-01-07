@@ -384,7 +384,7 @@ int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_siz
 /**
  * @brief Decode image with MIME type detection
  */
-int pipeline_decode(const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count)
+int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count)
 {
 	if (buffer == NULL || out_frames == NULL || out_frame_count == NULL) {
 		fprintf(stderr, "pipeline_decode: invalid parameters\n");
@@ -399,7 +399,7 @@ int pipeline_decode(const uint8_t *buffer, size_t size, image_t ***out_frames, i
 	}
 
 	/* Decode with registry */
-	image_t **frames = decoder_decode(buffer, size, mime, out_frame_count);
+	image_t **frames = decoder_decode(opts, buffer, size, mime, out_frame_count);
 	if (frames == NULL || *out_frame_count <= 0) {
 		fprintf(stderr, "pipeline_decode: failed to decode image\n");
 		return -1;
@@ -494,11 +494,11 @@ static int render_static_frame(image_t *frame)
 	ansi_cursor_hide();
 
 	/* Print newline before image */
-	printf("\n");
+	write(STDOUT_FILENO, "\n", 1);
 
 	/* Output lines to stdout */
 	for (size_t i = 0; i < line_count; i++) {
-		printf("%s", lines[i]);
+		write(STDOUT_FILENO, lines[i], strlen(lines[i]));
 	}
 
 	/* Show cursor and reset */

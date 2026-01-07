@@ -201,7 +201,7 @@ image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
 	frames[0] = img;
 	*frame_count = 1;
 
-	fprintf(stderr, "GIF decoded (first frame): %ux%u\n", width, height);
+	// fprintf(stderr, "GIF decoded (first frame): %ux%u\n", width, height);
 
 	return frames;
 }
@@ -445,7 +445,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	DGifCloseFile(gif, &error_code);
 
 	*frame_count = num_frames;
-	fprintf(stderr, "Animated GIF decoded: %d frames, %ux%u\n", num_frames, canvas_width, canvas_height);
+	// fprintf(stderr, "Animated GIF decoded: %d frames, %ux%u\n", num_frames, canvas_width, canvas_height);
 
 	return frames;
 

@@ -236,7 +236,7 @@ image_t **decode_hdr(const uint8_t *data, size_t len, int *frame_count)
 	frames[0] = img;
 	*frame_count = 1;
 
-	fprintf(stderr, "HDR decoded: %ux%u, tone-mapped to RGBA8888\n", (uint32_t)width, (uint32_t)height);
+	// fprintf(stderr, "HDR decoded: %ux%u, tone-mapped to RGBA8888\n", (uint32_t)width, (uint32_t)height);
 
 	return frames;
 }

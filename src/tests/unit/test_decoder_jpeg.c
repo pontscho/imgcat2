@@ -152,7 +152,7 @@ CTEST(decoder_jpeg, free_frames_null)
 CTEST(decoder_jpeg, decode_through_registry)
 {
 	/* Initialize decoder registry */
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	/* Minimal 1x1 JPEG */
 	static const uint8_t jpeg_1x1[] = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00,
@@ -164,7 +164,7 @@ CTEST(decoder_jpeg, decode_through_registry)
 		                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xD2, 0xFF, 0xD9 };
 
 	int frame_count;
-	image_t **frames = decoder_decode(jpeg_1x1, sizeof(jpeg_1x1), MIME_JPEG, &frame_count);
+	image_t **frames = decoder_decode(NULL, jpeg_1x1, sizeof(jpeg_1x1), MIME_JPEG, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -182,7 +182,7 @@ CTEST(decoder_jpeg, decode_through_registry)
  */
 CTEST(decoder_jpeg, find_by_mime)
 {
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	const decoder_t *decoder = decoder_find_by_mime(MIME_JPEG);
 	ASSERT_NOT_NULL(decoder);

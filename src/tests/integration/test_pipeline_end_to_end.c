@@ -44,7 +44,7 @@ CTEST(integration, target_dimensions)
 }
 
 /**
- * @test Test pipeline_decode() with minimal PNG
+ * @test Test pipeline_decode(NULL, ) with minimal PNG
  *
  * Verifies decoding step of pipeline with embedded PNG data.
  */
@@ -56,12 +56,12 @@ CTEST(integration, pipeline_decode_png)
 		                                0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82 };
 
 	/* Initialize decoder registry */
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	image_t **frames = NULL;
 	int frame_count = 0;
 
-	int result = pipeline_decode(png_data, sizeof(png_data), &frames, &frame_count);
+	int result = pipeline_decode(NULL, png_data, sizeof(png_data), &frames, &frame_count);
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(frames);
@@ -75,7 +75,7 @@ CTEST(integration, pipeline_decode_png)
 }
 
 /**
- * @test Test pipeline_decode() with minimal JPEG
+ * @test Test pipeline_decode(NULL, ) with minimal JPEG
  *
  * Verifies decoding step of pipeline with embedded JPEG data.
  */
@@ -90,12 +90,12 @@ CTEST(integration, pipeline_decode_jpeg)
 		                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xC4, 0x00, 0x14, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xD2, 0xFF, 0xD9 };
 
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	image_t **frames = NULL;
 	int frame_count = 0;
 
-	int result = pipeline_decode(jpeg_data, sizeof(jpeg_data), &frames, &frame_count);
+	int result = pipeline_decode(NULL, jpeg_data, sizeof(jpeg_data), &frames, &frame_count);
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(frames);
@@ -108,7 +108,7 @@ CTEST(integration, pipeline_decode_jpeg)
 }
 
 /**
- * @test Test pipeline_decode() with BMP
+ * @test Test pipeline_decode(NULL, ) with BMP
  *
  * Verifies decoding step of pipeline with embedded BMP data.
  */
@@ -119,12 +119,12 @@ CTEST(integration, pipeline_decode_bmp)
 		                                0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
 		                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	image_t **frames = NULL;
 	int frame_count = 0;
 
-	int result = pipeline_decode(bmp_data, sizeof(bmp_data), &frames, &frame_count);
+	int result = pipeline_decode(NULL, bmp_data, sizeof(bmp_data), &frames, &frame_count);
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(frames);
@@ -137,20 +137,20 @@ CTEST(integration, pipeline_decode_bmp)
 }
 
 /**
- * @test Test pipeline_decode() with invalid data
+ * @test Test pipeline_decode(NULL, ) with invalid data
  *
- * Verifies that pipeline_decode() rejects invalid image data.
+ * Verifies that pipeline_decode(NULL, ) rejects invalid image data.
  */
 CTEST(integration, pipeline_decode_invalid)
 {
 	const uint8_t invalid_data[] = "Not an image file";
 
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	image_t **frames = NULL;
 	int frame_count = 0;
 
-	int result = pipeline_decode(invalid_data, sizeof(invalid_data), &frames, &frame_count);
+	int result = pipeline_decode(NULL, invalid_data, sizeof(invalid_data), &frames, &frame_count);
 
 	/* Should fail */
 	ASSERT_EQUAL(-1, result);
@@ -208,12 +208,12 @@ CTEST(integration, full_pipeline_png)
 		                                0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x3A, 0x7E, 0x9B, 0x55, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0x60, 0x00,
 		                                0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82 };
 
-	decoder_registry_init();
+	decoder_registry_init(NULL);
 
 	/* Step 1: Decode */
 	image_t **frames = NULL;
 	int frame_count = 0;
-	int result = pipeline_decode(png_data, sizeof(png_data), &frames, &frame_count);
+	int result = pipeline_decode(NULL, png_data, sizeof(png_data), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);

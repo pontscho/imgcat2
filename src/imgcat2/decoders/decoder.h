@@ -12,6 +12,7 @@
 
 #include <stddef.h>
 
+#include "../core/cli.h"
 #include "../core/image.h"
 #include "magic.h"
 
@@ -69,9 +70,11 @@ extern size_t g_decoder_count;
  * 3. GIF: decode_gif (giflib) if HAVE_GIFLIB, else not supported
  * 4. BMP, TGA, PSD, HDR, PNM: decode_stb (stb_image always available)
  *
+ * @param opts CLI options structure (currently unused, reserved for future use)
+ *
  * @note This function is idempotent (safe to call multiple times)
  */
-void decoder_registry_init(void);
+void decoder_registry_init(cli_options_t *opts);
 
 /**
  * @brief Find decoder by MIME type
@@ -102,6 +105,7 @@ const decoder_t *decoder_find_by_mime(mime_type_t mime);
  * 4. Validates output frames
  * 5. Returns decoded frames array
  *
+ * @param opts CLI options structure (for logging verbosity)
  * @param data Raw image file data
  * @param len Length of data in bytes
  * @param mime Detected MIME type (from detect_mime_type())
@@ -126,7 +130,7 @@ const decoder_t *decoder_find_by_mime(mime_type_t mime);
  *     free(data);
  * }
  */
-image_t **decoder_decode(const uint8_t *data, size_t len, mime_type_t mime, int *frame_count);
+image_t **decoder_decode(cli_options_t *opts, const uint8_t *data, size_t len, mime_type_t mime, int *frame_count);
 
 /**
  * @brief Free multi-frame decoder output
