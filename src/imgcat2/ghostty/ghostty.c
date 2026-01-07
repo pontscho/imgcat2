@@ -25,11 +25,18 @@ bool ghostty_is_format_supported(const uint8_t *data, size_t size)
 	/* Detect MIME type using magic bytes */
 	mime_type_t mime = detect_mime_type(data, size);
 
-	/* Check if format is supported by Kitty graphics protocol */
+	/*
+	 * Kitty graphics protocol officially supports:
+	 * - f=24: RGB raw pixel data
+	 * - f=32: RGBA raw pixel data
+	 * - f=100: PNG format
+	 *
+	 * Currently only PNG is supported directly (f=100).
+	 * JPEG and GIF would require decoding and re-encoding as RGB/RGBA.
+	 * TODO: Add support for JPEG/GIF by decoding to RGB/RGBA pixel data.
+	 */
 	switch (mime) {
-		case MIME_PNG:
-		case MIME_JPEG:
-		case MIME_GIF: return true;
+		case MIME_PNG: return true;
 		default: return false;
 	}
 }

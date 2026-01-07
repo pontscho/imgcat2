@@ -20,10 +20,16 @@
 /**
  * @brief Check if image format is supported by Kitty graphics protocol
  *
- * Kitty protocol supports formats that can be natively decoded:
- * - PNG (Portable Network Graphics)
- * - JPEG (Joint Photographic Experts Group)
- * - GIF (Graphics Interchange Format, including animated)
+ * Currently only PNG format is supported (f=100 in Kitty protocol).
+ * JPEG and GIF formats would require decoding to RGB/RGBA pixel data (f=24/f=32),
+ * which is not yet implemented. These formats will fall back to ANSI rendering.
+ *
+ * Supported formats:
+ * - PNG (Portable Network Graphics) - sent directly with f=100
+ *
+ * Planned support (requires decoding):
+ * - JPEG (Joint Photographic Experts Group) - decode to f=24/f=32
+ * - GIF (Graphics Interchange Format) - decode to f=24/f=32
  *
  * @param data Raw image file data
  * @param size Size of data in bytes

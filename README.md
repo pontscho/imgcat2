@@ -24,7 +24,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 - **Native Protocol Support** - Automatically uses iTerm2 inline images or Ghostty Kitty graphics protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
-- **Animation Support** - Displays animated GIFs with smooth playback (native in iTerm2 and Ghostty)
+- **Animation Support** - Displays animated GIFs with smooth playback (native in iTerm2)
 - **High-Quality Scaling** - Uses advanced interpolation for photographic images
 - **Pure C Implementation** - Fast, efficient, and lightweight (C11 standard)
 - **Static Linking** - Produces fully static binaries where possible
@@ -236,37 +236,40 @@ imgcat2 animation.gif
 
 When running in Ghostty terminal, imgcat2 automatically uses the Kitty graphics protocol for high-quality image rendering:
 
-### Advantages in Ghostty
-- **Higher Quality** - Native image rendering using Kitty graphics protocol
+### Advantages in Ghostty (PNG only)
+- **Higher Quality** - Native PNG rendering using Kitty graphics protocol
 - **Better Colors** - No color quantization or dithering
 - **Faster Rendering** - Direct image display without pixel-by-pixel processing
-- **Native Animations** - Smooth GIF playback handled by the terminal
 - **Automatic Scaling** - Images scale to fit terminal window while preserving aspect ratio
 - **Custom Sizing** - Supports `-w` and `-H` flags for precise control
+- **Note:** JPEG and GIF images will use ANSI rendering (Kitty protocol support coming soon)
 
 ### How It Works
 imgcat2 automatically detects Ghostty by checking the `TERM_PROGRAM` environment variable. When detected:
-1. Validates image format is supported (PNG, JPEG, GIF)
-2. Sends image data via Kitty graphics protocol (`\033_G`)
+1. Validates image format is supported (**PNG only** - JPEG/GIF fall back to ANSI)
+2. Sends PNG data directly via Kitty graphics protocol (`\033_G` with `f=100`)
 3. **Default behavior**: Fits image to terminal width, preserving aspect ratio
 4. **With `-w` or `-H`**: Scales to specified pixel dimensions (converted to terminal cells)
-5. Automatically falls back to ANSI rendering if protocol fails
+5. Automatically falls back to ANSI rendering for unsupported formats or protocol failures
+
+**Note:** Currently only PNG format uses the Kitty protocol. JPEG and GIF images will automatically fall back to ANSI rendering. Future versions will add support for these formats by decoding them to RGB/RGBA pixel data.
 
 ### Ghostty Sizing Examples
 ```bash
-# Fit to terminal width (default in Ghostty)
+# Fit PNG to terminal width (default in Ghostty)
 imgcat2 image.png
 
-# Scale to 800px width
+# Scale PNG to 800px width
 imgcat2 -w 800 image.png
 
-# Scale to 600px height
+# Scale PNG to 600px height
 imgcat2 -H 600 image.png
 
-# Animated GIF with auto-fit
-imgcat2 animation.gif
+# JPEG/GIF will use ANSI rendering (Kitty protocol support coming soon)
+imgcat2 photo.jpg      # Uses ANSI rendering
+imgcat2 animation.gif  # Uses ANSI rendering
 
-# Force ANSI rendering
+# Force ANSI rendering for PNG
 imgcat2 --force-ansi image.png
 ```
 

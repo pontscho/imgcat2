@@ -134,6 +134,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	int option_index = 0;
 
 	bool is_iterm2 = terminal_is_iterm2();
+	// bool is_ghostty = terminal_is_ghostty();
 	if (is_iterm2) {
 		opts->fit_mode = false;
 	}
@@ -150,14 +151,17 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			case 'F': opts->fps = atoi(optarg); break;
 			case 'a': opts->animate = true; break;
 			case 'A': opts->force_ansi = true; break;
+
 			case 'w':
 				opts->target_width = atoi(optarg);
 				opts->has_custom_dimensions = true;
 				break;
+
 			case 'H':
 				opts->target_height = atoi(optarg);
 				opts->has_custom_dimensions = true;
 				break;
+
 			case '?':
 				/* getopt_long already printed error message */
 				fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
@@ -176,6 +180,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		} else {
 			opts->input_file = argv[optind];
 		}
+
 	} else {
 		/* No file specified, use stdin */
 		opts->input_file = NULL;
@@ -229,6 +234,7 @@ int validate_options(cli_options_t *opts)
 		int rows, cols;
 
 		bool is_iterm2 = terminal_is_iterm2();
+		bool is_ghostty = terminal_is_ghostty();
 
 		/* Get terminal dimensions for bounds checking */
 		if (terminal_get_size(&rows, &cols) != 0) {
@@ -242,7 +248,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check width bounds */
 		if (opts->target_width > 0) {
-			if ((opts->target_width < 1 || opts->target_width > max_width) && !is_iterm2) {
+			if ((opts->target_width < 1 || opts->target_width > max_width) && ! (is_iterm2 || is_ghostty)) {
 				fprintf(stderr, "Error: Width must be between 1 and %d pixels (got %d)\n", max_width, opts->target_width);
 				return -1;
 			}
@@ -250,7 +256,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check height bounds */
 		if (opts->target_height > 0) {
-			if ((opts->target_height < 1 || opts->target_height > max_height) && !is_iterm2) {
+			if ((opts->target_height < 1 || opts->target_height > max_height) && ! (is_iterm2 || is_ghostty)) {
 				fprintf(stderr, "Error: Height must be between 1 and %d pixels (got %d)\n", max_height, opts->target_height);
 				return -1;
 			}
