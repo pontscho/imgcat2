@@ -26,9 +26,18 @@ option(ENABLE_CLANG_FORMAT "Enable clang-format code formatting" ON)
 # Static linking preference
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
 
-# Force static linking for all libraries
-set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+# Platform-specific static linking
+# macOS doesn't support fully static binaries (libSystem must be dynamic)
+# Only link third-party libraries statically on macOS
+if(UNIX AND NOT APPLE)
+	# Linux: Full static linking
+	set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+elseif(APPLE)
+	# macOS: Static link third-party libs, dynamic system libs
+	# Only search for .a files to force static linking
+	set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+endif()
 
 # clang-tidy detection
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
@@ -74,9 +83,27 @@ find_package(PkgConfig REQUIRED)
 # zlib-ng (preferred) or zlib
 pkg_check_modules(ZLIB_NG zlib-ng)
 if(NOT ZLIB_NG_FOUND)
-	find_package(ZLIB REQUIRED)
-	set(ZLIB_LIBRARIES ${ZLIB_LIBRARIES})
-	set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS})
+	# On macOS, find static library explicitly
+	if(APPLE)
+		find_library(ZLIB_LIBRARY NAMES z REQUIRED
+			HINTS /usr/local/opt/zlib/lib /usr/local/lib)
+		find_path(ZLIB_INCLUDE_DIR zlib.h
+			HINTS /usr/local/opt/zlib/include /usr/local/include)
+		if(ZLIB_LIBRARY AND ZLIB_INCLUDE_DIR)
+			set(ZLIB_LIBRARIES ${ZLIB_LIBRARY})
+			set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIR})
+			set(ZLIB_FOUND TRUE)
+		endif()
+	else()
+		# Try pkg-config first (better for finding static libraries)
+		pkg_check_modules(ZLIB zlib)
+		if(NOT ZLIB_FOUND)
+			# Fallback to CMake's FindZLIB
+			find_package(ZLIB REQUIRED)
+			set(ZLIB_LIBRARIES ${ZLIB_LIBRARIES})
+			set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS})
+		endif()
+	endif()
 else()
 	set(ZLIB_LIBRARIES ${ZLIB_NG_LIBRARIES})
 	set(ZLIB_INCLUDE_DIRS ${ZLIB_NG_INCLUDE_DIRS})
@@ -94,9 +121,20 @@ endif()
 add_definitions(-DHAVE_LIBJPEG)
 
 # libpng (REQUIRED)
-pkg_check_modules(PNG libpng16)
-if(NOT PNG_FOUND)
-	pkg_check_modules(PNG libpng)
+# Find static library explicitly on macOS
+if(APPLE)
+	find_library(PNG_LIBRARY NAMES png16 png REQUIRED)
+	find_path(PNG_INCLUDE_DIR png.h PATH_SUFFIXES libpng16 libpng)
+	if(PNG_LIBRARY AND PNG_INCLUDE_DIR)
+		set(PNG_LIBRARIES ${PNG_LIBRARY})
+		set(PNG_INCLUDE_DIRS ${PNG_INCLUDE_DIR})
+		set(PNG_FOUND TRUE)
+	endif()
+else()
+	pkg_check_modules(PNG libpng16)
+	if(NOT PNG_FOUND)
+		pkg_check_modules(PNG libpng)
+	endif()
 endif()
 
 if(NOT PNG_FOUND)
@@ -120,7 +158,19 @@ endif()
 
 # WebP (optional)
 if(ENABLE_WEBP)
-	pkg_check_modules(WEBP libwebp)
+	# Find static library explicitly on macOS
+	if(APPLE)
+		find_library(WEBP_LIBRARY NAMES webp)
+		find_path(WEBP_INCLUDE_DIR webp/decode.h)
+		if(WEBP_LIBRARY AND WEBP_INCLUDE_DIR)
+			set(WEBP_LIBRARIES ${WEBP_LIBRARY})
+			set(WEBP_INCLUDE_DIRS ${WEBP_INCLUDE_DIR})
+			set(WEBP_FOUND TRUE)
+		endif()
+	else()
+		pkg_check_modules(WEBP libwebp)
+	endif()
+
 	if(WEBP_FOUND)
 		add_definitions(-DENABLE_WEBP)
 	else()
@@ -232,14 +282,14 @@ add_library(imgcat2_lib STATIC ${IMGCAT2_SOURCES})
 
 # Link libraries for executable
 target_link_libraries(imgcat2 PRIVATE
-	${PNG_LDFLAGS}
+	${PNG_LIBRARIES}
 	${ZLIB_LIBRARIES}
 	${JPEG_LIBRARIES}
 )
 
 # Link libraries for library
 target_link_libraries(imgcat2_lib PUBLIC
-	${PNG_LDFLAGS}
+	${PNG_LIBRARIES}
 	${ZLIB_LIBRARIES}
 	${JPEG_LIBRARIES}
 )
@@ -250,8 +300,8 @@ if(GIF_FOUND)
 endif()
 
 if(WEBP_FOUND)
-	target_link_libraries(imgcat2 PRIVATE ${WEBP_LDFLAGS})
-	target_link_libraries(imgcat2_lib PUBLIC ${WEBP_LDFLAGS})
+	target_link_libraries(imgcat2 PRIVATE ${WEBP_LIBRARIES})
+	target_link_libraries(imgcat2_lib PUBLIC ${WEBP_LIBRARIES})
 endif()
 
 if(HEIF_FOUND)
