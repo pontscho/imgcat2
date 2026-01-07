@@ -271,6 +271,22 @@ endif()
 # Install target
 install(TARGETS imgcat2 DESTINATION bin)
 
+# clang-format target
+if(ENABLE_CLANG_FORMAT AND CLANG_FORMAT_EXE)
+	file(GLOB_RECURSE ALL_SOURCE_FILES
+		${CMAKE_SOURCE_DIR}/src/*.c
+		${CMAKE_SOURCE_DIR}/src/*.h
+	)
+	add_custom_target(
+		format
+		COMMAND ${CLANG_FORMAT_EXE}
+		-i
+		-style=file
+		${ALL_SOURCE_FILES}
+		COMMENT "Running clang-format on all source files"
+	)
+endif()
+
 # Testing
 if(BUILD_TESTING)
 	enable_testing()
