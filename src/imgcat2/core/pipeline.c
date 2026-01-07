@@ -20,6 +20,7 @@
 #include "../ansi/escape.h"
 #include "../decoders/decoder.h"
 #include "../decoders/magic.h"
+#include "../ghostty/ghostty.h"
 #include "../iterm2/iterm2.h"
 #include "../terminal/terminal.h"
 #include "cli.h"
@@ -748,4 +749,26 @@ int pipeline_render_iterm2(const uint8_t *buffer, size_t buffer_size, const cli_
 	/* Render using iTerm2 protocol with sizing parameters */
 	/* Note: iTerm2 uses original image size by default unless dimensions specified */
 	return iterm2_render(buffer, buffer_size, filename, opts->fit_mode, target_width, target_height);
+}
+
+/**
+ * @brief Render using Ghostty Kitty graphics protocol
+ */
+int pipeline_render_ghostty(const uint8_t *buffer, size_t buffer_size, const cli_options_t *opts)
+{
+	/* Validate inputs */
+	if (buffer == NULL || buffer_size == 0 || opts == NULL) {
+		fprintf(stderr, "pipeline_render_ghostty: invalid parameters\n");
+		return -1;
+	}
+
+	/* Extract filename for metadata (NULL for stdin) */
+	const char *filename = opts->input_file;
+
+	/* Extract sizing parameters from CLI options */
+	int target_width = opts->target_width;
+	int target_height = opts->target_height;
+
+	/* Render using Kitty graphics protocol with sizing parameters */
+	return ghostty_render(buffer, buffer_size, filename, opts->fit_mode, target_width, target_height);
 }

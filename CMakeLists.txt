@@ -265,6 +265,9 @@ set(IMGCAT2_SOURCES
 	# iTerm2 inline images protocol module
 	src/imgcat2/iterm2/base64.c
 	src/imgcat2/iterm2/iterm2.c
+
+	# Ghostty Kitty graphics protocol module
+	src/imgcat2/ghostty/ghostty.c
 )
 
 if(GIF_FOUND)

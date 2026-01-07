@@ -112,4 +112,16 @@ bool terminal_supports_truecolor(void);
  */
 bool terminal_is_iterm2(void);
 
+/**
+ * @brief Check if terminal is Ghostty
+ *
+ * Detects if the current terminal is Ghostty by checking environment variables.
+ * Ghostty sets TERM_PROGRAM="ghostty".
+ *
+ * @return true if running in Ghostty, false otherwise
+ *
+ * @note Used to enable Kitty graphics protocol
+ */
+bool terminal_is_ghostty(void);
+
 #endif /* IMGCAT2_TERMINAL_H */

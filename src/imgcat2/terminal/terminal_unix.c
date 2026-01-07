@@ -169,3 +169,18 @@ bool terminal_is_iterm2(void)
 	/* Not iTerm2 */
 	return false;
 }
+
+/**
+ * @brief Check if terminal is Ghostty
+ */
+bool terminal_is_ghostty(void)
+{
+	/* Detection: TERM_PROGRAM environment variable */
+	const char *term_program = getenv("TERM_PROGRAM");
+	if (term_program != NULL && strcmp(term_program, "ghostty") == 0) {
+		return true;
+	}
+
+	/* Not Ghostty */
+	return false;
+}

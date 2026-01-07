@@ -6,11 +6,11 @@
    (_|   |_)  |_|_| |_| |_|\__, |\___\__,_|\__|_____|
                            |___/
 
-            -- Purr-fect terminal image viewer! --
-            --   ANSI • Terminal • True Color   --
+             -- Purr-fect terminal image viewer! --
+            -- ANSI • iTerm2 • Kitty • True Color --
 ```
 
-A command-line tool that displays images and animated GIFs directly in terminal emulators using standard ANSI escape sequences and Unicode characters.
+A command-line tool that displays images and animated GIFs directly in terminal emulators using standard ANSI escape sequences, iTerm2 inline images protocol, and Kitty graphics protocol.
 
 <p align="center">
   <img src="docs/example.gif" alt="imgcat2 in action">
@@ -21,10 +21,10 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
 - **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, and optionally WebP, HEIF, TIFF, RAW
-- **iTerm2 Native Support** - Automatically uses iTerm2's inline images protocol for higher quality when available
+- **Native Protocol Support** - Automatically uses iTerm2 inline images or Ghostty Kitty graphics protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
-- **Animation Support** - Displays animated GIFs with smooth playback (native in iTerm2)
+- **Animation Support** - Displays animated GIFs with smooth playback (native in iTerm2 and Ghostty)
 - **High-Quality Scaling** - Uses advanced interpolation for photographic images
 - **Pure C Implementation** - Fast, efficient, and lightweight (C11 standard)
 - **Static Linking** - Produces fully static binaries where possible
@@ -32,13 +32,23 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 
 ## How It Works
 
-imgcat2 uses the **half-block rendering technique** with Unicode character `▄` (U+2584) to achieve double vertical resolution:
+imgcat2 supports multiple rendering modes depending on your terminal:
+
+### Native Protocol Mode (iTerm2 / Ghostty)
+When running in iTerm2 or Ghostty, imgcat2 uses native image protocols for the highest quality:
+- **iTerm2**: Uses OSC 1337 inline images protocol
+- **Ghostty**: Uses Kitty graphics protocol
+- Automatic detection based on `TERM_PROGRAM` environment variable
+- Falls back to ANSI rendering if protocol fails
+
+### ANSI Rendering Mode (Universal Fallback)
+For all other terminals, imgcat2 uses the **half-block rendering technique** with Unicode character `▄` (U+2584) to achieve double vertical resolution:
 
 - **Background color** represents the top pixel
 - **Foreground color + half-block** represents the bottom pixel
 - Each terminal cell displays **two pixels vertically**
 
-This technique provides universal compatibility without requiring Sixel graphics, Kitty graphics protocol, or iTerm2 inline images.
+This technique provides universal compatibility with any terminal supporting true color and Unicode.
 
 ## Prerequisites
 
@@ -194,15 +204,15 @@ imgcat2 automatically detects iTerm2 by checking the `TERM_PROGRAM` environment 
 5. Automatically falls back to ANSI rendering if protocol fails
 
 ### Force ANSI Rendering
-To disable iTerm2 protocol and use ANSI rendering:
+To disable native protocols (iTerm2/Ghostty) and use ANSI rendering:
 ```bash
 imgcat2 --force-ansi image.png
 ```
 
 This is useful for:
-- Testing ANSI rendering in iTerm2
+- Testing ANSI rendering in iTerm2 or Ghostty
 - Compatibility with tools that expect ANSI output
-- Scenarios where iTerm2 protocol may not work (e.g., remote sessions)
+- Scenarios where native protocols may not work (e.g., remote sessions)
 
 ### iTerm2 Sizing Examples
 ```bash
@@ -220,6 +230,44 @@ imgcat2 -w 800 -H 600 image.png
 
 # Animated GIF at original size
 imgcat2 animation.gif
+```
+
+## Ghostty Native Support
+
+When running in Ghostty terminal, imgcat2 automatically uses the Kitty graphics protocol for high-quality image rendering:
+
+### Advantages in Ghostty
+- **Higher Quality** - Native image rendering using Kitty graphics protocol
+- **Better Colors** - No color quantization or dithering
+- **Faster Rendering** - Direct image display without pixel-by-pixel processing
+- **Native Animations** - Smooth GIF playback handled by the terminal
+- **Automatic Scaling** - Images scale to fit terminal window while preserving aspect ratio
+- **Custom Sizing** - Supports `-w` and `-H` flags for precise control
+
+### How It Works
+imgcat2 automatically detects Ghostty by checking the `TERM_PROGRAM` environment variable. When detected:
+1. Validates image format is supported (PNG, JPEG, GIF)
+2. Sends image data via Kitty graphics protocol (`\033_G`)
+3. **Default behavior**: Fits image to terminal width, preserving aspect ratio
+4. **With `-w` or `-H`**: Scales to specified pixel dimensions (converted to terminal cells)
+5. Automatically falls back to ANSI rendering if protocol fails
+
+### Ghostty Sizing Examples
+```bash
+# Fit to terminal width (default in Ghostty)
+imgcat2 image.png
+
+# Scale to 800px width
+imgcat2 -w 800 image.png
+
+# Scale to 600px height
+imgcat2 -H 600 image.png
+
+# Animated GIF with auto-fit
+imgcat2 animation.gif
+
+# Force ANSI rendering
+imgcat2 --force-ansi image.png
 ```
 
 ## Usage
@@ -256,7 +304,7 @@ Options:
   --top-offset=<n>   Number of lines to reserve at top (default: 8)
   --animate          Display animated GIFs (default for .gif files)
   --fps=<n>          Animation frame rate (default: 15)
-  --force-ansi       Force ANSI rendering (disable iTerm2 protocol)
+  --force-ansi       Force ANSI rendering (disable iTerm2/Ghostty protocols)
   --silent           Suppress exit message during animation
   -h, --help         Show this help message
   -v, --version      Show version information

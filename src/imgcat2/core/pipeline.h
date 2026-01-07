@@ -188,4 +188,22 @@ int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts
  */
 int pipeline_render_iterm2(const uint8_t *buffer, size_t buffer_size, const cli_options_t *opts);
 
+/**
+ * @brief Render using Ghostty Kitty graphics protocol
+ *
+ * Renders image using Kitty graphics protocol.
+ * Bypasses the decode/scale pipeline and sends raw image data directly
+ * to Ghostty for native rendering.
+ *
+ * @param buffer Raw image file data
+ * @param buffer_size Size of data in bytes
+ * @param opts CLI options (for filename)
+ *
+ * @return 0 on success, -1 on error
+ *
+ * @note Only call when terminal_is_ghostty() returns true
+ * @note Automatically falls back to ANSI if rendering fails
+ */
+int pipeline_render_ghostty(const uint8_t *buffer, size_t buffer_size, const cli_options_t *opts);
+
 #endif /* IMGCAT2_PIPELINE_H */

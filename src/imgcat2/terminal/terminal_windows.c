@@ -174,4 +174,10 @@ bool terminal_is_iterm2(void)
 	return false;
 }
 
+bool terminal_is_ghostty(void)
+{
+	/* Ghostty is not available on Windows */
+	return false;
+}
+
 #endif /* _WIN32 */

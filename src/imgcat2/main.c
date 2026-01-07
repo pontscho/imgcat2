@@ -14,6 +14,7 @@
 #include "core/image.h"
 #include "core/pipeline.h"
 #include "decoders/decoder.h"
+#include "ghostty/ghostty.h"
 #include "iterm2/iterm2.h"
 #include "terminal/terminal.h"
 
@@ -69,8 +70,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Read %zu bytes from %s\n", buffer_size, opts.input_file ? opts.input_file : "stdin");
 	}
 
-	/* DECISION POINT: iTerm2 vs ANSI rendering */
+	/* DECISION POINT: iTerm2 / Ghostty / ANSI rendering */
 	bool use_iterm2 = false;
+	bool use_ghostty = false;
 
 	if (!opts.force_ansi && terminal_is_iterm2()) {
 		/* Check if format is supported by iTerm2 protocol */
@@ -84,6 +86,20 @@ int main(int argc, char **argv)
 		} else {
 			if (!opts.silent) {
 				fprintf(stderr, "Format not supported by iTerm2, using ANSI rendering\n");
+			}
+		}
+	} else if (!opts.force_ansi && terminal_is_ghostty()) {
+		/* Check if format is supported by Kitty graphics protocol */
+		if (ghostty_is_format_supported(buffer, buffer_size)) {
+			use_ghostty = true;
+
+			if (!opts.silent) {
+				fprintf(stderr, "Using Ghostty (Kitty graphics protocol)\n");
+			}
+
+		} else {
+			if (!opts.silent) {
+				fprintf(stderr, "Format not supported by Ghostty, using ANSI rendering\n");
 			}
 		}
 	}
@@ -104,7 +120,23 @@ int main(int argc, char **argv)
 		}
 	}
 
-	/* ANSI rendering path (or fallback from iTerm2 failure) */
+	/* Ghostty rendering path - bypass decode/scale pipeline */
+	if (use_ghostty) {
+		if (pipeline_render_ghostty(buffer, buffer_size, &opts) < 0) {
+			/* Ghostty rendering failed, fall back to ANSI */
+			if (!opts.silent) {
+				fprintf(stderr, "Ghostty rendering failed, falling back to ANSI\n");
+			}
+			use_ghostty = false;
+
+		} else {
+			/* Success - skip ANSI pipeline */
+			exit_code = EXIT_SUCCESS;
+			goto cleanup;
+		}
+	}
+
+	/* ANSI rendering path (or fallback from iTerm2/Ghostty failure) */
 
 	/* STEP 2: Decode image with MIME detection */
 	if (pipeline_decode(&opts, buffer, buffer_size, &frames, &frame_count) < 0) {
