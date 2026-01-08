@@ -209,3 +209,12 @@ bool terminal_is_ghostty(void)
 	/* Not Ghostty */
 	return false;
 }
+
+/**
+ * @brief Check if running inside tmux
+ */
+bool terminal_is_tmux(void)
+{
+	/* Check if TMUX environment variable is set */
+	return getenv("TMUX") != NULL;
+}

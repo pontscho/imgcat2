@@ -20,7 +20,7 @@
 #include "../ansi/escape.h"
 #include "../decoders/decoder.h"
 #include "../decoders/magic.h"
-#include "../ghostty/ghostty.h"
+#include "../kitty/kitty.h"
 #include "../iterm2/iterm2.h"
 #include "../terminal/terminal.h"
 #include "cli.h"
@@ -473,12 +473,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 	}
 
 	/* Get terminal size */
-	int rows, cols;
-	if (terminal_get_size(&rows, &cols) != 0) {
-		fprintf(stderr, "pipeline_scale: failed to get terminal size, using defaults\n");
-		rows = DEFAULT_TERM_ROWS;
-		cols = DEFAULT_TERM_COLS;
-	}
+	int rows = opts->terminal.rows, cols = opts->terminal.cols;
 
 	/* Determine target dimensions based on priority */
 	target_dimensions_t target = { 0, 0 };
@@ -499,13 +494,31 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 			if (opts->target_height > 0) {
 				fprintf(stderr, "height=%d ", opts->target_height);
 			}
-			fprintf(stderr, "(final: %u×%u)\n", target.width, target.height);
+			fprintf(stderr, "(final: %ux%u)\n", target.width, target.height);
 		}
 
-	} else if (terminal_is_ghostty() && !opts->force_ansi) {
-		/* Ghostty: use terminal size directly */
-		// target = calculate_target_terminal_dimensions(cols, rows, opts->top_offset);
-		calculate_custom_dimensions(frames[0], frames[0]->width, frames[0]->height, &target);
+	} else if (opts->terminal.has_kitty && ! opts->force_ansi) {
+		uint32_t img_height = frames[0]->height;
+		uint32_t half_terminal_height = opts->terminal.height / 2;
+
+		if (img_height > half_terminal_height) {
+			uint32_t max_height = 0;
+			if (opts->fit_mode) {
+				max_height = (opts->terminal.height > 10) ? (opts->terminal.height - 10) : opts->terminal.height;
+
+			} else {
+				max_height = half_terminal_height;
+			}
+
+			/* Scale to max_height preserving aspect ratio */
+			float aspect = (float)frames[0]->width / (float)frames[0]->height;
+			target.height = max_height;
+			target.width = (uint32_t)roundf((float)max_height * aspect);
+
+		} else {
+			/* Image fits within half terminal height - use original size */
+			calculate_custom_dimensions(frames[0], frames[0]->width, frames[0]->height, &target);
+		}
 
 	} else {
 		/* Default: terminal-aware scaling */
@@ -652,9 +665,6 @@ static int render_animated(image_t **frames, int frame_count, const cli_options_
 	ansi_cursor_hide();
 	void *echo_state = terminal_disable_echo();
 
-	/* Print newline before animation */
-	printf("\n");
-
 	/* Animation loop */
 	bool first_iteration = true;
 	while (*running) {
@@ -715,21 +725,13 @@ int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts
 	if (frames == NULL || frame_count <= 0 || opts == NULL) {
 		fprintf(stderr, "pipeline_render: invalid parameters\n");
 		return -1;
-	}
 
-	/* Dispatch to static or animated rendering */
-	if (frame_count == 1) {
-		/* Single frame - always render as static */
-		return render_static_frame(frames[0]);
-
-	} else if (opts->animate) {
+	} else if (opts->animate && frame_count > 1) {
 		/* Multiple frames and animation requested */
 		return render_animated(frames, frame_count, opts);
-
-	} else {
-		/* Multiple frames but no animation - show first frame only */
-		return render_static_frame(frames[0]);
 	}
+
+	return render_static_frame(frames[0]);
 }
 
 /**
@@ -753,26 +755,4 @@ int pipeline_render_iterm2(const uint8_t *buffer, size_t buffer_size, const cli_
 	/* Render using iTerm2 protocol with sizing parameters */
 	/* Note: iTerm2 uses original image size by default unless dimensions specified */
 	return iterm2_render(buffer, buffer_size, filename, opts->fit_mode, target_width, target_height);
-}
-
-/**
- * @brief Render using Ghostty Kitty graphics protocol
- */
-int pipeline_render_ghostty(const uint8_t *buffer, size_t buffer_size, const cli_options_t *opts)
-{
-	/* Validate inputs */
-	if (buffer == NULL || buffer_size == 0 || opts == NULL) {
-		fprintf(stderr, "pipeline_render_ghostty: invalid parameters\n");
-		return -1;
-	}
-
-	/* Extract filename for metadata (NULL for stdin) */
-	const char *filename = opts->input_file;
-
-	/* Extract sizing parameters from CLI options */
-	int target_width = opts->target_width;
-	int target_height = opts->target_height;
-
-	/* Render using Kitty graphics protocol with sizing parameters */
-	return ghostty_render(buffer, buffer_size, filename, opts, target_width, target_height);
 }

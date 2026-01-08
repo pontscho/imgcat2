@@ -14,7 +14,7 @@
 #include "core/image.h"
 #include "core/pipeline.h"
 #include "decoders/decoder.h"
-#include "ghostty/ghostty.h"
+#include "kitty/kitty.h"
 #include "iterm2/iterm2.h"
 #include "terminal/terminal.h"
 
@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 		.input_file = NULL,
 		.top_offset = 8,
 		.interpolation = "lanczos",
-		.fit_mode = true,
+		.fit_mode = false,
 		.silent = true,
 		.fps = 15,
 		.animate = false,
@@ -46,15 +46,23 @@ int main(int argc, char **argv)
 			.height = 0,
 			.is_iterm2 = terminal_is_iterm2(),
 			.is_ghostty = terminal_is_ghostty(),
+
+			.is_tmux = terminal_is_tmux(),
+
+			.has_kitty = terminal_is_ghostty(),
 		},
 	};
 
-	terminal_get_size(&opts.terminal.rows, &opts.terminal.cols);
 	terminal_get_pixels(&opts.terminal.width, &opts.terminal.height);
-
-	if (opts.terminal.is_ghostty || opts.terminal.is_iterm2) {
-		opts.fit_mode = false;
+	if (terminal_get_size(&opts.terminal.rows, &opts.terminal.cols) < 0) {
+		fprintf(stderr, "Warning: Failed to get terminal size, using defaults\n");
+		opts.terminal.rows = DEFAULT_TERM_ROWS;
+		opts.terminal.cols = DEFAULT_TERM_COLS;
 	}
+
+	// if (opts.terminal.is_ghostty || opts.terminal.is_iterm2) {
+	// 	opts.fit_mode = false;
+	// }
 
 	/* Parse command-line arguments */
 	if (parse_arguments(argc, argv, &opts) != 0) {
@@ -113,7 +121,7 @@ int main(int argc, char **argv)
 
 	} else if (!opts.force_ansi && opts.terminal.is_ghostty) {
 		/* Check if format is supported by Kitty graphics protocol */
-		if (ghostty_is_format_supported(buffer, buffer_size, &opts)) {
+		if (kitty_is_format_supported(buffer, buffer_size, &opts)) {
 			if (!opts.silent) {
 				fprintf(stderr, "Using Ghostty (Kitty graphics protocol)\n");
 			}
@@ -148,17 +156,15 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Scaled to %ux%u pixels\n", scaled_frames[0]->width, scaled_frames[0]->height);
 	}
 
-	if (opts.terminal.is_ghostty) {
-		extern int ghostty_render2(image_t * *frames, int frame_count, const char *filename, const cli_options_t *opts, int target_width, int target_height);
-		/* Render using Ghostty protocol */
-		printf(" ! opts.target_width=%d opts.target_height=%d \n", opts.target_width, opts.target_height);
-		if (ghostty_render2(scaled_frames, frame_count, opts.input_file, &opts, opts.target_width, opts.target_height) == 0) {
+	/* STEP 4.1: Render using Kitty graphics protocol */
+	if (opts.terminal.has_kitty && !opts.force_ansi) {
+		if (kitty_render(scaled_frames, frame_count, &opts) == 0) {
 			exit_code = EXIT_SUCCESS;
 			goto cleanup;
 		}
 	}
 
-	/* STEP 4: Render to terminal */
+	/* STEP 4.2: Render to terminal */
 	if (pipeline_render(scaled_frames, frame_count, &opts) < 0) {
 		fprintf(stderr, "Error: Failed to render output\n");
 		goto cleanup;

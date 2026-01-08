@@ -89,6 +89,7 @@ char *generate_line_ansi(const image_t *img, uint32_t y_top, char *line_buffer)
 		if (top_a < 128) {
 			/* Transparent background */
 			written = snprintf(ptr, remaining, ANSI_BG_TRANSPARENT);
+
 		} else {
 			/* Opaque background */
 			written = snprintf(ptr, remaining, ANSI_BG_RGB, top_r, top_g, top_b);
@@ -105,6 +106,7 @@ char *generate_line_ansi(const image_t *img, uint32_t y_top, char *line_buffer)
 		if (bottom_a < 128) {
 			/* Transparent foreground */
 			written = snprintf(ptr, remaining, ANSI_FG_TRANSPARENT);
+
 		} else {
 			/* Opaque foreground + half-block */
 			written = snprintf(ptr, remaining, ANSI_FG_RGB_HALFBLOCK, bottom_r, bottom_g, bottom_b);

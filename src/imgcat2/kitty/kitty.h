@@ -1,6 +1,6 @@
 /**
- * @file ghostty.h
- * @brief Ghostty Terminal Kitty Graphics Protocol implementation
+ * @file kitty.h
+ * @brief Terminal Kitty Graphics Protocol implementation
  *
  * Provides functions for rendering images using the Kitty graphics protocol
  * which is supported by Ghostty terminal. Supports both static and animated
@@ -10,8 +10,8 @@
  * image data directly to the terminal with flexible positioning and scaling.
  */
 
-#ifndef IMGCAT2_GHOSTTY_H
-#define IMGCAT2_GHOSTTY_H
+#ifndef IMGCAT2_KITTY_H
+#define IMGCAT2_KITTY_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -43,7 +43,7 @@
  * @note Uses gif_is_animated() to detect animated GIFs
  * @note Returns false if data is NULL or size is 0
  */
-bool ghostty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *opts);
+bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *opts);
 
 /**
  * @brief Render image using Kitty graphics protocol
@@ -68,32 +68,19 @@ bool ghostty_is_format_supported(const uint8_t *data, size_t size, cli_options_t
  * - c=<cols>: width in terminal columns (optional sizing)
  * - r=<rows>: height in terminal rows (optional sizing)
  *
- * @param data Raw image file data
- * @param size Size of data in bytes
- * @param filename Optional filename for metadata (currently unused)
+ * @param frames Array of image frames
+ * @param frame_count Number of frames in the array
  * @param opts Command-line options for rendering
- * @param target_width Target width in pixels (-1 for auto/fit mode)
- * @param target_height Target height in pixels (-1 for auto/fit mode)
  *
  * @return 0 on success, -1 on error
  *
  * @note Automatically handles tmux environments with DCS wrapping
  * @note PNG images bypass decoding for maximum efficiency
  * @note JPEG/GIF images are decoded once and transmitted as RGBA
- * @note Animated GIFs should not reach this function (filtered by ghostty_is_format_supported)
+ * @note Animated GIFs should not reach this function (filtered by kitty_is_format_supported)
  * @note If target_width/height specified: converts to terminal cell dimensions
  * @note Outputs to stdout
  */
-int ghostty_render(const uint8_t *data, size_t size, const char *filename, const cli_options_t *opts, int target_width, int target_height);
+int kitty_render(image_t **frames, int frame_count, const cli_options_t *opts);
 
-/**
- * @brief Check if running inside tmux
- *
- * Detects tmux by checking the TMUX environment variable.
- * When inside tmux, escape sequences must be wrapped with DCS.
- *
- * @return true if TMUX environment variable is set, false otherwise
- */
-bool ghostty_is_tmux(void);
-
-#endif /* IMGCAT2_GHOSTTY_H */
+#endif /* IMGCAT2_KITTY_H */

@@ -141,4 +141,14 @@ bool terminal_is_iterm2(void);
  */
 bool terminal_is_ghostty(void);
 
+/**
+ * @brief Check if running inside tmux
+ *
+ * Detects if the current terminal session is running inside tmux
+ * by checking the TMUX environment variable.
+ *
+ * @return true if inside tmux, false otherwise
+ */
+bool terminal_is_tmux(void);
+
 #endif /* IMGCAT2_TERMINAL_H */
