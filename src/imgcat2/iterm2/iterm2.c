@@ -11,7 +11,7 @@
 #include <string.h>
 
 #include "../decoders/magic.h"
-#include "base64.h"
+#include "../core/base64.h"
 #include "iterm2.h"
 
 bool iterm2_is_format_supported(const uint8_t *data, size_t size)

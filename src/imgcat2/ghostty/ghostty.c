@@ -12,7 +12,7 @@
 
 #include "../decoders/decoder.h"
 #include "../decoders/magic.h"
-#include "../iterm2/base64.h"
+#include "../core/base64.h"
 #include "../terminal/terminal.h"
 #include "ghostty.h"
 

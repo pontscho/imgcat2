@@ -250,6 +250,7 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/core/image.c
 	src/imgcat2/core/pipeline.c
 	src/imgcat2/core/cli.c
+	src/imgcat2/core/base64.c
 
 	# Decoders module
 	src/imgcat2/decoders/decoder.c
@@ -263,7 +264,6 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/ansi/escape.c
 
 	# iTerm2 inline images protocol module
-	src/imgcat2/iterm2/base64.c
 	src/imgcat2/iterm2/iterm2.c
 
 	# Ghostty Kitty graphics protocol module
