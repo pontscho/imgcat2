@@ -12,6 +12,7 @@
 
 #include "../decoders/magic.h"
 #include "../core/base64.h"
+#include "../core/cli.h"
 #include "iterm2.h"
 
 bool iterm2_is_format_supported(const uint8_t *data, size_t size)
@@ -34,16 +35,8 @@ bool iterm2_is_format_supported(const uint8_t *data, size_t size)
 	}
 }
 
-bool iterm2_is_tmux(void)
+int iterm2_render(const uint8_t *data, size_t size, const cli_options_t *opts, int target_width, int target_height)
 {
-	/* Check if TMUX environment variable is set */
-	return getenv("TMUX") != NULL;
-}
-
-int iterm2_render(const uint8_t *data, size_t size, const char *filename, bool fit_mode, int target_width, int target_height)
-{
-		printf("target_width=%d target_height=%d fit_mode=%d \n", target_width, target_height, fit_mode);
-
 	/* Validate inputs */
 	if (data == NULL || size == 0) {
 		fprintf(stderr, "Error: iTerm2 render called with invalid data\n");
@@ -60,17 +53,13 @@ int iterm2_render(const uint8_t *data, size_t size, const char *filename, bool f
 
 	/* Base64 encode filename if provided */
 	char *encoded_filename = NULL;
-	if (filename != NULL) {
+	if (opts->input_file != NULL) {
 		size_t filename_encoded_size = 0;
-		encoded_filename = base64_encode((const uint8_t *)filename, strlen(filename), &filename_encoded_size);
-		/* Filename encoding failure is non-fatal - just omit it */
+		encoded_filename = base64_encode((const uint8_t *)opts->input_file, strlen(opts->input_file), &filename_encoded_size);
 	}
 
-	/* Check if running inside tmux */
-	bool in_tmux = iterm2_is_tmux();
-
 	/* Construct iTerm2 inline images escape sequence (OSC 1337) */
-	if (in_tmux) {
+	if (opts->terminal.is_tmux) {
 		/* Wrap with tmux DCS sequence: \033Ptmux;\033 ... \033\\ */
 		printf("\033Ptmux;\033\033]1337;File=inline=1;size=%zu", size);
 	} else {
@@ -86,7 +75,7 @@ int iterm2_render(const uint8_t *data, size_t size, const char *filename, bool f
 	/* Add width/height parameters based on CLI options */
 	/* For iTerm2, default to original image size (no parameters) */
 	/* Only add dimensions if explicitly specified by user */
-	if (fit_mode) {
+	if (opts->fit_mode) {
 		/* Fit mode: ignore explicit dimensions, use original size */
 		printf(";width=90%%");
 		printf(";height=90%%");
@@ -120,17 +109,14 @@ int iterm2_render(const uint8_t *data, size_t size, const char *filename, bool f
 	printf(":%s", encoded);
 
 	/* Terminate escape sequence */
-	if (in_tmux) {
+	if (opts->terminal.is_tmux) {
 		printf("\a\033\\"); /* BEL + tmux end DCS */
 
 	} else {
 		printf("\a"); /* BEL */
 	}
 
-	/* Print newline after image */
 	printf("\n");
-
-	/* Flush output */
 	fflush(stdout);
 
 	/* Cleanup */

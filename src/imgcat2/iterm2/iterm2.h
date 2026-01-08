@@ -49,8 +49,7 @@ bool iterm2_is_format_supported(const uint8_t *data, size_t size);
  *
  * @param data Raw image file data
  * @param size Size of data in bytes
- * @param filename Optional filename for metadata (can be NULL)
- * @param fit_mode If true, fit image to terminal while preserving aspect ratio
+ * @param opts Command-line options (for filename and fit mode)
  * @param target_width Target width in pixels (-1 for auto/original size)
  * @param target_height Target height in pixels (-1 for auto/original size)
  *
@@ -62,7 +61,7 @@ bool iterm2_is_format_supported(const uint8_t *data, size_t size);
  * @note If no dimensions specified: uses original image size
  * @note Outputs to stdout
  */
-int iterm2_render(const uint8_t *data, size_t size, const char *filename, bool fit_mode, int target_width, int target_height);
+int iterm2_render(const uint8_t *data, size_t size, const cli_options_t *opts, int target_width, int target_height);
 
 /**
  * @brief Check if running inside tmux

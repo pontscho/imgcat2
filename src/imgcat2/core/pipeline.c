@@ -745,14 +745,11 @@ int pipeline_render_iterm2(const uint8_t *buffer, size_t buffer_size, const cli_
 		return -1;
 	}
 
-	/* Extract filename for metadata (NULL for stdin) */
-	const char *filename = opts->input_file;
-
 	/* Extract sizing parameters from CLI options */
 	int target_width = opts->target_width;
 	int target_height = opts->target_height;
 
 	/* Render using iTerm2 protocol with sizing parameters */
 	/* Note: iTerm2 uses original image size by default unless dimensions specified */
-	return iterm2_render(buffer, buffer_size, filename, opts->fit_mode, target_width, target_height);
+	return iterm2_render(buffer, buffer_size, opts, target_width, target_height);
 }
