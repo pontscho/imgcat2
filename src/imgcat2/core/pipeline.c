@@ -500,6 +500,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 	} else if (opts->terminal.has_kitty && ! opts->force_ansi) {
 		uint32_t img_height = frames[0]->height;
 		uint32_t half_terminal_height = opts->terminal.height / 2;
+		float aspect = (float)frames[0]->width / (float)frames[0]->height;
 
 		if (img_height > half_terminal_height) {
 			uint32_t max_height = 0;
@@ -511,9 +512,21 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 			}
 
 			/* Scale to max_height preserving aspect ratio */
-			float aspect = (float)frames[0]->width / (float)frames[0]->height;
 			target.height = max_height;
 			target.width = (uint32_t)roundf((float)max_height * aspect);
+
+		} else if (opts->fit_mode) {
+			/* Fit within terminal width, if new height is bigger than terminal height adjust the target by terminal height */
+			uint32_t max_width = opts->terminal.width;
+			int calc_height = (int)roundf((float)max_width / aspect);
+
+			if (calc_height > opts->terminal.height) {
+				target.height = opts->terminal.height;
+				target.width = (uint32_t)roundf((float)target.height * aspect);
+			} else {
+				target.width = max_width;
+				target.height = calc_height;
+			}
 
 		} else {
 			/* Image fits within half terminal height - use original size */
