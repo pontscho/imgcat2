@@ -19,6 +19,8 @@
 
 bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *opts)
 {
+	(void)opts;
+
 	/* Validate inputs */
 	if (data == NULL || size == 0) {
 		return false;
