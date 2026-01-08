@@ -96,9 +96,8 @@ image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t tar
 	if (src == NULL || src->pixels == NULL) {
 		fprintf(stderr, "image_scale_fit: invalid source image\n");
 		return NULL;
-	}
 
-	if (target_width == 0 || target_height == 0) {
+	} else if (target_width == 0 || target_height == 0) {
 		fprintf(stderr, "image_scale_fit: invalid target dimensions %u×%u\n", target_width, target_height);
 		return NULL;
 	}
@@ -118,6 +117,7 @@ image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t tar
 			new_height = target_height;
 			new_width = (uint32_t)roundf((float)new_height * src_aspect);
 		}
+
 	} else {
 		/* Source is taller - fit to height */
 		new_height = target_height;

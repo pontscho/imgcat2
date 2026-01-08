@@ -70,7 +70,7 @@ static int gif_read_func(GifFileType *gif, GifByteType *buf, int len)
  * @param transparent_color Transparent color index (-1 if none)
  * @param out_rgba Output RGBA pixel [4 bytes]
  */
-static void gif_index_to_rgba(const ColorMapObject *color_map, int index, int transparent_color, uint8_t *out_rgba)
+static inline void gif_index_to_rgba(const ColorMapObject *color_map, int index, int transparent_color, uint8_t *out_rgba)
 {
 	if (color_map == NULL || index < 0 || index >= color_map->ColorCount) {
 		// Invalid index, use black
@@ -460,4 +460,52 @@ cleanup_error:
 	free(frames);
 	DGifCloseFile(gif, &error_code);
 	return NULL;
+}
+
+/**
+ * @brief Check if GIF is animated (has multiple frames)
+ *
+ * Quickly checks if a GIF file contains multiple frames without
+ * fully decoding the image data. Useful for determining whether
+ * to use native protocols or fallback rendering.
+ *
+ * @param data Raw GIF file data
+ * @param size Size of data in bytes
+ * @return true if GIF has more than one frame, false otherwise or on error
+ *
+ * @note Returns false if data is invalid or not a GIF
+ * @note Does not validate that frames are decodable, only counts them
+ */
+bool gif_is_animated(const uint8_t *data, size_t size)
+{
+	if (data == NULL || size == 0) {
+		return false;
+	}
+
+	/* Setup memory reader */
+	gif_mem_reader reader;
+	reader.data = data;
+	reader.size = size;
+	reader.offset = 0;
+
+	/* Open GIF */
+	int error_code = 0;
+	GifFileType *gif = DGifOpen(&reader, gif_read_func, &error_code);
+	if (gif == NULL) {
+		return false;
+	}
+
+	/* Read GIF metadata (does not decode pixel data) */
+	if (DGifSlurp(gif) == GIF_ERROR) {
+		DGifCloseFile(gif, &error_code);
+		return false;
+	}
+
+	/* Check if animated (more than one frame) */
+	bool is_animated = (gif->ImageCount > 1);
+
+	/* Cleanup */
+	DGifCloseFile(gif, &error_code);
+
+	return is_animated;
 }

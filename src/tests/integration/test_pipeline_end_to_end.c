@@ -19,7 +19,7 @@
 #include "../ctest.h"
 
 /**
- * @test Test calculate_target_dimensions() function
+ * @test Test calculate_target_terminal_dimensions() function
  *
  * Verifies terminal dimension calculation for half-block rendering.
  */
@@ -28,17 +28,17 @@ CTEST(integration, target_dimensions)
 	target_dimensions_t dims;
 
 	/* 80x24 terminal, no offset */
-	dims = calculate_target_dimensions(80, 24, 0);
+	dims = calculate_target_terminal_dimensions(80, 24, 0);
 	ASSERT_EQUAL(80, dims.width);
 	ASSERT_EQUAL(48, dims.height); /* 24 * 2 for half-blocks */
 
 	/* 100x30 terminal, 2 line offset */
-	dims = calculate_target_dimensions(100, 30, 2);
+	dims = calculate_target_terminal_dimensions(100, 30, 2);
 	ASSERT_EQUAL(100, dims.width);
 	ASSERT_EQUAL(56, dims.height); /* (30 - 2) * 2 */
 
 	/* Zero dimensions should return {0, 0} */
-	dims = calculate_target_dimensions(0, 24, 0);
+	dims = calculate_target_terminal_dimensions(0, 24, 0);
 	ASSERT_EQUAL(0, dims.width);
 	ASSERT_EQUAL(0, dims.height);
 }

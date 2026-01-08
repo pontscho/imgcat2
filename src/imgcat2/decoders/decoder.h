@@ -154,4 +154,21 @@ image_t **decoder_decode(cli_options_t *opts, const uint8_t *data, size_t len, m
  */
 void decoder_free_frames(image_t **frames, int frame_count);
 
+#ifdef HAVE_GIFLIB
+/**
+ * @brief Check if GIF is animated (has multiple frames)
+ *
+ * Quickly checks if a GIF file contains multiple frames without
+ * fully decoding the image data.
+ *
+ * @param data Raw GIF file data
+ * @param size Size of data in bytes
+ * @return true if GIF has more than one frame, false otherwise or on error
+ *
+ * @note Returns false if data is invalid or not a GIF
+ * @note Requires HAVE_GIFLIB to be defined
+ */
+bool gif_is_animated(const uint8_t *data, size_t size);
+#endif
+
 #endif /* IMGCAT2_DECODER_H */

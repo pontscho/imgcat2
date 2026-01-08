@@ -63,6 +63,25 @@ int terminal_get_size(int *rows, int *cols)
 }
 
 /**
+ * @brief Get terminal pixel dimensions using GetConsoleScreenBufferInfo
+ */
+int terminal_get_pixels(int *width, int *height)
+{
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	HWND console = GetConsoleWindow();
+	RECT rect;
+
+	if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi) == 0 && GetWindowRect(console, &rect)) {
+		*width = rect.right - rect.left;
+		*height = rect.bottom - rect.top;
+
+		return 0;
+	}
+
+	return -1;
+}
+
+/**
  * @brief Check if file descriptor is a TTY using GetFileType
  */
 bool terminal_is_tty(int fd)

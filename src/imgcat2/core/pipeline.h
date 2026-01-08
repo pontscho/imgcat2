@@ -106,10 +106,10 @@ typedef struct {
  * @note Clamps width to maximum 1000 columns to prevent excessive memory use
  *
  * @example
- * target_dimensions_t dims = calculate_target_dimensions(80, 24, 0);
+ * target_dimensions_t dims = calculate_target_terminal_dimensions(80, 24, 0);
  * // dims.width = 80, dims.height = 48 (24 * 2)
  */
-target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset);
+target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset);
 
 /**
  * @brief Read input (file or stdin) based on CLI options
@@ -145,7 +145,7 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, ima
  * @brief Scale images to terminal dimensions
  *
  * Scales all frames to fit terminal size based on CLI options.
- * Uses terminal_get_size() and calculate_target_dimensions().
+ * Uses terminal_get_size() and calculate_target_terminal_dimensions().
  *
  * @param frames Input frames array
  * @param frame_count Number of frames

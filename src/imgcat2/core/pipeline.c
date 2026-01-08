@@ -86,12 +86,6 @@ static bool validate_path_safe(const char *path, char *canonical_out)
 		return false;
 	}
 
-	// Check for obvious ".." components
-	if (strstr(path, "..") != NULL) {
-		fprintf(stderr, "Error: Path contains '..' component: %s\n", path);
-		return false;
-	}
-
 #ifdef _WIN32
 	// Windows: GetFullPathName
 	DWORD result = GetFullPathName(path, PATH_MAX, canonical_out, NULL);
@@ -316,7 +310,7 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 	return true;
 }
 
-target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset)
+target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset)
 {
 	/* Resize factors:
 	 * - RESIZE_FACTOR_X = 1: Horizontal 1:1 (1 pixel per column)
@@ -331,12 +325,11 @@ target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, ui
 
 	/* Validate inputs */
 	if (cols == 0 || rows == 0) {
-		fprintf(stderr, "calculate_target_dimensions: invalid terminal size %u×%u\n", cols, rows);
+		fprintf(stderr, "calculate_target_terminal_dimensions: invalid terminal size %u×%u\n", cols, rows);
 		return result;
-	}
 
-	if (top_offset >= rows) {
-		fprintf(stderr, "calculate_target_dimensions: top_offset %u >= rows %u\n", top_offset, rows);
+	} else if (top_offset >= rows) {
+		fprintf(stderr, "calculate_target_terminal_dimensions: top_offset %u >= rows %u\n", top_offset, rows);
 		return result;
 	}
 
@@ -352,7 +345,7 @@ target_dimensions_t calculate_target_dimensions(uint32_t cols, uint32_t rows, ui
 
 	/* Validate calculated dimensions */
 	if (target_width == 0 || target_height == 0) {
-		fprintf(stderr, "calculate_target_dimensions: calculated invalid dimensions %u×%u\n", target_width, target_height);
+		fprintf(stderr, "calculate_target_terminal_dimensions: calculated invalid dimensions %u×%u\n", target_width, target_height);
 		return result;
 	}
 
@@ -391,14 +384,17 @@ static bool calculate_custom_dimensions(const image_t *src, int target_width, in
 		/* Both specified: use exact dimensions */
 		final_width = (uint32_t)target_width;
 		final_height = (uint32_t)target_height;
+
 	} else if (target_width > 0) {
 		/* Only width specified: calculate height from aspect ratio */
 		final_width = (uint32_t)target_width;
 		final_height = (uint32_t)roundf((float)final_width / src_aspect);
+
 	} else if (target_height > 0) {
 		/* Only height specified: calculate width from aspect ratio */
 		final_height = (uint32_t)target_height;
 		final_width = (uint32_t)roundf((float)final_height * src_aspect);
+
 	} else {
 		fprintf(stderr, "calculate_custom_dimensions: no dimensions specified\n");
 		return false;
@@ -429,6 +425,7 @@ int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_siz
 	if (opts->input_file != NULL) {
 		/* Read from file */
 		success = read_file_secure(opts->input_file, out_data, out_size);
+
 	} else {
 		/* Read from stdin */
 		success = read_stdin_secure(out_data, out_size);
@@ -484,7 +481,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 	}
 
 	/* Determine target dimensions based on priority */
-	target_dimensions_t target;
+	target_dimensions_t target = { 0, 0 };
 
 	if (opts->has_custom_dimensions) {
 		/* Custom dimensions take priority over fit/resize */
@@ -504,13 +501,20 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 			}
 			fprintf(stderr, "(final: %u×%u)\n", target.width, target.height);
 		}
+
+	} else if (terminal_is_ghostty() && !opts->force_ansi) {
+		/* Ghostty: use terminal size directly */
+		// target = calculate_target_terminal_dimensions(cols, rows, opts->top_offset);
+		calculate_custom_dimensions(frames[0], frames[0]->width, frames[0]->height, &target);
+
 	} else {
 		/* Default: terminal-aware scaling */
-		target = calculate_target_dimensions(cols, rows, opts->top_offset);
-		if (target.width == 0 || target.height == 0) {
-			fprintf(stderr, "pipeline_scale: invalid target dimensions\n");
-			return -1;
-		}
+		target = calculate_target_terminal_dimensions(cols, rows, opts->top_offset);
+	}
+
+	if (target.width == 0 || target.height == 0) {
+		fprintf(stderr, "pipeline_scale: invalid target dimensions\n");
+		return -1;
 	}
 
 	/* Allocate scaled frames array */
@@ -524,12 +528,10 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 	for (int i = 0; i < frame_count; i++) {
 		image_t *scaled_frame;
 
-		if (opts->has_custom_dimensions) {
-			/* Custom dimensions: always exact (resize) */
-			scaled_frame = image_scale_resize(frames[i], target.width, target.height);
-		} else if (opts->fit_mode) {
+		if (opts->fit_mode) {
 			/* Fit mode: maintain aspect ratio */
 			scaled_frame = image_scale_fit(frames[i], target.width, target.height);
+
 		} else {
 			/* Resize mode: exact dimensions */
 			scaled_frame = image_scale_resize(frames[i], target.width, target.height);
@@ -719,9 +721,11 @@ int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts
 	if (frame_count == 1) {
 		/* Single frame - always render as static */
 		return render_static_frame(frames[0]);
+
 	} else if (opts->animate) {
 		/* Multiple frames and animation requested */
 		return render_animated(frames, frame_count, opts);
+
 	} else {
 		/* Multiple frames but no animation - show first frame only */
 		return render_static_frame(frames[0]);
@@ -770,5 +774,5 @@ int pipeline_render_ghostty(const uint8_t *buffer, size_t buffer_size, const cli
 	int target_height = opts->target_height;
 
 	/* Render using Kitty graphics protocol with sizing parameters */
-	return ghostty_render(buffer, buffer_size, filename, opts->fit_mode, target_width, target_height);
+	return ghostty_render(buffer, buffer_size, filename, opts, target_width, target_height);
 }

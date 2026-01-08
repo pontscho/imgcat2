@@ -126,18 +126,12 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "width",         required_argument, 0, 'w' },
 		{ "height",        required_argument, 0, 'H' },
 		{ "force-ansi",    no_argument,       0, 'A' },
-		{ 0,		       0,		         0, 0   },
+		{ 0,		       0,		          0, 0   },
 	};
 
 	/* Parse options */
 	int opt;
 	int option_index = 0;
-
-	bool is_iterm2 = terminal_is_iterm2();
-	// bool is_ghostty = terminal_is_ghostty();
-	if (is_iterm2) {
-		opts->fit_mode = false;
-	}
 
 	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:w:H:A", long_options, &option_index)) != -1) {
 		switch (opt) {
@@ -231,24 +225,12 @@ int validate_options(cli_options_t *opts)
 
 	/* Validate custom dimensions if specified */
 	if (opts->has_custom_dimensions) {
-		int rows, cols;
-
-		bool is_iterm2 = terminal_is_iterm2();
-		bool is_ghostty = terminal_is_ghostty();
-
-		/* Get terminal dimensions for bounds checking */
-		if (terminal_get_size(&rows, &cols) != 0) {
-			/* Use defaults if unable to detect */
-			rows = 24; /* DEFAULT_TERM_ROWS */
-			cols = 80; /* DEFAULT_TERM_COLS */
-		}
-
-		int max_width = cols * RESIZE_FACTOR_X;
-		int max_height = (rows - opts->top_offset) * RESIZE_FACTOR_Y;
+		int max_width = opts->terminal.cols * RESIZE_FACTOR_X;
+		int max_height = (opts->terminal.rows - opts->top_offset) * RESIZE_FACTOR_Y;
 
 		/* Check width bounds */
 		if (opts->target_width > 0) {
-			if ((opts->target_width < 1 || opts->target_width > max_width) && ! (is_iterm2 || is_ghostty)) {
+			if ((opts->target_width < 1 || opts->target_width > max_width) && ! (opts->terminal.is_iterm2 || opts->terminal.is_ghostty)) {
 				fprintf(stderr, "Error: Width must be between 1 and %d pixels (got %d)\n", max_width, opts->target_width);
 				return -1;
 			}
@@ -256,7 +238,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check height bounds */
 		if (opts->target_height > 0) {
-			if ((opts->target_height < 1 || opts->target_height > max_height) && ! (is_iterm2 || is_ghostty)) {
+			if ((opts->target_height < 1 || opts->target_height > max_height) && ! (opts->terminal.is_iterm2 || opts->terminal.is_ghostty)) {
 				fprintf(stderr, "Error: Height must be between 1 and %d pixels (got %d)\n", max_height, opts->target_height);
 				return -1;
 			}

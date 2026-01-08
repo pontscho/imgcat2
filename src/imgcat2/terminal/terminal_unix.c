@@ -54,6 +54,31 @@ int terminal_get_size(int *rows, int *cols)
 }
 
 /**
+ * @brief Get terminal pixel dimensions using ioctl(TIOCGWINSZ)
+ */
+int terminal_get_pixels(int *width, int *height)
+{
+	/* Get terminal size with ioctl */
+	struct winsize ws;
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
+		/* ioctl failed, use defaults */
+		fprintf(stderr, "Warning: Failed to get terminal size: %s (using defaults %dx%d)\n", strerror(errno), DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
+		return -1;
+	}
+
+	/* Validate dimensions */
+	if (ws.ws_row <= 0 || ws.ws_col <= 0) {
+		fprintf(stderr, "Warning: Invalid terminal size %ux%u (using defaults %dx%d)\n", ws.ws_col, ws.ws_row, DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
+		return -1;
+	}
+
+	/* Success */
+	*width = ws.ws_xpixel;
+	*height = ws.ws_ypixel;
+	return 0;
+}
+
+/**
  * @brief Check if file descriptor is a TTY using isatty()
  */
 bool terminal_is_tty(int fd)

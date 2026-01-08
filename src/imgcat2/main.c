@@ -38,16 +38,35 @@ int main(int argc, char **argv)
 		.target_height = -1,
 		.has_custom_dimensions = false,
 		.force_ansi = false,
+
+		.terminal = {
+			.rows = 0,
+			.cols = 0,
+			.width = 0,
+			.height = 0,
+			.is_iterm2 = terminal_is_iterm2(),
+			.is_ghostty = terminal_is_ghostty(),
+		},
 	};
+
+	terminal_get_size(&opts.terminal.rows, &opts.terminal.cols);
+	terminal_get_pixels(&opts.terminal.width, &opts.terminal.height);
+
+	if (opts.terminal.is_iterm2 || opts.terminal.is_ghostty) {
+		opts.fit_mode = false;
+	}
 
 	/* Parse command-line arguments */
 	if (parse_arguments(argc, argv, &opts) != 0) {
 		return EXIT_FAILURE;
+
+		/* Validate options */
+	} else if (validate_options(&opts) < 0) {
+		return EXIT_FAILURE;
 	}
 
-	/* Validate options */
-	if (validate_options(&opts) < 0) {
-		return EXIT_FAILURE;
+	if (!opts.silent) {
+		fprintf(stderr, "Terminal size: %dx%d (%dx%d) pixels, is %s\n", opts.terminal.width, opts.terminal.height, opts.terminal.cols, opts.terminal.rows, opts.terminal.is_iterm2 ? "iTerm2" : (opts.terminal.is_ghostty ? "Ghostty" : "ANSI"));
 	}
 
 	/* Initialize decoder registry */
@@ -71,72 +90,43 @@ int main(int argc, char **argv)
 	}
 
 	/* DECISION POINT: iTerm2 / Ghostty / ANSI rendering */
-	bool use_iterm2 = false;
-	bool use_ghostty = false;
 
-	if (!opts.force_ansi && terminal_is_iterm2()) {
+	if (!opts.force_ansi && opts.terminal.is_iterm2) {
 		/* Check if format is supported by iTerm2 protocol */
 		if (iterm2_is_format_supported(buffer, buffer_size)) {
-			use_iterm2 = true;
-
 			if (!opts.silent) {
 				fprintf(stderr, "Using iTerm2 inline images protocol\n");
 			}
 
-		} else {
-			if (!opts.silent) {
-				fprintf(stderr, "Format not supported by iTerm2, using ANSI rendering\n");
+			if (pipeline_render_iterm2(buffer, buffer_size, &opts) == 0) {
+				/* Success - skip ANSI pipeline */
+				exit_code = EXIT_SUCCESS;
+				goto cleanup;
 			}
 		}
-	} else if (!opts.force_ansi && terminal_is_ghostty()) {
-		/* Check if format is supported by Kitty graphics protocol */
-		if (ghostty_is_format_supported(buffer, buffer_size)) {
-			use_ghostty = true;
 
+		opts.terminal.is_iterm2 = false;
+		opts.force_ansi = true;
+		if (!opts.silent) {
+			fprintf(stderr, "Format not supported by iTerm2 or rendering failed, using ANSI rendering\n");
+		}
+
+	} else if (!opts.force_ansi && opts.terminal.is_ghostty) {
+		/* Check if format is supported by Kitty graphics protocol */
+		if (ghostty_is_format_supported(buffer, buffer_size, &opts)) {
 			if (!opts.silent) {
 				fprintf(stderr, "Using Ghostty (Kitty graphics protocol)\n");
 			}
 
 		} else {
+			opts.terminal.is_ghostty = false;
+			opts.force_ansi = true;
+
 			if (!opts.silent) {
 				fprintf(stderr, "Format not supported by Ghostty, using ANSI rendering\n");
 			}
 		}
 	}
-
-	/* iTerm2 rendering path - bypass decode/scale pipeline */
-	if (use_iterm2) {
-		if (pipeline_render_iterm2(buffer, buffer_size, &opts) < 0) {
-			/* iTerm2 rendering failed, fall back to ANSI */
-			if (!opts.silent) {
-				fprintf(stderr, "iTerm2 rendering failed, falling back to ANSI\n");
-			}
-			use_iterm2 = false;
-
-		} else {
-			/* Success - skip ANSI pipeline */
-			exit_code = EXIT_SUCCESS;
-			goto cleanup;
-		}
-	}
-
-	/* Ghostty rendering path - bypass decode/scale pipeline */
-	if (use_ghostty) {
-		if (pipeline_render_ghostty(buffer, buffer_size, &opts) < 0) {
-			/* Ghostty rendering failed, fall back to ANSI */
-			if (!opts.silent) {
-				fprintf(stderr, "Ghostty rendering failed, falling back to ANSI\n");
-			}
-			use_ghostty = false;
-
-		} else {
-			/* Success - skip ANSI pipeline */
-			exit_code = EXIT_SUCCESS;
-			goto cleanup;
-		}
-	}
-
-	/* ANSI rendering path (or fallback from iTerm2/Ghostty failure) */
 
 	/* STEP 2: Decode image with MIME detection */
 	if (pipeline_decode(&opts, buffer, buffer_size, &frames, &frame_count) < 0) {
@@ -156,6 +146,16 @@ int main(int argc, char **argv)
 
 	if (!opts.silent) {
 		fprintf(stderr, "Scaled to %ux%u pixels\n", scaled_frames[0]->width, scaled_frames[0]->height);
+	}
+
+	if (opts.terminal.is_ghostty) {
+		extern int ghostty_render2(image_t * *frames, int frame_count, const char *filename, const cli_options_t *opts, int target_width, int target_height);
+		/* Render using Ghostty protocol */
+		printf(" ! opts.target_width=%d opts.target_height=%d \n", opts.target_width, opts.target_height);
+		if (ghostty_render2(scaled_frames, frame_count, opts.input_file, &opts, opts.target_width, opts.target_height) == 0) {
+			exit_code = EXIT_SUCCESS;
+			goto cleanup;
+		}
 	}
 
 	/* STEP 4: Render to terminal */

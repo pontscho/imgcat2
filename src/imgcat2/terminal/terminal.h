@@ -36,11 +36,27 @@
  *
  * @param rows Output parameter for terminal rows
  * @param cols Output parameter for terminal columns
+ *
  * @return 0 on success, -1 on failure (sets defaults)
  *
  * @note On failure, *rows and *cols are set to DEFAULT_TERM_ROWS/COLS
  */
 int terminal_get_size(int *rows, int *cols);
+
+/**
+ * @brief Get terminal pixel dimensions
+ *
+ * Retrieves the current terminal size in pixels (width and height).
+ * Platform-specific implementation:
+ * - Unix: ioctl(TIOCGWINSZ)
+ * - Windows: GetConsoleScreenBufferInfo() + font size
+ *
+ * @param width Output parameter for terminal width in pixels
+ * @param height Output parameter for terminal height in pixels
+ *
+ * @return 0 on success, -1 on failure
+ */
+int terminal_get_pixels(int *width, int *height);
 
 /**
  * @brief Check if file descriptor is a TTY
@@ -52,6 +68,7 @@ int terminal_get_size(int *rows, int *cols);
  * - Windows: GetFileType() == FILE_TYPE_CHAR
  *
  * @param fd File descriptor to check (e.g., STDOUT_FILENO)
+ *
  * @return true if fd is a TTY, false otherwise
  */
 bool terminal_is_tty(int fd);

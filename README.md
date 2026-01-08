@@ -236,40 +236,42 @@ imgcat2 animation.gif
 
 When running in Ghostty terminal, imgcat2 automatically uses the Kitty graphics protocol for high-quality image rendering:
 
-### Advantages in Ghostty (PNG only)
-- **Higher Quality** - Native PNG rendering using Kitty graphics protocol
+### Advantages in Ghostty
+- **Higher Quality** - Native rendering using Kitty graphics protocol (PNG direct, JPEG/GIF decoded)
 - **Better Colors** - No color quantization or dithering
 - **Faster Rendering** - Direct image display without pixel-by-pixel processing
 - **Automatic Scaling** - Images scale to fit terminal window while preserving aspect ratio
 - **Custom Sizing** - Supports `-w` and `-H` flags for precise control
-- **Note:** JPEG and GIF images will use ANSI rendering (Kitty protocol support coming soon)
+- **Format Support:** PNG (direct f=100), JPEG (decoded f=32), static GIF (decoded f=32)
+- **Note:** Animated GIFs will use ANSI rendering for frame-by-frame animation
 
 ### How It Works
 imgcat2 automatically detects Ghostty by checking the `TERM_PROGRAM` environment variable. When detected:
-1. Validates image format is supported (**PNG only** - JPEG/GIF fall back to ANSI)
-2. Sends PNG data directly via Kitty graphics protocol (`\033_G` with `f=100`)
-3. **Default behavior**: Fits image to terminal width, preserving aspect ratio
-4. **With `-w` or `-H`**: Scales to specified pixel dimensions (converted to terminal cells)
-5. Automatically falls back to ANSI rendering for unsupported formats or protocol failures
-
-**Note:** Currently only PNG format uses the Kitty protocol. JPEG and GIF images will automatically fall back to ANSI rendering. Future versions will add support for these formats by decoding them to RGB/RGBA pixel data.
+1. **PNG images**: Sent directly via Kitty protocol with `f=100` (no decoding needed)
+2. **JPEG images**: Decoded to RGBA and sent with `f=32` format
+3. **Static GIF images**: Decoded to RGBA and sent with `f=32` format
+4. **Animated GIF images**: Fall back to ANSI rendering for frame-by-frame animation
+5. **Default behavior**: Fits image to terminal width, preserving aspect ratio
+6. **With `-w` or `-H`**: Scales to specified pixel dimensions (converted to terminal cells)
 
 ### Ghostty Sizing Examples
 ```bash
-# Fit PNG to terminal width (default in Ghostty)
+# PNG - sent directly with f=100
 imgcat2 image.png
-
-# Scale PNG to 800px width
 imgcat2 -w 800 image.png
 
-# Scale PNG to 600px height
-imgcat2 -H 600 image.png
+# JPEG - decoded to RGBA and sent with f=32
+imgcat2 photo.jpg
+imgcat2 -w 800 photo.jpg
 
-# JPEG/GIF will use ANSI rendering (Kitty protocol support coming soon)
-imgcat2 photo.jpg      # Uses ANSI rendering
-imgcat2 animation.gif  # Uses ANSI rendering
+# Static GIF - decoded to RGBA and sent with f=32
+imgcat2 static.gif
+imgcat2 -H 600 static.gif
 
-# Force ANSI rendering for PNG
+# Animated GIF - uses ANSI rendering (frame-by-frame animation)
+imgcat2 animation.gif
+
+# Force ANSI rendering for any format
 imgcat2 --force-ansi image.png
 ```
 
