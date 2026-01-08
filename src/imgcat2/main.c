@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 	terminal_get_size(&opts.terminal.rows, &opts.terminal.cols);
 	terminal_get_pixels(&opts.terminal.width, &opts.terminal.height);
 
-	if (opts.terminal.is_iterm2 || opts.terminal.is_ghostty) {
+	if (opts.terminal.is_ghostty || opts.terminal.is_iterm2) {
 		opts.fit_mode = false;
 	}
 

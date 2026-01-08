@@ -42,6 +42,8 @@ bool iterm2_is_tmux(void)
 
 int iterm2_render(const uint8_t *data, size_t size, const char *filename, bool fit_mode, int target_width, int target_height)
 {
+		printf("target_width=%d target_height=%d fit_mode=%d \n", target_width, target_height, fit_mode);
+
 	/* Validate inputs */
 	if (data == NULL || size == 0) {
 		fprintf(stderr, "Error: iTerm2 render called with invalid data\n");
@@ -84,11 +86,15 @@ int iterm2_render(const uint8_t *data, size_t size, const char *filename, bool f
 	/* Add width/height parameters based on CLI options */
 	/* For iTerm2, default to original image size (no parameters) */
 	/* Only add dimensions if explicitly specified by user */
-
 	if (fit_mode) {
 		/* Fit mode: ignore explicit dimensions, use original size */
-		printf(";width=100%%");
-		printf(";height=100%%");
+		printf(";width=90%%");
+		printf(";height=90%%");
+		printf(";preserveAspectRatio=1");
+
+	} else if (target_width == -1 && target_height == -1) {
+		/* Maximize image height in half of height of the terminal */
+		printf(";height=50%%");
 		printf(";preserveAspectRatio=1");
 
 	} else if (target_width > 0 && target_height > 0) {
