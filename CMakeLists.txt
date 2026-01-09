@@ -315,10 +315,14 @@ endif()
 # STB headers (vendored)
 set(STB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/stb)
 
+# QOI headers (vendored, header-only)
+set(QOI_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/qoi)
+
 # Add include directories
 include_directories(
 	${CMAKE_SOURCE_DIR}/src
 	${STB_INCLUDE_DIR}
+	${QOI_INCLUDE_DIR}
 	${PNG_INCLUDE_DIRS}
 	${ZLIB_INCLUDE_DIRS}
 	${JPEG_INCLUDE_DIRS}
@@ -359,6 +363,7 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_stb.c
 	src/imgcat2/decoders/decoder_png.c
 	src/imgcat2/decoders/decoder_jpeg.c
+	src/imgcat2/decoders/decoder_qoi.c
 
 	# ANSI module
 	src/imgcat2/ansi/ansi.c

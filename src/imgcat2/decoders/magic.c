@@ -60,6 +60,9 @@ const uint8_t MAGIC_RAW_ORF_IIRS[4] = "IIRS"; /* Olympus ORF variant 2 */
 const uint8_t MAGIC_RAW_RW2[4] = { 'I', 'I', 'U', 0x00 }; /* Panasonic RW2 */
 const uint8_t MAGIC_RAW_CR2[4] = { 'C', 'R', 0x02, 0x00 }; /* Canon CR2 marker at offset 8 */
 
+/* QOI signature */
+const uint8_t MAGIC_QOI[4] = "qoif"; /* QOI: Quite OK Image format */
+
 /**
  * @brief Check if TIFF data is actually a TIFF-based RAW format
  *
@@ -167,6 +170,11 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 		if (memcmp(data, MAGIC_RAW_RW2, 4) == 0) {
 			return MIME_RAW;
 		}
+
+		// QOI - 4 byte signature "qoif"
+		if (memcmp(data, MAGIC_QOI, 4) == 0) {
+			return MIME_QOI;
+		}
 	}
 
 	// Priority 4: BMP (2 byte match "BM")
@@ -230,6 +238,7 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_HEIF: return "HEIF";
 		case MIME_TIFF: return "TIFF";
 		case MIME_RAW: return "RAW";
+		case MIME_QOI: return "QOI";
 		case MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}

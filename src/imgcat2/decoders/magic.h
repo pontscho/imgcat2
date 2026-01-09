@@ -31,6 +31,7 @@ typedef enum {
 	MIME_HEIF, /**< HEIF: High Efficiency Image Format */
 	MIME_TIFF, /**< TIFF: Tagged Image File Format */
 	MIME_RAW, /**< RAW: Camera RAW formats (CR2, NEF, ARW, DNG, etc.) */
+	MIME_QOI, /**< QOI: Quite OK Image format */
 } mime_type_t;
 
 /**
@@ -114,6 +115,9 @@ extern const uint8_t MAGIC_RAW_RW2[4];
 
 /** CR2 (Canon) marker at offset 8: 4 bytes */
 extern const uint8_t MAGIC_RAW_CR2[4];
+
+/** QOI (Quite OK Image) signature: 4 bytes */
+extern const uint8_t MAGIC_QOI[4];
 
 /**
  * @brief Detect MIME type from binary data magic bytes
