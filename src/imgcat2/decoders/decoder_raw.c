@@ -49,7 +49,8 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	}
 
 	// Open buffer
-	int ret = libraw_open_buffer(raw, data, len);
+	// Cast away const - libraw API doesn't accept const but won't modify data
+	int ret = libraw_open_buffer(raw, (void *)data, len);
 	if (ret != LIBRAW_SUCCESS) {
 		fprintf(stderr, "Error: Failed to open RAW buffer: %s\n", libraw_strerror(ret));
 		libraw_close(raw);
