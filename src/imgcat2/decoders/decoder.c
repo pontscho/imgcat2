@@ -46,6 +46,10 @@ extern image_t **decode_tiff(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_raw(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
+#ifdef ENABLE_JXL
+extern image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count);
+#endif
+
 /* QOI decoder (header-only, always available) */
 extern image_t **decode_qoi(const uint8_t *data, size_t len, int *frame_count);
 
@@ -92,6 +96,10 @@ static const decoder_t s_decoder_registry[] = {
 
 #ifdef ENABLE_RAW
 	{ MIME_RAW,  "RAW (libraw)",         decode_raw          },
+#endif
+
+#ifdef ENABLE_JXL
+	{ MIME_JXL,  "JXL (libjxl)",         decode_jxl          },
 #endif
 
 	/* QOI format (header-only, always available) */

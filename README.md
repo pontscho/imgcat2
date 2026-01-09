@@ -20,7 +20,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
-- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, and optionally WebP, HEIF, TIFF, RAW
+- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL
 - **Native Protocol Support** - Automatically uses iTerm2 inline images or Ghostty Kitty graphics protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
@@ -68,6 +68,7 @@ This technique provides universal compatibility with any terminal supporting tru
 - **libheif** - For HEIF/HEIC format support
 - **libtiff** - For TIFF format support
 - **libraw** - For RAW camera format support
+- **libjxl** - For JPEG XL format support
 
 ### Terminal Requirements
 
@@ -95,7 +96,7 @@ sudo apt-get update
 sudo apt-get install cmake gcc libpng-dev zlib1g-dev libjpeg-dev
 
 # Install optional dependencies
-sudo apt-get install libgif-dev libwebp-dev libheif-dev libtiff-dev libraw-dev
+sudo apt-get install libgif-dev libwebp-dev libheif-dev libtiff-dev libraw-dev libjxl-dev
 
 # Clone repository
 git clone https://github.com/yourusername/imgcat2.git
@@ -114,7 +115,7 @@ sudo make install
 
 ```bash
 # Install dependencies
-brew install cmake libpng zlib-ng jpeg-turbo giflib webp libheif libtiff libraw
+brew install cmake libpng zlib-ng jpeg-turbo giflib webp libheif libtiff libraw jpeg-xl
 
 # Clone repository
 git clone https://github.com/yourusername/imgcat2.git
@@ -133,7 +134,7 @@ sudo make install
 
 ```bash
 # Install dependencies
-sudo pacman -S cmake gcc libpng zlib libjpeg-turbo giflib libwebp libheif libtiff libraw
+sudo pacman -S cmake gcc libpng zlib libjpeg-turbo giflib libwebp libheif libtiff libraw libjxl
 
 # Clone and build
 git clone https://github.com/yourusername/imgcat2.git
@@ -154,7 +155,7 @@ sudo make install
 
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake
 pacman -S mingw-w64-x86_64-libpng mingw-w64-x86_64-zlib mingw-w64-x86_64-libjpeg-turbo
-pacman -S mingw-w64-x86_64-giflib mingw-w64-x86_64-libwebp
+pacman -S mingw-w64-x86_64-giflib mingw-w64-x86_64-libwebp mingw-w64-x86_64-libjxl
 
 # Clone and build
 git clone https://github.com/yourusername/imgcat2.git
@@ -172,7 +173,7 @@ You can customize the build with CMake options:
 
 ```bash
 # Minimal build (only required formats)
-cmake -DENABLE_GIF=OFF -DENABLE_WEBP=OFF -DENABLE_HEIF=OFF -DENABLE_TIFF=OFF -DENABLE_RAW=OFF ..
+cmake -DENABLE_GIF=OFF -DENABLE_WEBP=OFF -DENABLE_HEIF=OFF -DENABLE_TIFF=OFF -DENABLE_RAW=OFF -DENABLE_JXL=OFF ..
 
 # Disable testing
 cmake -DBUILD_TESTING=OFF ..
@@ -390,6 +391,7 @@ convert input.webp png:- | imgcat2
 - **HEIF/HEIC** - High Efficiency Image Format
 - **TIFF** - Tagged Image File Format
 - **RAW** - Camera raw formats (CR2, NEF, ARW, etc.)
+- **JXL** - JPEG XL format (modern, high efficiency, HDR support)
 
 **Note:** Format support depends on which optional libraries were available at build time. Run `imgcat2 --version` to see enabled formats.
 

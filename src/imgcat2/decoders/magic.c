@@ -69,6 +69,10 @@ const uint8_t MAGIC_ICO[4] = { 0x00, 0x00, 0x01, 0x00 }; /* ICO: Windows Icon fo
 /* CUR signature */
 const uint8_t MAGIC_CUR[4] = { 0x00, 0x00, 0x02, 0x00 }; /* CUR: Windows Cursor format */
 
+/* JXL signatures */
+const uint8_t MAGIC_JXL_BARE[2] = { 0xff, 0x0a }; /* Bare codestream */
+const uint8_t MAGIC_JXL_CONTAINER[12] = { 0x00, 0x00, 0x00, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a }; /* ISOBMFF container */
+
 /**
  * @brief Check if TIFF data is actually a TIFF-based RAW format
  *
@@ -132,6 +136,18 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	if (len >= 12) {
 		if (memcmp(data, MAGIC_WEBP_RIFF, 4) == 0 && memcmp(data + 8, MAGIC_WEBP_WEBP, 4) == 0) {
 			return MIME_WEBP;
+		}
+	}
+
+	// Priority 3.6: JXL (JPEG XL) - check container first, then bare
+	if (len >= 12) {
+		if (memcmp(data, MAGIC_JXL_CONTAINER, 12) == 0) {
+			return MIME_JXL;
+		}
+	}
+	if (len >= 2) {
+		if (memcmp(data, MAGIC_JXL_BARE, 2) == 0) {
+			return MIME_JXL;
 		}
 	}
 
@@ -264,6 +280,7 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_QOI: return "QOI";
 		case MIME_ICO: return "ICO";
 		case MIME_CUR: return "CUR";
+		case MIME_JXL: return "JXL";
 		case MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}

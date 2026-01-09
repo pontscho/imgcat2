@@ -34,6 +34,7 @@ typedef enum {
 	MIME_QOI, /**< QOI: Quite OK Image format */
 	MIME_ICO, /**< ICO: Windows Icon format */
 	MIME_CUR, /**< CUR: Windows Cursor format */
+	MIME_JXL, /**< JXL: JPEG XL format */
 } mime_type_t;
 
 /**
@@ -126,6 +127,12 @@ extern const uint8_t MAGIC_ICO[4];
 
 /** CUR (Windows Cursor) signature: 4 bytes */
 extern const uint8_t MAGIC_CUR[4];
+
+/** JXL bare codestream signature: 2 bytes */
+extern const uint8_t MAGIC_JXL_BARE[2];
+
+/** JXL ISOBMFF container signature: 12 bytes */
+extern const uint8_t MAGIC_JXL_CONTAINER[12];
 
 /**
  * @brief Detect MIME type from binary data magic bytes
