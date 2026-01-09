@@ -42,9 +42,6 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 	 * - Animated GIF: NOT supported (fall back to ANSI rendering)
 	 */
 	switch (mime) {
-		case MIME_PNG: return true;
-		case MIME_JPEG: return true;
-
 #ifdef HAVE_GIFLIB
 		case MIME_GIF:
 			if (gif_is_animated(data, size) && opts->animate) {
@@ -54,7 +51,7 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 			return true;
 #endif
 
-		default: return false;
+		default: return true;
 	}
 }
 

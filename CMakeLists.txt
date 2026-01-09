@@ -161,14 +161,15 @@ if(ENABLE_WEBP)
 	# Find static library explicitly on macOS
 	if(APPLE)
 		find_library(WEBP_LIBRARY NAMES webp)
+		find_library(WEBPDEMUX_LIBRARY NAMES webpdemux)
 		find_path(WEBP_INCLUDE_DIR webp/decode.h)
-		if(WEBP_LIBRARY AND WEBP_INCLUDE_DIR)
-			set(WEBP_LIBRARIES ${WEBP_LIBRARY})
+		if(WEBP_LIBRARY AND WEBPDEMUX_LIBRARY AND WEBP_INCLUDE_DIR)
+			set(WEBP_LIBRARIES ${WEBP_LIBRARY} ${WEBPDEMUX_LIBRARY})
 			set(WEBP_INCLUDE_DIRS ${WEBP_INCLUDE_DIR})
 			set(WEBP_FOUND TRUE)
 		endif()
 	else()
-		pkg_check_modules(WEBP libwebp)
+		pkg_check_modules(WEBP libwebp libwebpdemux)
 	endif()
 
 	if(WEBP_FOUND)
@@ -272,6 +273,10 @@ set(IMGCAT2_SOURCES
 
 if(GIF_FOUND)
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_gif.c)
+endif()
+
+if(WEBP_FOUND)
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_webp.c)
 endif()
 
 # Platform-specific terminal module (PHASE 8)

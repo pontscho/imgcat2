@@ -27,6 +27,7 @@ typedef enum {
 	MIME_PSD, /**< PSD: Adobe Photoshop Document */
 	MIME_HDR, /**< HDR: Radiance RGBE */
 	MIME_PNM, /**< PNM: Portable Anymap (PBM/PGM/PPM) */
+	MIME_WEBP, /**< WEBP: WebP image format */
 } mime_type_t;
 
 /**
@@ -65,6 +66,12 @@ extern const char MAGIC_PNM_P5[2];
 
 /** PNM P6 signature (RGB): 2 bytes */
 extern const char MAGIC_PNM_P6[2];
+
+/** WebP RIFF signature: 4 bytes */
+extern const uint8_t MAGIC_WEBP_RIFF[4];
+
+/** WebP WEBP signature: 4 bytes */
+extern const uint8_t MAGIC_WEBP_WEBP[4];
 
 /**
  * @brief Detect MIME type from binary data magic bytes

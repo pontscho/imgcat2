@@ -36,6 +36,10 @@ const char MAGIC_HDR_RGBE[6] = "#?RGBE";
 const char MAGIC_PNM_P5[2] = "P5"; /* Grayscale */
 const char MAGIC_PNM_P6[2] = "P6"; /* RGB */
 
+/* WebP signatures */
+const uint8_t MAGIC_WEBP_RIFF[4] = "RIFF";
+const uint8_t MAGIC_WEBP_WEBP[4] = "WEBP";
+
 /**
  * @brief Detect MIME type from binary data magic bytes
  *
@@ -63,6 +67,13 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	if (len >= 6) {
 		if (memcmp(data, MAGIC_GIF87A, 6) == 0 || memcmp(data, MAGIC_GIF89A, 6) == 0) {
 			return MIME_GIF;
+		}
+	}
+
+	// Priority 3.5: WebP (12 byte match - RIFF + WEBP)
+	if (len >= 12) {
+		if (memcmp(data, MAGIC_WEBP_RIFF, 4) == 0 && memcmp(data + 8, MAGIC_WEBP_WEBP, 4) == 0) {
+			return MIME_WEBP;
 		}
 	}
 
@@ -123,6 +134,7 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_PSD: return "PSD";
 		case MIME_HDR: return "HDR";
 		case MIME_PNM: return "PNM";
+		case MIME_WEBP: return "WEBP";
 		case MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}
