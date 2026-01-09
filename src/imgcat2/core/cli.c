@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../decoders/decoder.h"
 #include "../terminal/terminal.h"
 #include "cli.h"
 
@@ -90,6 +91,16 @@ void print_version(void)
 #else
 	printf("Unknown\n");
 #endif
+	printf("\n");
+	printf("Supported image formats:\n");
+
+	/* Initialize decoder registry to get the list of supported formats */
+	decoder_registry_init(NULL);
+
+	/* Print each supported format */
+	for (size_t i = 0; i < g_decoder_count; i++) {
+		printf("  - %s\n", g_decoder_registry[i].name);
+	}
 }
 
 /**
