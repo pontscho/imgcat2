@@ -291,6 +291,10 @@ if(TIFF_FOUND)
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_tiff.c)
 endif()
 
+if(RAW_FOUND)
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_raw.c)
+endif()
+
 # Platform-specific terminal module (PHASE 8)
 if(WIN32)
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_windows.c)

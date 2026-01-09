@@ -42,6 +42,10 @@ extern image_t **decode_heif(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_tiff(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
+#ifdef ENABLE_RAW
+extern image_t **decode_raw(const uint8_t *data, size_t len, int *frame_count);
+#endif
+
 /* STB fallback decoders (always available) */
 extern image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count);
 
@@ -78,6 +82,10 @@ static const decoder_t s_decoder_registry[] = {
 
 #ifdef ENABLE_TIFF
 	{ MIME_TIFF, "TIFF (libtiff)",       decode_tiff         },
+#endif
+
+#ifdef ENABLE_RAW
+	{ MIME_RAW,  "RAW (libraw)",         decode_raw          },
 #endif
 
 	/* STB-supported formats (always available) */

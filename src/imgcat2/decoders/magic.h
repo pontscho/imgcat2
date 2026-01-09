@@ -30,6 +30,7 @@ typedef enum {
 	MIME_WEBP, /**< WEBP: WebP image format */
 	MIME_HEIF, /**< HEIF: High Efficiency Image Format */
 	MIME_TIFF, /**< TIFF: Tagged Image File Format */
+	MIME_RAW, /**< RAW: Camera RAW formats (CR2, NEF, ARW, DNG, etc.) */
 } mime_type_t;
 
 /**
@@ -98,6 +99,21 @@ extern const uint8_t MAGIC_TIFF_LE[4];
 
 /** TIFF big-endian signature: 4 bytes */
 extern const uint8_t MAGIC_TIFF_BE[4];
+
+/** RAF (Fuji) signature: 16 bytes */
+extern const uint8_t MAGIC_RAW_RAF[16];
+
+/** ORF (Olympus) IIRO signature: 4 bytes */
+extern const uint8_t MAGIC_RAW_ORF_IIRO[4];
+
+/** ORF (Olympus) IIRS signature: 4 bytes */
+extern const uint8_t MAGIC_RAW_ORF_IIRS[4];
+
+/** RW2 (Panasonic) signature: 4 bytes */
+extern const uint8_t MAGIC_RAW_RW2[4];
+
+/** CR2 (Canon) marker at offset 8: 4 bytes */
+extern const uint8_t MAGIC_RAW_CR2[4];
 
 /**
  * @brief Detect MIME type from binary data magic bytes

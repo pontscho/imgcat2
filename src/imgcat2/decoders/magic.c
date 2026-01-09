@@ -3,6 +3,7 @@
  * @brief Magic bytes detection implementation
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -52,6 +53,42 @@ const uint8_t MAGIC_HEIF_MIF1[4] = "mif1";
 const uint8_t MAGIC_TIFF_LE[4] = { 0x49, 0x49, 0x2A, 0x00 }; // "II*\0" little-endian
 const uint8_t MAGIC_TIFF_BE[4] = { 0x4D, 0x4D, 0x00, 0x2A }; // "MM\0*" big-endian
 
+/* RAW format signatures */
+const uint8_t MAGIC_RAW_RAF[16] = "FUJIFILMCCD-RAW"; /* Fuji RAF */
+const uint8_t MAGIC_RAW_ORF_IIRO[4] = "IIRO"; /* Olympus ORF variant 1 */
+const uint8_t MAGIC_RAW_ORF_IIRS[4] = "IIRS"; /* Olympus ORF variant 2 */
+const uint8_t MAGIC_RAW_RW2[4] = { 'I', 'I', 'U', 0x00 }; /* Panasonic RW2 */
+const uint8_t MAGIC_RAW_CR2[4] = { 'C', 'R', 0x02, 0x00 }; /* Canon CR2 marker at offset 8 */
+
+/**
+ * @brief Check if TIFF data is actually a TIFF-based RAW format
+ *
+ * Some RAW formats (CR2, NEF, ARW, DNG) use TIFF container structure.
+ * This function detects explicit RAW markers to distinguish them from regular TIFF.
+ *
+ * @param data Pointer to file data buffer
+ * @param len Length of data buffer in bytes
+ * @return true if detected as TIFF-based RAW, false otherwise
+ *
+ * @note CR2 (Canon) has explicit "CR\x02\x00" marker at offset 8
+ * @note NEF/ARW/DNG detection relies on LibRAW (acceptable ambiguity)
+ */
+static bool is_tiff_based_raw(const uint8_t *data, size_t len)
+{
+	if (len < 16) {
+		return false;
+	}
+
+	// CR2 (Canon) - explicit marker at offset 8
+	if (memcmp(data + 8, MAGIC_RAW_CR2, 4) == 0) {
+		return true;
+	}
+
+	// For NEF/ARW/DNG: we accept ambiguity and rely on LibRAW
+	// If this function returns false, TIFF decoder will be tried
+	return false;
+}
+
 /**
  * @brief Detect MIME type from binary data magic bytes
  *
@@ -100,10 +137,35 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 		}
 	}
 
-	// Priority 3.8: TIFF (4 byte match - II or MM marker)
+	// Priority 3.8: TIFF and TIFF-based RAW (4 byte match - II or MM marker)
 	if (len >= 4) {
 		if (memcmp(data, MAGIC_TIFF_LE, 4) == 0 || memcmp(data, MAGIC_TIFF_BE, 4) == 0) {
+			// Check if this is a TIFF-based RAW format (CR2, NEF, ARW, DNG)
+			if (is_tiff_based_raw(data, len)) {
+				return MIME_RAW;
+			}
+			// Regular TIFF file
 			return MIME_TIFF;
+		}
+	}
+
+	// Priority 3.9: Non-TIFF RAW formats
+	if (len >= 16) {
+		// Fuji RAF - 16 byte signature
+		if (memcmp(data, MAGIC_RAW_RAF, 16) == 0) {
+			return MIME_RAW;
+		}
+	}
+
+	if (len >= 4) {
+		// Olympus ORF - 4 byte signature (two variants)
+		if (memcmp(data, MAGIC_RAW_ORF_IIRO, 4) == 0 || memcmp(data, MAGIC_RAW_ORF_IIRS, 4) == 0) {
+			return MIME_RAW;
+		}
+
+		// Panasonic RW2 - 4 byte signature
+		if (memcmp(data, MAGIC_RAW_RW2, 4) == 0) {
+			return MIME_RAW;
 		}
 	}
 
@@ -167,6 +229,7 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_WEBP: return "WEBP";
 		case MIME_HEIF: return "HEIF";
 		case MIME_TIFF: return "TIFF";
+		case MIME_RAW: return "RAW";
 		case MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}
