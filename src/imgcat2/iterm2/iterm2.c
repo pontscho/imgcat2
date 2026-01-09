@@ -31,6 +31,7 @@ bool iterm2_is_format_supported(const uint8_t *data, size_t size)
 		case MIME_JPEG:
 		case MIME_GIF:
 		case MIME_WEBP:
+		case MIME_TIFF:
 		case MIME_BMP: return true;
 		default: return false;
 	}

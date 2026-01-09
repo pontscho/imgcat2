@@ -29,6 +29,7 @@ typedef enum {
 	MIME_PNM, /**< PNM: Portable Anymap (PBM/PGM/PPM) */
 	MIME_WEBP, /**< WEBP: WebP image format */
 	MIME_HEIF, /**< HEIF: High Efficiency Image Format */
+	MIME_TIFF, /**< TIFF: Tagged Image File Format */
 } mime_type_t;
 
 /**
@@ -91,6 +92,12 @@ extern const uint8_t MAGIC_HEIF_HEVX[4];
 
 /** HEIF MIF1 brand: 4 bytes */
 extern const uint8_t MAGIC_HEIF_MIF1[4];
+
+/** TIFF little-endian signature: 4 bytes */
+extern const uint8_t MAGIC_TIFF_LE[4];
+
+/** TIFF big-endian signature: 4 bytes */
+extern const uint8_t MAGIC_TIFF_BE[4];
 
 /**
  * @brief Detect MIME type from binary data magic bytes
