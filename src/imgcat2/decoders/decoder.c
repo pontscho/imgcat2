@@ -49,6 +49,9 @@ extern image_t **decode_raw(const uint8_t *data, size_t len, int *frame_count);
 /* QOI decoder (header-only, always available) */
 extern image_t **decode_qoi(const uint8_t *data, size_t len, int *frame_count);
 
+/* ICO/CUR decoder (always available) */
+extern image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count);
+
 /* STB fallback decoders (always available) */
 extern image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count);
 
@@ -93,6 +96,10 @@ static const decoder_t s_decoder_registry[] = {
 
 	/* QOI format (header-only, always available) */
 	{ MIME_QOI,  "QOI (header-only)",    decode_qoi          },
+
+	/* ICO/CUR formats (custom decoder, always available) */
+	{ MIME_ICO,  "ICO (custom)",         decode_ico          },
+	{ MIME_CUR,  "CUR (custom)",         decode_ico          },
 
 	/* STB-supported formats (always available) */
 	{ MIME_BMP,  "BMP (stb_image)",      decode_stb          },

@@ -364,6 +364,7 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_png.c
 	src/imgcat2/decoders/decoder_jpeg.c
 	src/imgcat2/decoders/decoder_qoi.c
+	src/imgcat2/decoders/decoder_ico.c
 
 	# ANSI module
 	src/imgcat2/ansi/ansi.c

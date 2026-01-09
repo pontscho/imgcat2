@@ -63,6 +63,12 @@ const uint8_t MAGIC_RAW_CR2[4] = { 'C', 'R', 0x02, 0x00 }; /* Canon CR2 marker a
 /* QOI signature */
 const uint8_t MAGIC_QOI[4] = "qoif"; /* QOI: Quite OK Image format */
 
+/* ICO signature */
+const uint8_t MAGIC_ICO[4] = { 0x00, 0x00, 0x01, 0x00 }; /* ICO: Windows Icon format */
+
+/* CUR signature */
+const uint8_t MAGIC_CUR[4] = { 0x00, 0x00, 0x02, 0x00 }; /* CUR: Windows Cursor format */
+
 /**
  * @brief Check if TIFF data is actually a TIFF-based RAW format
  *
@@ -182,6 +188,23 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 		return MIME_BMP;
 	}
 
+	// Priority 4.5: ICO/CUR (with type field discrimination)
+	if (len >= 6 && data[0] == 0x00 && data[1] == 0x00) {
+		// Type field (bytes 2-3, little-endian)
+		uint16_t type = (uint16_t)(data[2] | (data[3] << 8));
+
+		// Image count validation (bytes 4-5)
+		uint16_t count = (uint16_t)(data[4] | (data[5] << 8));
+
+		if (count > 0 && count < 256) {
+			if (type == 1) {
+				return MIME_ICO; // Icon
+			} else if (type == 2) {
+				return MIME_CUR; // Cursor
+			}
+		}
+	}
+
 	// Priority 5: TGA (header-based detection)
 	// TGA format: byte[2] should be 0x02 (uncompressed true-color) or 0x03 (uncompressed grayscale)
 	// or 0x0A (RLE true-color) or 0x0B (RLE grayscale)
@@ -239,6 +262,8 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_TIFF: return "TIFF";
 		case MIME_RAW: return "RAW";
 		case MIME_QOI: return "QOI";
+		case MIME_ICO: return "ICO";
+		case MIME_CUR: return "CUR";
 		case MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}
