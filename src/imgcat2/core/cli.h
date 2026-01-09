@@ -30,6 +30,8 @@ typedef struct {
 	int target_height; /**< Target height in pixels (-1 = not specified) */
 	bool has_custom_dimensions; /**< true if -w or -h specified */
 	bool force_ansi; /**< true = force ANSI rendering (disable iTerm2 protocol) */
+	bool info_mode; /**< true = output metadata instead of rendering */
+	bool json_output; /**< true = format output as JSON */
 
 	/* internal options */
 	struct {
@@ -40,6 +42,7 @@ typedef struct {
 
 		bool is_iterm2;
 		bool is_ghostty;
+		bool is_kitty;
 		bool is_tmux;
 		bool has_kitty;
 	} terminal;

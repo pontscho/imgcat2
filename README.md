@@ -34,10 +34,11 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 
 imgcat2 supports multiple rendering modes depending on your terminal:
 
-### Native Protocol Mode (iTerm2 / Ghostty)
-When running in iTerm2 or Ghostty, imgcat2 uses native image protocols for the highest quality:
+### Native Protocol Mode (iTerm2 / Ghostty / Kitty)
+When running in iTerm2, Ghostty, or Kitty, imgcat2 uses native image protocols for the highest quality:
 - **iTerm2**: Uses OSC 1337 inline images protocol
 - **Ghostty**: Uses Kitty graphics protocol
+- **Kitty**: Uses Kitty graphics protocol
 - Automatic detection based on `TERM_PROGRAM` environment variable
 - Falls back to ANSI rendering if protocol fails
 
@@ -236,7 +237,7 @@ imgcat2 animation.gif
 
 When running in Ghostty terminal, imgcat2 automatically uses the Kitty graphics protocol for high-quality image rendering:
 
-### Advantages in Ghostty
+### Advantages in Ghostty or Kitty
 - **Higher Quality** - Native rendering using Kitty graphics protocol (PNG direct, JPEG/GIF decoded)
 - **Better Colors** - No color quantization or dithering
 - **Faster Rendering** - Direct image display without pixel-by-pixel processing
@@ -254,7 +255,7 @@ imgcat2 automatically detects Ghostty by checking the `TERM_PROGRAM` environment
 5. **Default behavior**: Fits image to terminal width, preserving aspect ratio
 6. **With `-w` or `-H`**: Scales to specified pixel dimensions (converted to terminal cells)
 
-### Ghostty Sizing Examples
+### Ghostty / Kitty Sizing Examples
 ```bash
 # PNG - sent directly with f=100
 imgcat2 image.png
@@ -299,22 +300,38 @@ cat image.jpg | imgcat2
 ### Command-Line Options
 
 ```bash
-Usage: imgcat2 [options] [file]
+Usage: ./imgcat2 [OPTIONS] [FILE]
+
+Display images in the terminal using ANSI escape sequences and half-block characters.
 
 Options:
-  --fit              Fit image to terminal (maintains aspect ratio) [default]
-  --resize           Resize image to exact terminal dimensions
-  --interpolation=<method>
-                     Interpolation method: lanczos (default), nearest
-  --top-offset=<n>   Number of lines to reserve at top (default: 8)
-  --animate          Display animated GIFs (default for .gif files)
-  --fps=<n>          Animation frame rate (default: 15)
-  --force-ansi       Force ANSI rendering (disable iTerm2/Ghostty protocols)
-  --silent           Suppress exit message during animation
-  -h, --help         Show this help message
-  -v, --version      Show version information
+  -h, --help                Show this help message and exit
+      --version             Show version information and exit
+  -o, --top-offset N        Top offset in terminal rows (default: 8)
+  -i, --interpolation TYPE  Interpolation method (default: lanczos)
+                            Available: lanczos, bilinear, nearest, cubic
+  -f, --fit                 Fit image to terminal (maintain aspect ratio, default)
+  -r, --resize              Resize to exact terminal dimensions (may distort)
+  -w, --width N             Target width in pixels
+  -H, --height N            Target height in pixels
+                            If both: exact dimensions
+                            If one: aspect ratio preserved
+                            If neither: fit to terminal (default)
+  -v, --verbose             Verbose mode (show non-error messages)
+      --fps N               Animation FPS (1-15, default: 15)
+  -a, --animate             Animate GIF frames
+      --force-ansi          Force ANSI rendering (disable iTerm2 protocol)
+      --info                Output image metadata instead of rendering
+      --json                Format --info output as JSON (single line)
 
-If [file] is not specified, reads from stdin.
+Arguments:
+  FILE                      Input image file (omit or '-' for stdin)
+
+Examples:
+  ./imgcat2 image.png              Display PNG image
+  ./imgcat2 -a animation.gif       Animate GIF
+  cat image.jpg | ./imgcat2        Read from stdin
+  ./imgcat2 --fps 10 anim.gif      Animate at 10 FPS
 ```
 
 ### Examples

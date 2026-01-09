@@ -199,4 +199,13 @@ bool terminal_is_ghostty(void)
 	return false;
 }
 
+/**
+ * @brief Check if terminal is Kitty
+ */
+bool terminal_is_kitty(void)
+{
+	/* Kitty is not available on Windows */
+	return false;
+}
+
 #endif /* _WIN32 */

@@ -142,6 +142,18 @@ bool terminal_is_iterm2(void);
 bool terminal_is_ghostty(void);
 
 /**
+ * @brief Check if terminal is Kitty
+ *
+ * Detects if the current terminal is Kitty by checking environment variables.
+ * Kitty sets TERM="xterm-kitty" and optionally TERM_PROGRAM="kitty".
+ *
+ * @return true if running in Kitty, false otherwise
+ *
+ * @note Used to enable Kitty graphics protocol
+ */
+bool terminal_is_kitty(void);
+
+/**
  * @brief Check if running inside tmux
  *
  * Detects if the current terminal session is running inside tmux

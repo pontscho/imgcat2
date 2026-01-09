@@ -47,6 +47,8 @@ void print_usage(const char *program_name)
 	printf("      --fps N               Animation FPS (1-15, default: 15)\n");
 	printf("  -a, --animate             Animate GIF frames\n");
 	printf("      --force-ansi          Force ANSI rendering (disable iTerm2 protocol)\n");
+	printf("      --info                Output image metadata instead of rendering\n");
+	printf("      --json                Format --info output as JSON (single line)\n");
 	printf("\n");
 	printf("Arguments:\n");
 	printf("  FILE                      Input image file (omit or '-' for stdin)\n");
@@ -126,14 +128,16 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "width",         required_argument, 0, 'w' },
 		{ "height",        required_argument, 0, 'H' },
 		{ "force-ansi",    no_argument,       0, 'A' },
-		{ 0,		       0,		          0, 0   },
+		{ "info",          no_argument,       0, 'I' },
+		{ "json",          no_argument,       0, 'J' },
+		{ 0,		       0,		         0, 0   },
 	};
 
 	/* Parse options */
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:w:H:A", long_options, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:w:H:AIJ", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;
@@ -145,6 +149,8 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			case 'F': opts->fps = atoi(optarg); break;
 			case 'a': opts->animate = true; break;
 			case 'A': opts->force_ansi = true; break;
+			case 'I': opts->info_mode = true; break;
+			case 'J': opts->json_output = true; break;
 
 			case 'w':
 				opts->target_width = atoi(optarg);
@@ -230,7 +236,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check width bounds */
 		if (opts->target_width > 0) {
-			if ((opts->target_width < 1 || opts->target_width > max_width) && ! (opts->terminal.is_iterm2 || opts->terminal.is_ghostty)) {
+			if ((opts->target_width < 1 || opts->target_width > max_width) && !(opts->terminal.is_iterm2 || opts->terminal.is_ghostty || opts->terminal.is_kitty)) {
 				fprintf(stderr, "Error: Width must be between 1 and %d pixels (got %d)\n", max_width, opts->target_width);
 				return -1;
 			}
@@ -238,7 +244,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check height bounds */
 		if (opts->target_height > 0) {
-			if ((opts->target_height < 1 || opts->target_height > max_height) && ! (opts->terminal.is_iterm2 || opts->terminal.is_ghostty)) {
+			if ((opts->target_height < 1 || opts->target_height > max_height) && !(opts->terminal.is_iterm2 || opts->terminal.is_ghostty || opts->terminal.is_kitty)) {
 				fprintf(stderr, "Error: Height must be between 1 and %d pixels (got %d)\n", max_height, opts->target_height);
 				return -1;
 			}
@@ -249,6 +255,12 @@ int validate_options(cli_options_t *opts)
 			fprintf(stderr, "Error: At least one of -w or -h must be positive\n");
 			return -1;
 		}
+	}
+
+	/* Validate that --json is only used with --info */
+	if (opts->json_output && !opts->info_mode) {
+		fprintf(stderr, "Error: --json can only be used with --info\n");
+		return -1;
 	}
 
 	return 0;

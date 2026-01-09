@@ -255,6 +255,7 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/core/pipeline.c
 	src/imgcat2/core/cli.c
 	src/imgcat2/core/base64.c
+	src/imgcat2/core/metadata.c
 
 	# Decoders module
 	src/imgcat2/decoders/decoder.c

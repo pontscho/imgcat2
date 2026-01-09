@@ -211,6 +211,27 @@ bool terminal_is_ghostty(void)
 }
 
 /**
+ * @brief Check if terminal is Kitty
+ */
+bool terminal_is_kitty(void)
+{
+	/* Primary detection: TERM environment variable */
+	const char *term = getenv("TERM");
+	if (term != NULL && strcmp(term, "xterm-kitty") == 0) {
+		return true;
+	}
+
+	/* Secondary detection: TERM_PROGRAM environment variable */
+	const char *term_program = getenv("TERM_PROGRAM");
+	if (term_program != NULL && strcmp(term_program, "kitty") == 0) {
+		return true;
+	}
+
+	/* Not Kitty */
+	return false;
+}
+
+/**
  * @brief Check if running inside tmux
  */
 bool terminal_is_tmux(void)

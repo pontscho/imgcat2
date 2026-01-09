@@ -12,10 +12,12 @@
 
 #include "core/cli.h"
 #include "core/image.h"
+#include "core/metadata.h"
 #include "core/pipeline.h"
 #include "decoders/decoder.h"
-#include "kitty/kitty.h"
+#include "decoders/magic.h"
 #include "iterm2/iterm2.h"
+#include "kitty/kitty.h"
 #include "terminal/terminal.h"
 
 /**
@@ -38,6 +40,8 @@ int main(int argc, char **argv)
 		.target_height = -1,
 		.has_custom_dimensions = false,
 		.force_ansi = false,
+		.info_mode = false,
+		.json_output = false,
 
 		.terminal = {
 			.rows = 0,
@@ -46,10 +50,10 @@ int main(int argc, char **argv)
 			.height = 0,
 			.is_iterm2 = terminal_is_iterm2(),
 			.is_ghostty = terminal_is_ghostty(),
-
+			.is_kitty = terminal_is_kitty(),
 			.is_tmux = terminal_is_tmux(),
 
-			.has_kitty = terminal_is_ghostty(),
+			.has_kitty = terminal_is_ghostty() || terminal_is_kitty(),
 		},
 	};
 
@@ -74,7 +78,8 @@ int main(int argc, char **argv)
 	}
 
 	if (!opts.silent) {
-		fprintf(stderr, "Terminal size: %dx%d (%dx%d) pixels, is %s\n", opts.terminal.width, opts.terminal.height, opts.terminal.cols, opts.terminal.rows, opts.terminal.is_iterm2 ? "iTerm2" : (opts.terminal.is_ghostty ? "Ghostty" : "ANSI"));
+		const char *terminal_type = opts.terminal.is_iterm2 ? "iTerm2" : (opts.terminal.is_ghostty ? "Ghostty" : (opts.terminal.is_kitty ? "Kitty" : "ANSI"));
+		fprintf(stderr, "Terminal size: %dx%d (%dx%d) pixels, is %s\n", opts.terminal.width, opts.terminal.height, opts.terminal.cols, opts.terminal.rows, terminal_type);
 	}
 
 	/* Initialize decoder registry */
@@ -119,19 +124,21 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Format not supported by iTerm2 or rendering failed, using ANSI rendering\n");
 		}
 
-	} else if (!opts.force_ansi && opts.terminal.is_ghostty) {
+	} else if (!opts.force_ansi && opts.terminal.has_kitty) {
 		/* Check if format is supported by Kitty graphics protocol */
 		if (kitty_is_format_supported(buffer, buffer_size, &opts)) {
 			if (!opts.silent) {
-				fprintf(stderr, "Using Ghostty (Kitty graphics protocol)\n");
+				const char *terminal_name = opts.terminal.is_ghostty ? "Ghostty" : "Kitty";
+				fprintf(stderr, "Using %s (Kitty graphics protocol)\n", terminal_name);
 			}
 
 		} else {
-			opts.terminal.is_ghostty = false;
+			opts.terminal.has_kitty = false;
 			opts.force_ansi = true;
 
 			if (!opts.silent) {
-				fprintf(stderr, "Format not supported by Ghostty, using ANSI rendering\n");
+				const char *terminal_name = opts.terminal.is_ghostty ? "Ghostty" : "Kitty";
+				fprintf(stderr, "Format not supported by %s, using ANSI rendering\n", terminal_name);
 			}
 		}
 	}
@@ -144,6 +151,22 @@ int main(int argc, char **argv)
 
 	if (!opts.silent) {
 		fprintf(stderr, "Decoded %d frame(s)\n", frame_count);
+	}
+
+	/* STEP 2.5: Output metadata and exit if --info specified */
+	if (opts.info_mode) {
+		/* Re-detect MIME type for output */
+		mime_type_t mime = detect_mime_type(buffer, buffer_size);
+
+		if (opts.json_output) {
+			output_metadata_json(mime, frames[0]->width, frames[0]->height, frame_count);
+		} else {
+			output_metadata_text(mime, frames[0]->width, frames[0]->height, frame_count);
+		}
+
+		/* Success - skip scaling and rendering */
+		exit_code = EXIT_SUCCESS;
+		goto cleanup;
 	}
 
 	/* STEP 3: Scale images to terminal dimensions */
