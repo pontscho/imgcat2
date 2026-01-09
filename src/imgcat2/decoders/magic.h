@@ -28,6 +28,7 @@ typedef enum {
 	MIME_HDR, /**< HDR: Radiance RGBE */
 	MIME_PNM, /**< PNM: Portable Anymap (PBM/PGM/PPM) */
 	MIME_WEBP, /**< WEBP: WebP image format */
+	MIME_HEIF, /**< HEIF: High Efficiency Image Format */
 } mime_type_t;
 
 /**
@@ -72,6 +73,24 @@ extern const uint8_t MAGIC_WEBP_RIFF[4];
 
 /** WebP WEBP signature: 4 bytes */
 extern const uint8_t MAGIC_WEBP_WEBP[4];
+
+/** HEIF ftyp signature: 4 bytes */
+extern const uint8_t MAGIC_HEIF_FTYP[4];
+
+/** HEIF HEIC brand: 4 bytes */
+extern const uint8_t MAGIC_HEIF_HEIC[4];
+
+/** HEIF HEIX brand: 4 bytes */
+extern const uint8_t MAGIC_HEIF_HEIX[4];
+
+/** HEIF HEVC brand: 4 bytes */
+extern const uint8_t MAGIC_HEIF_HEVC[4];
+
+/** HEIF HEVX brand: 4 bytes */
+extern const uint8_t MAGIC_HEIF_HEVX[4];
+
+/** HEIF MIF1 brand: 4 bytes */
+extern const uint8_t MAGIC_HEIF_MIF1[4];
 
 /**
  * @brief Detect MIME type from binary data magic bytes

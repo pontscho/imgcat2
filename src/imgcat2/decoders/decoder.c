@@ -34,6 +34,10 @@ extern image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame
 extern image_t **decode_webp(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
+#ifdef ENABLE_HEIF
+extern image_t **decode_heif(const uint8_t *data, size_t len, int *frame_count);
+#endif
+
 /* STB fallback decoders (always available) */
 extern image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count);
 
@@ -62,6 +66,10 @@ static const decoder_t s_decoder_registry[] = {
 
 #ifdef ENABLE_WEBP
 	{ MIME_WEBP, "WebP (libwebp)",       decode_webp         },
+#endif
+
+#ifdef ENABLE_HEIF
+	{ MIME_HEIF, "HEIF (libheif)",       decode_heif         },
 #endif
 
 	/* STB-supported formats (always available) */

@@ -40,6 +40,14 @@ const char MAGIC_PNM_P6[2] = "P6"; /* RGB */
 const uint8_t MAGIC_WEBP_RIFF[4] = "RIFF";
 const uint8_t MAGIC_WEBP_WEBP[4] = "WEBP";
 
+/* HEIF signatures */
+const uint8_t MAGIC_HEIF_FTYP[4] = "ftyp";
+const uint8_t MAGIC_HEIF_HEIC[4] = "heic";
+const uint8_t MAGIC_HEIF_HEIX[4] = "heix";
+const uint8_t MAGIC_HEIF_HEVC[4] = "hevc";
+const uint8_t MAGIC_HEIF_HEVX[4] = "hevx";
+const uint8_t MAGIC_HEIF_MIF1[4] = "mif1";
+
 /**
  * @brief Detect MIME type from binary data magic bytes
  *
@@ -74,6 +82,17 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	if (len >= 12) {
 		if (memcmp(data, MAGIC_WEBP_RIFF, 4) == 0 && memcmp(data + 8, MAGIC_WEBP_WEBP, 4) == 0) {
 			return MIME_WEBP;
+		}
+	}
+
+	// Priority 3.7: HEIF/HEIC (12+ byte match - ftyp box + brand)
+	if (len >= 12) {
+		if (memcmp(data + 4, MAGIC_HEIF_FTYP, 4) == 0) {
+			// Check major brand at offset 8
+			const uint8_t *brand = data + 8;
+			if (memcmp(brand, MAGIC_HEIF_HEIC, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEIX, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEVC, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEVX, 4) == 0 || memcmp(brand, MAGIC_HEIF_MIF1, 4) == 0) {
+				return MIME_HEIF;
+			}
 		}
 	}
 
@@ -135,6 +154,7 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_HDR: return "HDR";
 		case MIME_PNM: return "PNM";
 		case MIME_WEBP: return "WEBP";
+		case MIME_HEIF: return "HEIF";
 		case MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}

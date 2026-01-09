@@ -279,6 +279,10 @@ if(WEBP_FOUND)
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_webp.c)
 endif()
 
+if(HEIF_FOUND)
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_heif.c)
+endif()
+
 # Platform-specific terminal module (PHASE 8)
 if(WIN32)
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_windows.c)
