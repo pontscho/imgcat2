@@ -34,7 +34,7 @@
  * @note Returns false if data is invalid or not a HEIF
  * @note Does not validate that images are decodable, only checks count
  */
-static bool heif_is_animated(const uint8_t *data, size_t len)
+bool heif_is_animated(const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0) {
 		return false;
@@ -359,7 +359,7 @@ image_t **decode_heif(const uint8_t *data, size_t len, int *frame_count)
 	// Check if image sequence
 	if (heif_is_animated(data, len)) {
 		return decode_heif_animated(data, len, frame_count);
-	} else {
-		return decode_heif_static(data, len, frame_count);
 	}
+
+	return decode_heif_static(data, len, frame_count);
 }

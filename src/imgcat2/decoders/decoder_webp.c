@@ -96,7 +96,7 @@ static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_
  * @note Returns false if data is invalid or not a WebP
  * @note Does not validate that frames are decodable, only checks for animation flag
  */
-static bool webp_is_animated(const uint8_t *data, size_t len)
+bool webp_is_animated(const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0) {
 		return false;
@@ -271,7 +271,7 @@ image_t **decode_webp(const uint8_t *data, size_t len, int *frame_count)
 	// Check if animated
 	if (webp_is_animated(data, len)) {
 		return decode_webp_animated(data, len, frame_count);
-	} else {
-		return decode_webp_static(data, len, frame_count);
 	}
+
+	return decode_webp_static(data, len, frame_count);
 }

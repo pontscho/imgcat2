@@ -11,9 +11,9 @@
 #include <string.h>
 #include <time.h>
 
+#include "../core/base64.h"
 #include "../decoders/decoder.h"
 #include "../decoders/magic.h"
-#include "../core/base64.h"
 #include "../terminal/terminal.h"
 #include "kitty.h"
 
@@ -43,28 +43,47 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 	 * - Animated GIF: NOT supported (fall back to ANSI rendering)
 	 */
 	switch (mime) {
+#ifdef ENABLE_WEBP
+		case MIME_WEBP:
+			if (webp_is_animated(data, size) && opts->animate) {
+				goto force_ansi;
+			}
+			break;
+#endif
+
+#ifdef ENABLE_HEIF
+		case MIME_AVIF:
+		case MIME_HEIF:
+			if (heif_is_animated(data, size) && opts->animate) {
+				goto force_ansi;
+			}
+			break;
+#endif
+
 #ifdef PNG_APNG_SUPPORTED
 		case MIME_PNG:
-		printf("Kitty: PNG format supported\n");
 			if (png_is_animated(data, size) && opts->animate) {
-				/* Animated PNG not supported, fall back to ANSI */
-				opts->force_ansi = true;
-				return false;
+				goto force_ansi;
 			}
-			return true;
+			break;
 #endif
 
 #ifdef HAVE_GIFLIB
 		case MIME_GIF:
 			if (gif_is_animated(data, size) && opts->animate) {
-				opts->force_ansi = true;
-				return false;
+				goto force_ansi;
 			}
-			return true;
+			break;
 #endif
-
-		default: return true;
+		default: break;
 	}
+
+	return true;
+
+force_ansi:
+	/* Format not supported, force ANSI rendering */
+	opts->force_ansi = true;
+	return false;
 }
 
 int kitty_render(image_t **frames, int frame_count, const cli_options_t *opts)

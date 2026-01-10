@@ -40,7 +40,6 @@
  * @return true if format is supported, false otherwise
  *
  * @note Uses magic byte detection from decoders/magic.h
- * @note Uses gif_is_animated() to detect animated GIFs
  * @note Returns false if data is NULL or size is 0
  */
 bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *opts);

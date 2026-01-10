@@ -190,4 +190,53 @@ bool gif_is_animated(const uint8_t *data, size_t size);
 bool png_is_animated(const uint8_t *data, size_t size);
 #endif
 
+
+/**
+ * @brief Check if HEIF is an image sequence (has multiple images)
+ *
+ * Quickly checks if a HEIF file contains multiple top-level images without
+ * fully decoding the image data. Useful for determining whether
+ * to use static or animated decoder.
+ *
+ * @param data Raw HEIF file data
+ * @param len Size of data in bytes
+ * @return true if HEIF has multiple images, false otherwise or on error
+ *
+ * @note Returns false if data is invalid or not a HEIF
+ * @note Does not validate that images are decodable, only checks count
+ */
+bool heif_is_animated(const uint8_t *data, size_t len);
+
+/**
+ * @brief Check if AVIF is an image sequence (has multiple images)
+ *
+ * Quickly checks if an AVIF file contains multiple top-level images without
+ * fully decoding the image data. Useful for determining whether
+ * to use static or animated decoder.
+ *
+ * @param data Raw AVIF file data
+ * @param len Size of data in bytes
+ * @return true if AVIF has multiple images, false otherwise or on error
+ *
+ * @note Returns false if data is invalid or not an AVIF
+ * @note Does not validate that images are decodable, only checks count
+ */
+bool avif_is_animated(const uint8_t *data, size_t len);
+
+/**
+ * @brief Check if WebP is animated (has multiple frames)
+ *
+ * Quickly checks if a WebP file contains multiple frames without
+ * fully decoding the image data. Useful for determining whether
+ * to use static or animated decoder.
+ *
+ * @param data Raw WebP file data
+ * @param len Size of data in bytes
+ * @return true if WebP has animation, false otherwise or on error
+ *
+ * @note Returns false if data is invalid or not a WebP
+ * @note Does not validate that frames are decodable, only checks for animation flag
+ */
+bool webp_is_animated(const uint8_t *data, size_t len);
+
 #endif /* IMGCAT2_DECODER_H */
