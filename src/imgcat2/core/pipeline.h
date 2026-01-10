@@ -108,7 +108,7 @@ typedef struct {
  * target_dimensions_t dims = calculate_target_terminal_dimensions(80, 24, 0);
  * // dims.width = 80, dims.height = 48 (24 * 2)
  */
-target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t img_width, uint32_t img_height, bool fit_mode);
+target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t terminal_width, uint32_t terminal_height, uint32_t img_width, uint32_t img_height, bool fit_mode);
 
 /**
  * @brief Read input (file or stdin) based on CLI options

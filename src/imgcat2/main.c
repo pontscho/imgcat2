@@ -83,6 +83,13 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Terminal size: %dx%d (%dx%d) pixels, is %s\n", opts.terminal.width, opts.terminal.height, opts.terminal.cols, opts.terminal.rows, terminal_type);
 	}
 
+	if (opts.terminal.width == 0 || opts.terminal.height == 0) {
+		opts.force_ansi = true;
+		if (!opts.silent) {
+			fprintf(stderr, "Warning: Terminal pixel size unknown, forcing ANSI rendering\n");
+		}
+	}
+
 	/* Initialize decoder registry */
 	decoder_registry_init(&opts);
 

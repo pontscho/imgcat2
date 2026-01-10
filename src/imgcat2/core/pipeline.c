@@ -308,9 +308,10 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 	return true;
 }
 
-target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t img_width, uint32_t img_height, bool fit_mode)
+target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t terminal_width, uint32_t terminal_height, uint32_t img_width, uint32_t img_height, bool fit_mode)
 {
-	(void)fit_mode; /* Currently unused, reserved for future use */
+	(void)terminal_width; /* Reserved for future use */
+	(void)terminal_height; /* Reserved for future use */
 
 	/* Resize factors:
 	 * - RESIZE_FACTOR_X = 1: Horizontal 1:1 (1 pixel per column)
@@ -332,18 +333,31 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
 	/* Calculate maximum available dimensions */
 	uint32_t available_rows = rows;
 	uint32_t max_width = cols * RESIZE_FACTOR_X;
-	uint32_t max_height = available_rows * RESIZE_FACTOR_Y;
+	uint32_t max_height = available_rows * RESIZE_FACTOR_Y - RESIZE_FACTOR_Y;
 
 	/* Clamp width to prevent excessive memory use */
 	if (max_width > MAX_TERMINAL_WIDTH) {
 		max_width = MAX_TERMINAL_WIDTH;
 	}
 
-	if (img_width > 0 && img_height > 0) {
-		/* Fit mode: preserve aspect ratio, fit within terminal bounds */
-		float aspect = (float)img_width / (float)img_height;
-		uint32_t calc_height = (uint32_t)roundf((float)max_width / aspect);
+	float aspect = (float)img_width / (float)img_height;
+	uint32_t calc_height = (uint32_t)roundf((float)max_width / aspect);
 
+	if (fit_mode && img_width > 0 && img_height > 0) {
+		/* Fit mode: scale to fit terminal while preserving aspect ratio */
+		if (calc_height > max_height) {
+			/* Height constraint is tighter - fit to height */
+			result.height = max_height;
+			result.width = (uint32_t)roundf((float)max_height * aspect);
+
+		} else {
+			/* Width constraint is tighter - fit to width */
+			result.width = max_width;
+			result.height = calc_height;
+		}
+
+	} else if (img_width > max_width || img_height > max_height) {
+		/* Image is larger than terminal - scale down preserving aspect ratio */
 		if (calc_height > max_height) {
 			/* Height constraint is tighter - fit to height */
 			result.height = max_height;
@@ -356,9 +370,9 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
 		}
 
 	} else {
-		/* Resize mode: use exact terminal dimensions (may distort) */
-		result.width = max_width;
-		result.height = max_height;
+		/* Image is smaller than or equal to terminal - keep original size */
+		result.width = img_width;
+		result.height = img_height;
 	}
 
 	/* Validate calculated dimensions */
@@ -551,7 +565,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 
 	} else {
 		/* Default: terminal-aware scaling with aspect ratio */
-		target = calculate_target_terminal_dimensions(cols, rows, frames[0]->width, frames[0]->height, opts->fit_mode);
+		target = calculate_target_terminal_dimensions(cols, rows, opts->terminal.width, opts->terminal.height, frames[0]->width, frames[0]->height, opts->fit_mode);
 	}
 
 	if (target.width == 0 || target.height == 0) {
