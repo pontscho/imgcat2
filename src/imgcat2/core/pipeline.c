@@ -20,8 +20,8 @@
 #include "../ansi/escape.h"
 #include "../decoders/decoder.h"
 #include "../decoders/magic.h"
-#include "../kitty/kitty.h"
 #include "../iterm2/iterm2.h"
+#include "../kitty/kitty.h"
 #include "../terminal/terminal.h"
 #include "cli.h"
 #include "image.h"
@@ -310,7 +310,7 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 	return true;
 }
 
-target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset)
+target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t img_width, uint32_t img_height, bool fit_mode)
 {
 	/* Resize factors:
 	 * - RESIZE_FACTOR_X = 1: Horizontal 1:1 (1 pixel per column)
@@ -327,31 +327,50 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
 	if (cols == 0 || rows == 0) {
 		fprintf(stderr, "calculate_target_terminal_dimensions: invalid terminal size %u×%u\n", cols, rows);
 		return result;
-
-	} else if (top_offset >= rows) {
-		fprintf(stderr, "calculate_target_terminal_dimensions: top_offset %u >= rows %u\n", top_offset, rows);
-		return result;
 	}
 
-	/* Calculate target dimensions */
-	uint32_t available_rows = rows - top_offset;
-	uint32_t target_width = cols * RESIZE_FACTOR_X;
-	uint32_t target_height = available_rows * RESIZE_FACTOR_Y;
+	/* Calculate maximum available dimensions */
+	uint32_t available_rows = rows;
+	uint32_t max_width = cols * RESIZE_FACTOR_X;
+	uint32_t max_height = available_rows * RESIZE_FACTOR_Y;
 
 	/* Clamp width to prevent excessive memory use */
-	if (target_width > MAX_TERMINAL_WIDTH) {
-		target_width = MAX_TERMINAL_WIDTH;
+	if (max_width > MAX_TERMINAL_WIDTH) {
+		max_width = MAX_TERMINAL_WIDTH;
+	}
+
+	printf("Terminal size: %ux%u, available: %ux%u, img: %ux%u, fit_mode: %s\n",
+	       cols, rows, max_width, max_height, img_width, img_height, fit_mode ? "true" : "false");
+
+	if (img_width > 0 && img_height > 0) {
+		/* Fit mode: preserve aspect ratio, fit within terminal bounds */
+		float aspect = (float)img_width / (float)img_height;
+		uint32_t calc_height = (uint32_t)roundf((float)max_width / aspect);
+
+		if (calc_height > max_height) {
+			/* Height constraint is tighter - fit to height */
+			result.height = max_height;
+			result.width = (uint32_t)roundf((float)max_height * aspect);
+
+		} else {
+			/* Width constraint is tighter - fit to width */
+			result.width = max_width;
+			result.height = calc_height;
+		}
+
+	} else {
+		/* Resize mode: use exact terminal dimensions (may distort) */
+		result.width = max_width;
+		result.height = max_height;
 	}
 
 	/* Validate calculated dimensions */
-	if (target_width == 0 || target_height == 0) {
-		fprintf(stderr, "calculate_target_terminal_dimensions: calculated invalid dimensions %u×%u\n", target_width, target_height);
-		return result;
+	if (result.width == 0 || result.height == 0) {
+		fprintf(stderr, "calculate_target_terminal_dimensions: calculated invalid dimensions %u×%u\n", result.width, result.height);
+		result.width = 0;
+		result.height = 0;
 	}
 
-	/* Return valid dimensions */
-	result.width = target_width;
-	result.height = target_height;
 	return result;
 }
 
@@ -497,7 +516,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 			fprintf(stderr, "(final: %ux%u)\n", target.width, target.height);
 		}
 
-	} else if (opts->terminal.has_kitty && ! opts->force_ansi) {
+	} else if (opts->terminal.has_kitty && !opts->force_ansi) {
 		uint32_t img_height = frames[0]->height;
 		uint32_t half_terminal_height = opts->terminal.height / 2;
 		float aspect = (float)frames[0]->width / (float)frames[0]->height;
@@ -534,8 +553,8 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 		}
 
 	} else {
-		/* Default: terminal-aware scaling */
-		target = calculate_target_terminal_dimensions(cols, rows, opts->top_offset);
+		/* Default: terminal-aware scaling with aspect ratio */
+		target = calculate_target_terminal_dimensions(cols, rows, frames[0]->width, frames[0]->height, opts->fit_mode);
 	}
 
 	if (target.width == 0 || target.height == 0) {

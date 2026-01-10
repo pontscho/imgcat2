@@ -30,7 +30,6 @@ int main(int argc, char **argv)
 	/* Initialize CLI options with defaults */
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = false,
 		.silent = true,

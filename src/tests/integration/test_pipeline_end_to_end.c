@@ -27,18 +27,18 @@ CTEST(integration, target_dimensions)
 {
 	target_dimensions_t dims;
 
-	/* 80x24 terminal, no offset */
-	dims = calculate_target_terminal_dimensions(80, 24, 0);
+	/* 80x24 terminal, no offset, resize mode (exact dimensions) */
+	dims = calculate_target_terminal_dimensions(80, 24, 800, 600, false);
 	ASSERT_EQUAL(80, dims.width);
 	ASSERT_EQUAL(48, dims.height); /* 24 * 2 for half-blocks */
 
-	/* 100x30 terminal, 2 line offset */
-	dims = calculate_target_terminal_dimensions(100, 30, 2);
+	/* 100x30 terminal, resize mode (exact dimensions) */
+	dims = calculate_target_terminal_dimensions(100, 30, 800, 600, false);
 	ASSERT_EQUAL(100, dims.width);
 	ASSERT_EQUAL(56, dims.height); /* (30 - 2) * 2 */
 
 	/* Zero dimensions should return {0, 0} */
-	dims = calculate_target_terminal_dimensions(0, 24, 0);
+	dims = calculate_target_terminal_dimensions(0, 24, 800, 600, false);
 	ASSERT_EQUAL(0, dims.width);
 	ASSERT_EQUAL(0, dims.height);
 }
@@ -172,7 +172,8 @@ CTEST(integration, pipeline_scale_basic)
 	/* Create CLI options with fit mode */
 	cli_options_t opts = { 0 };
 	opts.fit_mode = true;
-	opts.top_offset = 0;
+	opts.terminal.rows = 24;
+	opts.terminal.cols = 80;
 
 	image_t **scaled = NULL;
 	int result = pipeline_scale(frames, 1, &opts, &scaled);
@@ -216,7 +217,8 @@ CTEST(integration, full_pipeline_png)
 	/* Step 2: Scale */
 	cli_options_t opts = { 0 };
 	opts.fit_mode = true;
-	opts.top_offset = 0;
+	opts.terminal.rows = 24;
+	opts.terminal.cols = 80;
 
 	image_t **scaled = NULL;
 	result = pipeline_scale(frames, frame_count, &opts, &scaled);

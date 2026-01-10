@@ -20,7 +20,6 @@
  */
 typedef struct {
 	char *input_file; /**< Input file path, or NULL for stdin */
-	int top_offset; /**< Top offset in terminal rows (default: 8) */
 	char *interpolation; /**< Interpolation method: lanczos, bilinear, nearest, cubic */
 	bool fit_mode; /**< true = fit to terminal, false = resize to exact dimensions */
 	bool silent; /**< true = suppress non-error messages */
@@ -90,7 +89,6 @@ void print_version(void);
  * Validates parsed command-line options for correctness:
  * - fps in range [1, 15]
  * - interpolation is valid method
- * - top_offset is non-negative
  * - fit_mode and resize_mode are not both set
  *
  * @param opts Options structure to validate

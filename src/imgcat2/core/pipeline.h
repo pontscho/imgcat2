@@ -94,11 +94,10 @@ typedef struct {
  *
  * Formula:
  * - target_width = cols × RESIZE_FACTOR_X (1:1 horizontal)
- * - target_height = (rows - top_offset) × RESIZE_FACTOR_Y (2:1 vertical)
+ * - target_height = rows × RESIZE_FACTOR_Y (2:1 vertical)
  *
  * @param cols Terminal columns (character width)
  * @param rows Terminal rows (character height)
- * @param top_offset Reserved rows at top (e.g., for status line)
  *
  * @return Target dimensions struct, or {0, 0} on invalid input
  *
@@ -109,7 +108,7 @@ typedef struct {
  * target_dimensions_t dims = calculate_target_terminal_dimensions(80, 24, 0);
  * // dims.width = 80, dims.height = 48 (24 * 2)
  */
-target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t top_offset);
+target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t img_width, uint32_t img_height, bool fit_mode);
 
 /**
  * @brief Read input (file or stdin) based on CLI options
@@ -149,7 +148,7 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, ima
  *
  * @param frames Input frames array
  * @param frame_count Number of frames
- * @param opts CLI options (fit_mode, top_offset)
+ * @param opts CLI options (fit_mode, custom dimensions)
  * @param out_scaled Output parameter for scaled frames array (caller must free)
  *
  * @return 0 on success, -1 on error

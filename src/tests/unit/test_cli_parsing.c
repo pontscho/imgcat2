@@ -24,7 +24,6 @@ CTEST(cli, parse_basic_file)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -54,7 +53,6 @@ CTEST(cli, parse_stdin)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -83,7 +81,6 @@ CTEST(cli, parse_options)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -100,7 +97,6 @@ CTEST(cli, parse_options)
 	int result = parse_arguments(argc, argv, &opts);
 
 	ASSERT_EQUAL(0, result);
-	ASSERT_EQUAL(10, opts.top_offset);
 	ASSERT_STR("bilinear", opts.interpolation);
 	ASSERT_EQUAL(20, opts.fps);
 	ASSERT_TRUE(opts.silent);
@@ -117,7 +113,6 @@ CTEST(cli, parse_long_options)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -128,13 +123,12 @@ CTEST(cli, parse_long_options)
 	/* Reset getopt state */
 	optind = 1;
 
-	char *argv[] = { "imgcat2", "--top-offset", "5", "--interpolation", "cubic", "--fps", "10", "--silent", "animation.gif" };
-	int argc = 9;
+	char *argv[] = { "imgcat2", "--interpolation", "cubic", "--fps", "10", "--silent", "animation.gif" };
+	int argc = 7;
 
 	int result = parse_arguments(argc, argv, &opts);
 
 	ASSERT_EQUAL(0, result);
-	ASSERT_EQUAL(5, opts.top_offset);
 	ASSERT_STR("cubic", opts.interpolation);
 	ASSERT_EQUAL(10, opts.fps);
 	ASSERT_TRUE(opts.silent);
@@ -153,7 +147,6 @@ CTEST(cli, parse_invalid)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -195,7 +188,6 @@ CTEST(cli, validate_fps)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -241,7 +233,6 @@ CTEST(cli, validate_interpolation)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -279,44 +270,6 @@ CTEST(cli, validate_interpolation)
 
 	/* Invalid: wrong case */
 	opts.interpolation = "LANCZOS";
-	ASSERT_NOT_EQUAL(0, validate_options(&opts));
-}
-
-/**
- * @test Test top offset validation
- *
- * Verifies that validate_options() correctly validates top_offset (non-negative).
- */
-CTEST(cli, validate_top_offset)
-{
-	cli_options_t opts = {
-		.input_file = NULL,
-		.top_offset = 8,
-		.interpolation = "lanczos",
-		.fit_mode = true,
-		.silent = false,
-		.fps = 10,
-		.animate = true,
-	};
-
-	/* Valid: 0 */
-	opts.top_offset = 0;
-	ASSERT_EQUAL(0, validate_options(&opts));
-
-	/* Valid: 8 (default) */
-	opts.top_offset = 8;
-	ASSERT_EQUAL(0, validate_options(&opts));
-
-	/* Valid: 100 (large value) */
-	opts.top_offset = 100;
-	ASSERT_EQUAL(0, validate_options(&opts));
-
-	/* Invalid: -1 (negative) */
-	opts.top_offset = -1;
-	ASSERT_NOT_EQUAL(0, validate_options(&opts));
-
-	/* Invalid: -10 (very negative) */
-	opts.top_offset = -10;
 	ASSERT_NOT_EQUAL(0, validate_options(&opts));
 }
 
@@ -370,7 +323,6 @@ CTEST(cli, parse_no_animate)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -401,7 +353,6 @@ CTEST(cli, parse_resize_mode)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -446,7 +397,6 @@ CTEST(cli, parse_combined_short_options)
 {
 	cli_options_t opts = {
 		.input_file = NULL,
-		.top_offset = 8,
 		.interpolation = "lanczos",
 		.fit_mode = true,
 		.silent = false,
@@ -464,7 +414,6 @@ CTEST(cli, parse_combined_short_options)
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_TRUE(opts.silent);
-	ASSERT_EQUAL(5, opts.top_offset);
 	ASSERT_NOT_NULL(opts.input_file);
 	ASSERT_STR("test.png", opts.input_file);
 }

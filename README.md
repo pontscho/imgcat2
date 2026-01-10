@@ -317,7 +317,6 @@ Display images in the terminal using ANSI escape sequences and half-block charac
 Options:
   -h, --help                Show this help message and exit
       --version             Show version information and exit
-  -o, --top-offset N        Top offset in terminal rows (default: 8)
   -i, --interpolation TYPE  Interpolation method (default: lanczos)
                             Available: lanczos, bilinear, nearest, cubic
   -f, --fit                 Fit image to terminal (maintain aspect ratio, default)
@@ -354,11 +353,6 @@ imgcat2 photo.jpg
 **Display with nearest-neighbor scaling (for pixel art):**
 ```bash
 imgcat2 --interpolation=nearest pixelart.png
-```
-
-**Adjust for different terminal layout:**
-```bash
-imgcat2 --top-offset=4 image.png
 ```
 
 **View animated GIF:**

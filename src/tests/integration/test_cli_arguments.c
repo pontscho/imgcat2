@@ -24,7 +24,6 @@ CTEST(integration, cli_defaults)
 
 	/* Default values */
 	opts.input_file = NULL;
-	opts.top_offset = 8;
 	opts.interpolation = "lanczos";
 	opts.fit_mode = true;
 	opts.silent = false;
@@ -33,7 +32,6 @@ CTEST(integration, cli_defaults)
 
 	/* Validate defaults */
 	ASSERT_NULL(opts.input_file);
-	ASSERT_EQUAL(8, opts.top_offset);
 	ASSERT_NOT_NULL(opts.interpolation);
 	ASSERT_TRUE(opts.fit_mode);
 	ASSERT_FALSE(opts.silent);
@@ -50,7 +48,6 @@ CTEST(integration, cli_validate_valid_options)
 {
 	cli_options_t opts = { 0 };
 	opts.input_file = "test.png";
-	opts.top_offset = 8;
 	opts.interpolation = "lanczos";
 	opts.fit_mode = true;
 	opts.silent = false;
@@ -70,7 +67,6 @@ CTEST(integration, cli_validate_invalid_fps)
 {
 	cli_options_t opts = { 0 };
 	opts.input_file = "test.png";
-	opts.top_offset = 8;
 	opts.interpolation = "lanczos";
 	opts.fit_mode = true;
 	opts.silent = false;
@@ -93,26 +89,6 @@ CTEST(integration, cli_validate_invalid_fps)
 }
 
 /**
- * @test Test validate_options() with negative top_offset
- *
- * Verifies that negative top_offset is rejected.
- */
-CTEST(integration, cli_validate_negative_offset)
-{
-	cli_options_t opts = { 0 };
-	opts.input_file = "test.png";
-	opts.top_offset = -5;
-	opts.interpolation = "lanczos";
-	opts.fit_mode = true;
-	opts.silent = false;
-	opts.fps = 15;
-	opts.animate = false;
-
-	int result = validate_options(&opts);
-	ASSERT_EQUAL(-1, result);
-}
-
-/**
  * @test Test validate_options() with invalid interpolation
  *
  * Verifies that invalid interpolation methods are rejected.
@@ -121,7 +97,6 @@ CTEST(integration, cli_validate_invalid_interpolation)
 {
 	cli_options_t opts = { 0 };
 	opts.input_file = "test.png";
-	opts.top_offset = 8;
 	opts.interpolation = "invalid_method";
 	opts.fit_mode = true;
 	opts.silent = false;
@@ -141,7 +116,6 @@ CTEST(integration, cli_validate_valid_interpolations)
 {
 	cli_options_t opts = { 0 };
 	opts.input_file = "test.png";
-	opts.top_offset = 8;
 	opts.fit_mode = true;
 	opts.silent = false;
 	opts.fps = 15;
@@ -169,7 +143,6 @@ CTEST(integration, cli_option_combinations)
 	/* Combination 1: Fit mode with default FPS */
 	opts = (cli_options_t){ 0 };
 	opts.input_file = "image.png";
-	opts.top_offset = 0;
 	opts.interpolation = "lanczos";
 	opts.fit_mode = true;
 	opts.fps = 15;
@@ -179,7 +152,6 @@ CTEST(integration, cli_option_combinations)
 	/* Combination 2: Animation enabled with custom FPS */
 	opts = (cli_options_t){ 0 };
 	opts.input_file = "animation.gif";
-	opts.top_offset = 5;
 	opts.interpolation = "bilinear";
 	opts.fit_mode = true;
 	opts.fps = 10;
@@ -189,7 +161,6 @@ CTEST(integration, cli_option_combinations)
 	/* Combination 3: Silent mode */
 	opts = (cli_options_t){ 0 };
 	opts.input_file = "test.jpg";
-	opts.top_offset = 2;
 	opts.interpolation = "nearest";
 	opts.fit_mode = true;
 	opts.silent = true;
@@ -206,7 +177,6 @@ CTEST(integration, cli_fps_boundaries)
 {
 	cli_options_t opts = { 0 };
 	opts.input_file = "test.gif";
-	opts.top_offset = 0;
 	opts.interpolation = "lanczos";
 	opts.fit_mode = true;
 	opts.animate = true;
@@ -229,32 +199,6 @@ CTEST(integration, cli_fps_boundaries)
 }
 
 /**
- * @test Test top_offset boundary values
- *
- * Verifies top_offset validation.
- */
-CTEST(integration, cli_top_offset_boundaries)
-{
-	cli_options_t opts = { 0 };
-	opts.input_file = "test.png";
-	opts.interpolation = "lanczos";
-	opts.fit_mode = true;
-	opts.fps = 15;
-
-	/* Zero offset (valid) */
-	opts.top_offset = 0;
-	ASSERT_EQUAL(0, validate_options(&opts));
-
-	/* Positive offset (valid) */
-	opts.top_offset = 10;
-	ASSERT_EQUAL(0, validate_options(&opts));
-
-	/* Negative offset (invalid) */
-	opts.top_offset = -1;
-	ASSERT_EQUAL(-1, validate_options(&opts));
-}
-
-/**
  * @test Test stdin input (NULL input_file)
  *
  * Verifies that stdin input (NULL file) is valid.
@@ -263,7 +207,6 @@ CTEST(integration, cli_stdin_input)
 {
 	cli_options_t opts = { 0 };
 	opts.input_file = NULL; /* stdin */
-	opts.top_offset = 8;
 	opts.interpolation = "lanczos";
 	opts.fit_mode = true;
 	opts.fps = 15;

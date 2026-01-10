@@ -34,7 +34,6 @@ void print_usage(const char *program_name)
 	printf("Options:\n");
 	printf("  -h, --help                Show this help message and exit\n");
 	printf("      --version             Show version information and exit\n");
-	printf("  -o, --top-offset N        Top offset in terminal rows (default: 8)\n");
 	printf("  -i, --interpolation TYPE  Interpolation method (default: lanczos)\n");
 	printf("                            Available: lanczos, bilinear, nearest, cubic\n");
 	printf("  -f, --fit                 Fit image to terminal (maintain aspect ratio, default)\n");
@@ -129,7 +128,6 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	static struct option long_options[] = {
 		{ "help",          no_argument,       0, 'h' },
 		{ "version",       no_argument,       0, 'b' },
-		{ "top-offset",    required_argument, 0, 'o' },
 		{ "interpolation", required_argument, 0, 'i' },
 		{ "fit",           no_argument,       0, 'f' },
 		{ "resize",        no_argument,       0, 'r' },
@@ -148,11 +146,10 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hbo:i:frvaF:w:H:AIJ", long_options, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hb:i:frvaF:w:H:AIJ", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;
-			case 'o': opts->top_offset = atoi(optarg); break;
 			case 'i': opts->interpolation = optarg; break;
 			case 'f': opts->fit_mode = true; break;
 			case 'r': opts->fit_mode = false; break;
@@ -206,7 +203,6 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
  * Validates parsed command-line options for correctness:
  * - fps in range [1, 15]
  * - interpolation is valid method
- * - top_offset is non-negative
  * - fit_mode and resize_mode are not both set
  *
  * @param opts Options structure to validate
@@ -225,12 +221,6 @@ int validate_options(cli_options_t *opts)
 		return -1;
 	}
 
-	/* Validate top_offset is non-negative */
-	if (opts->top_offset < 0) {
-		fprintf(stderr, "Error: Top offset must be non-negative (got %d)\n", opts->top_offset);
-		return -1;
-	}
-
 	/* Validate interpolation method */
 	if (opts->interpolation != NULL) {
 		if (strcmp(opts->interpolation, "lanczos") != 0 && strcmp(opts->interpolation, "bilinear") != 0 && strcmp(opts->interpolation, "nearest") != 0 && strcmp(opts->interpolation, "cubic") != 0) {
@@ -243,7 +233,7 @@ int validate_options(cli_options_t *opts)
 	/* Validate custom dimensions if specified */
 	if (opts->has_custom_dimensions) {
 		int max_width = opts->terminal.cols * RESIZE_FACTOR_X;
-		int max_height = (opts->terminal.rows - opts->top_offset) * RESIZE_FACTOR_Y;
+		int max_height = opts->terminal.rows * RESIZE_FACTOR_Y;
 
 		/* Check width bounds */
 		if (opts->target_width > 0) {
