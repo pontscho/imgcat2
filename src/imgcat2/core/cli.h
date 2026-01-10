@@ -42,6 +42,8 @@ typedef struct {
 		bool is_iterm2;
 		bool is_ghostty;
 		bool is_kitty;
+		bool is_wezterm;
+		bool is_konsole;
 		bool is_tmux;
 		bool has_kitty;
 	} terminal;

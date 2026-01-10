@@ -237,7 +237,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check width bounds */
 		if (opts->target_width > 0) {
-			if ((opts->target_width < 1 || opts->target_width > max_width) && !(opts->terminal.is_iterm2 || opts->terminal.is_ghostty || opts->terminal.is_kitty)) {
+			if ((opts->target_width < 1 || opts->target_width > max_width) && !(opts->terminal.is_iterm2 || opts->terminal.has_kitty)) {
 				fprintf(stderr, "Error: Width must be between 1 and %d pixels (got %d)\n", max_width, opts->target_width);
 				return -1;
 			}
@@ -245,7 +245,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check height bounds */
 		if (opts->target_height > 0) {
-			if ((opts->target_height < 1 || opts->target_height > max_height) && !(opts->terminal.is_iterm2 || opts->terminal.is_ghostty || opts->terminal.is_kitty)) {
+			if ((opts->target_height < 1 || opts->target_height > max_height) && !(opts->terminal.is_iterm2 || opts->terminal.has_kitty)) {
 				fprintf(stderr, "Error: Height must be between 1 and %d pixels (got %d)\n", max_height, opts->target_height);
 				return -1;
 			}

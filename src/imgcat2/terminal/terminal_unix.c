@@ -232,6 +232,23 @@ bool terminal_is_kitty(void)
 }
 
 /**
+ * @brief Check if terminal is WezTerm
+ */
+bool terminal_is_wezterm(void)
+{
+	const char *term_program = getenv("TERM_PROGRAM");
+	return (term_program != NULL && strcmp(term_program, "WezTerm") == 0);
+}
+
+/**
+ * @brief Check if terminal is Konsole
+ */
+bool terminal_is_konsole(void)
+{
+	return (getenv("KONSOLE_VERSION") != NULL || getenv("KONSOLE_DBUS_SESSION") != NULL || getenv("KONSOLE_DBUS_SERVICE") != NULL);
+}
+
+/**
  * @brief Check if running inside tmux
  */
 bool terminal_is_tmux(void)

@@ -200,6 +200,22 @@ bool terminal_is_ghostty(void)
 }
 
 /**
+ * @brief Check if terminal is WezTerm
+ */
+bool terminal_is_wezterm(void)
+{
+	return false;
+}
+
+/**
+ * @brief Check if terminal is Konsole
+ */
+bool terminal_is_konsole(void)
+{
+	return false;
+}
+
+/**
  * @brief Check if terminal is Kitty
  */
 bool terminal_is_kitty(void)

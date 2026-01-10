@@ -158,6 +158,9 @@ bool terminal_is_ghostty(void);
  */
 bool terminal_is_kitty(void);
 
+bool terminal_is_wezterm(void);
+bool terminal_is_konsole(void);
+
 /**
  * @brief Check if running inside tmux
  *

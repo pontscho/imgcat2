@@ -48,9 +48,11 @@ int main(int argc, char **argv)
 			.is_iterm2 = terminal_is_iterm2(),
 			.is_ghostty = terminal_is_ghostty(),
 			.is_kitty = terminal_is_kitty(),
+			.is_wezterm = terminal_is_wezterm(),
+			.is_konsole = terminal_is_konsole(),
 			.is_tmux = terminal_is_tmux(),
 
-			.has_kitty = terminal_is_ghostty() || terminal_is_kitty(),
+			.has_kitty = terminal_is_ghostty() || terminal_is_kitty() || terminal_is_wezterm() || terminal_is_konsole(),
 		},
 	};
 
@@ -60,10 +62,6 @@ int main(int argc, char **argv)
 		opts.terminal.rows = DEFAULT_TERM_ROWS;
 		opts.terminal.cols = DEFAULT_TERM_COLS;
 	}
-
-	// if (opts.terminal.is_ghostty || opts.terminal.is_iterm2) {
-	// 	opts.fit_mode = false;
-	// }
 
 	/* Parse command-line arguments */
 	if (parse_arguments(argc, argv, &opts) != 0) {
@@ -75,7 +73,13 @@ int main(int argc, char **argv)
 	}
 
 	if (!opts.silent) {
-		const char *terminal_type = opts.terminal.is_iterm2 ? "iTerm2" : (opts.terminal.is_ghostty ? "Ghostty" : (opts.terminal.is_kitty ? "Kitty" : "ANSI"));
+		const char *terminal_type = opts.terminal.is_iterm2 ? "iTerm2" :
+			opts.terminal.is_ghostty ? "Ghostty" :
+			opts.terminal.is_kitty ? "Kitty" :
+			opts.terminal.is_wezterm ? "WezTerm" :
+			opts.terminal.is_konsole ? "Konsole" :
+			"ANSI";
+
 		fprintf(stderr, "Terminal size: %dx%d (%dx%d) pixels, is %s\n", opts.terminal.width, opts.terminal.height, opts.terminal.cols, opts.terminal.rows, terminal_type);
 	}
 
@@ -125,8 +129,7 @@ int main(int argc, char **argv)
 		/* Check if format is supported by Kitty graphics protocol */
 		if (kitty_is_format_supported(buffer, buffer_size, &opts)) {
 			if (!opts.silent) {
-				const char *terminal_name = opts.terminal.is_ghostty ? "Ghostty" : "Kitty";
-				fprintf(stderr, "Using %s (Kitty graphics protocol)\n", terminal_name);
+				fprintf(stderr, "Using Kitty graphics protocol\n");
 			}
 
 		} else {
@@ -134,8 +137,7 @@ int main(int argc, char **argv)
 			opts.force_ansi = true;
 
 			if (!opts.silent) {
-				const char *terminal_name = opts.terminal.is_ghostty ? "Ghostty" : "Kitty";
-				fprintf(stderr, "Format not supported by %s, using ANSI rendering\n", terminal_name);
+				fprintf(stderr, "Format not supported by Kitty graphics protocol, using ANSI rendering\n");
 			}
 		}
 	}
