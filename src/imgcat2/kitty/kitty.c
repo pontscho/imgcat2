@@ -28,6 +28,7 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 
 	/* Detect MIME type using magic bytes */
 	mime_type_t mime = detect_mime_type(data, size);
+	printf(" Detected MIME type: %d\n", mime);
 
 	/*
 	 * Kitty graphics protocol officially supports:
@@ -42,6 +43,17 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 	 * - Animated GIF: NOT supported (fall back to ANSI rendering)
 	 */
 	switch (mime) {
+#ifdef PNG_APNG_SUPPORTED
+		case MIME_PNG:
+		printf("Kitty: PNG format supported\n");
+			if (png_is_animated(data, size) && opts->animate) {
+				/* Animated PNG not supported, fall back to ANSI */
+				opts->force_ansi = true;
+				return false;
+			}
+			return true;
+#endif
+
 #ifdef HAVE_GIFLIB
 		case MIME_GIF:
 			if (gif_is_animated(data, size) && opts->animate) {

@@ -143,6 +143,41 @@ if(NOT PNG_FOUND)
 endif()
 add_definitions(-DHAVE_LIBPNG)
 
+# Check if libpng has APNG support (requires libpng 1.6.0+)
+include(CheckCSourceCompiles)
+# Prefer APNG-enabled libpng if available
+if(EXISTS "/usr/local/libpng-apng/include/png.h")
+	set(PNG_INCLUDE_DIRS "/usr/local/libpng-apng/include")
+	set(PNG_LIBRARIES "/usr/local/libpng-apng/lib/libpng16.a")
+	message(STATUS "Found APNG-enabled libpng: ${PNG_LIBRARIES}")
+endif()
+set(CMAKE_REQUIRED_INCLUDES ${PNG_INCLUDE_DIRS})
+set(CMAKE_REQUIRED_LIBRARIES ${PNG_LIBRARIES} ${ZLIB_LIBRARIES})
+
+check_c_source_compiles("
+	#include <png.h>
+	#ifndef PNG_APNG_SUPPORTED
+	#error PNG_APNG_SUPPORTED not defined
+	#endif
+	int main(void) {
+		png_uint_32 num_frames = 0;
+		png_uint_32 num_plays = 0;
+		png_structp png_ptr = NULL;
+		png_infop info_ptr = NULL;
+		png_get_acTL(png_ptr, info_ptr, &num_frames, &num_plays);
+		return 0;
+	}
+" PNG_APNG_SUPPORTED_CHECK)
+
+if(PNG_APNG_SUPPORTED_CHECK)
+	# PNG_APNG_SUPPORTED is already defined in png.h when APNG support is available
+	# Don't redefine it here to avoid macro redefinition warnings
+	message(STATUS "libpng has APNG support: YES")
+
+else()
+	message(WARNING "libpng does not have APNG support, APNG animations will not be decoded")
+endif()
+
 # giflib (optional)
 if(ENABLE_GIF)
 	find_library(GIF_LIBRARY NAMES gif)
@@ -551,6 +586,11 @@ message(STATUS "C standard: C${CMAKE_C_STANDARD}")
 message(STATUS "")
 message(STATUS "Core Dependencies (required):")
 message(STATUS "  libpng: ${PNG_LIBRARIES}")
+if(PNG_APNG_SUPPORTED_CHECK)
+	message(STATUS "    APNG support: YES")
+else()
+	message(STATUS "    APNG support: NO (requires libpng >= 1.6.0 with --enable-apng)")
+endif()
 message(STATUS "  zlib: ${ZLIB_LIBRARIES}")
 message(STATUS "  libjpeg: ${JPEG_LIBRARIES}")
 message(STATUS "")

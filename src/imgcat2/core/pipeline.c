@@ -312,6 +312,8 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 
 target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t img_width, uint32_t img_height, bool fit_mode)
 {
+	(void)fit_mode; /* Currently unused, reserved for future use */
+
 	/* Resize factors:
 	 * - RESIZE_FACTOR_X = 1: Horizontal 1:1 (1 pixel per column)
 	 * - RESIZE_FACTOR_Y = 2: Vertical 2:1 (half-block doubles vertical resolution)
@@ -338,9 +340,6 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
 	if (max_width > MAX_TERMINAL_WIDTH) {
 		max_width = MAX_TERMINAL_WIDTH;
 	}
-
-	printf("Terminal size: %ux%u, available: %ux%u, img: %ux%u, fit_mode: %s\n",
-	       cols, rows, max_width, max_height, img_width, img_height, fit_mode ? "true" : "false");
 
 	if (img_width > 0 && img_height > 0) {
 		/* Fit mode: preserve aspect ratio, fit within terminal bounds */

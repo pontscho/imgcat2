@@ -20,7 +20,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
-- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL, SVG
+- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL, SVG, APNG
 - **Native Protocol Support** - Automatically uses iTerm2 inline images or Ghostty Kitty graphics protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
@@ -89,34 +89,40 @@ Your terminal emulator must support:
 
 ## Installation
 
-### Linux (Debian/Ubuntu)
+<details>
+
+<summary>Linux</summary>
 
 ```bash
-# Install required dependencies
+# Install required dependencies on Arch Linux
+sudo pacman -S cmake gcc libpng zlib libjpeg-turbo giflib libwebp libheif libtiff libraw libjxl
+```
+
+```bash
+# Install required dependencies on Debian/Ubuntu
 sudo apt-get update
 sudo apt-get install cmake gcc libpng-dev zlib1g-dev libjpeg-dev
 
 # Install optional dependencies
 sudo apt-get install libgif-dev libwebp-dev libheif-dev libtiff-dev libraw-dev libjxl-dev
+```
 
+```bash
 # Clone repository with submodules for full format support
 git clone --recurse-submodules https://github.com/yourusername/imgcat2.git
-
-# Or if already cloned, initialize submodules
 git submodule update --init --recursive
-
 cd imgcat2
 
-# Build
 mkdir build && cd build
 cmake ..
 make
-
-# Install (optional)
-sudo make install
 ```
 
-### macOS (Homebrew)
+</details>
+
+<details>
+
+<summary>macOS (Homebrew)</summary>
 
 ```bash
 # Install dependencies
@@ -124,39 +130,20 @@ brew install cmake libpng zlib-ng jpeg-turbo giflib webp libheif libtiff libraw 
 
 # Clone repository with submodules for full format support
 git clone --recurse-submodules https://github.com/yourusername/imgcat2.git
-
-# Or if already cloned, initialize submodules
 git submodule update --init --recursive
-
 cd imgcat2
 
 # Build
 mkdir build && cd build
 cmake ..
 make
-
-# Install (optional)
-sudo make install
 ```
 
-### Arch Linux
+</details>
 
-```bash
-# Install dependencies
-sudo pacman -S cmake gcc libpng zlib libjpeg-turbo giflib libwebp libheif libtiff libraw libjxl
+<details>
 
-# Clone with submodules and build
-git clone --recurse-submodules https://github.com/yourusername/imgcat2.git
-cd imgcat2
-mkdir build && cd build
-cmake ..
-make
-
-# Install (optional)
-sudo make install
-```
-
-### Windows (MinGW)
+<summary>Windows (MinGW)</summary>
 
 ```bash
 # Install MSYS2 from https://www.msys2.org/
@@ -172,27 +159,52 @@ cd imgcat2
 mkdir build && cd build
 cmake .. -G "MinGW Makefiles"
 mingw32-make
-
-# Binary will be in build/imgcat2.exe
 ```
 
-### Build Options
+</details>
 
-You can customize the build with CMake options:
+<details>
+
+<summary>APNG Support</summary>
+
+**APNG (Animated PNG)** support requires libpng version 1.6.0 or later compiled with APNG patch. Most system-provided libpng installations do **not** include APNG support by default.
+**Note**: Without APNG support, animated PNG files will be decoded as static images (first frame only). All other PNG functionality works normally.
+
+To enable APNG animation support:
 
 ```bash
-# Minimal build (only required formats)
-cmake -DENABLE_GIF=OFF -DENABLE_WEBP=OFF -DENABLE_HEIF=OFF -DENABLE_TIFF=OFF -DENABLE_RAW=OFF -DENABLE_JXL=OFF -DENABLE_SVG=OFF ..
+# Download and build libpng with APNG patch
+cd /tmp
+wget https://downloads.sourceforge.net/libpng/libpng-1.6.43.tar.gz
+tar xzf libpng-1.6.43.tar.gz
+cd libpng-1.6.43
 
-# Disable testing
-cmake -DBUILD_TESTING=OFF ..
+# Apply APNG patch
+wget https://sourceforge.net/projects/libpng-apng/files/libpng16/1.6.43/libpng-1.6.43-apng.patch.gz
+gunzip libpng-1.6.43-apng.patch.gz
+patch -p1 < libpng-1.6.43-apng.patch
 
-# Disable static analysis
-cmake -DENABLE_CLANG_TIDY=OFF -DENABLE_CLANG_FORMAT=OFF ..
-
-# Custom build type
-cmake -DCMAKE_BUILD_TYPE=Release ..
+# Build and install
+./configure --prefix=/usr/local/libpng-apng
+make -j4
+sudo make install
 ```
+
+Then configure imgcat2 to use the APNG-enabled libpng:
+
+```bash
+cd imgcat2/build
+cmake .. -DPNG_PNG_INCLUDE_DIR=/usr/local/libpng-apng/include \
+         -DPNG_LIBRARY=/usr/local/libpng-apng/lib/libpng16.a
+make
+```
+
+Verify APNG support is enabled:
+```bash
+./imgcat2 --version  # Should show "APNG support: YES"
+```
+
+</details>
 
 ## iTerm2 Native Support
 
@@ -225,7 +237,10 @@ This is useful for:
 - Compatibility with tools that expect ANSI output
 - Scenarios where native protocols may not work (e.g., remote sessions)
 
-### iTerm2 Sizing Examples
+<details>
+
+<summary>iTerm2 Sizing Examples</summary>
+
 ```bash
 # Display at original size (default in iTerm2)
 imgcat2 image.png
@@ -242,6 +257,8 @@ imgcat2 -w 800 -H 600 image.png
 # Animated GIF at original size
 imgcat2 animation.gif
 ```
+
+</details>
 
 ## Ghostty Native Support
 
@@ -265,6 +282,11 @@ imgcat2 automatically detects Ghostty by checking the `TERM_PROGRAM` environment
 5. **Default behavior**: Fits image to terminal width, preserving aspect ratio
 6. **With `-w` or `-H`**: Scales to specified pixel dimensions (converted to terminal cells)
 
+<details>
+
+<summary>Kitty Sizing Examples</summary>
+
+```bash
 ### Ghostty / Kitty Sizing Examples
 ```bash
 # PNG - sent directly with f=100
@@ -285,6 +307,8 @@ imgcat2 animation.gif
 # Force ANSI rendering for any format
 imgcat2 --force-ansi image.png
 ```
+
+</details>
 
 ## Usage
 
@@ -343,7 +367,9 @@ Examples:
   ./imgcat2 --fps 10 anim.gif      Animate at 10 FPS
 ```
 
-### Examples
+<details>
+
+<summary>Examples</summary>
 
 **Fit image to terminal (default):**
 ```bash
@@ -357,13 +383,13 @@ imgcat2 --interpolation=nearest pixelart.png
 
 **View animated GIF:**
 ```bash
-imgcat2 animation.gif
+imgcat2 -a animation.gif
 # Press Ctrl+C to exit
 ```
 
 **Custom animation frame rate:**
 ```bash
-imgcat2 --fps=20 animation.gif
+imgcat2 -a --fps=20 animation.gif
 ```
 
 **Display image from clipboard (macOS):**
@@ -380,6 +406,8 @@ curl -sL https://picsum.photos/800/600 | imgcat2
 ```bash
 convert input.webp png:- | imgcat2
 ```
+
+</details>
 
 ## Supported Formats
 
@@ -398,6 +426,7 @@ convert input.webp png:- | imgcat2
 
 ### Optionally Supported (Optional Dependencies)
 - **GIF** - Graphics Interchange Format (animated)
+- **APNG** - Animated PNG format if built with libpng supporting APNG
 - **WebP** - Google WebP format
 - **HEIF/HEIC** - High Efficiency Image Format
 - **TIFF** - Tagged Image File Format
@@ -444,30 +473,6 @@ If characters don't display correctly:
 - Ensure terminal uses UTF-8 encoding
 - Install a Unicode-capable font (e.g., DejaVu Sans Mono, Menlo, Consolas)
 
-## Performance Considerations
-
-### Image Resolution
-- Terminal resolution limits effective image detail
-- Example: 80×24 terminal = 80×48 effective pixels
-- Large images are automatically downscaled
-
-### Memory Usage
-- Typical image: 1-5 MB in memory
-- Animated GIF: All frames loaded into memory (5-50 MB typical)
-- Very large images (>100 MB decoded) may exceed available memory
-
-### Animation Performance
-- Fixed frame rate at 15 FPS by default
-- Frame rate may drop if terminal rendering is slow
-- Large GIFs (>100 frames) may take longer to load initially
-
-## Documentation
-
-For detailed technical information:
-
-- **[ANSI Implementation Guide](docs/imgcat-ansi.md)** - Technical details of the rendering technique
-- Additional documentation in `docs/` directory
-
 ## Contributing
 
 Contributions are welcome! Please:
@@ -509,7 +514,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - Inspired by the original [imgcat](https://github.com/danielgatis/imgcat) by Daniel Gatis
-- Uses the half-block rendering technique with ANSI true color escape sequences
 - Built with [stb](https://github.com/nothings/stb) libraries for additional image format support
 
 ## Troubleshooting

@@ -11,6 +11,7 @@
 #define IMGCAT2_DECODER_H
 
 #include <stddef.h>
+#include <png.h>
 
 #include "../core/cli.h"
 #include "../core/image.h"
@@ -169,6 +170,24 @@ void decoder_free_frames(image_t **frames, int frame_count);
  * @note Requires HAVE_GIFLIB to be defined
  */
 bool gif_is_animated(const uint8_t *data, size_t size);
+#endif
+
+#ifdef PNG_APNG_SUPPORTED
+/**
+ * @brief Check if PNG is animated (APNG format)
+ *
+ * Quickly checks if a PNG file contains animation control chunk (acTL)
+ * without fully decoding the image data. Returns false if APNG support
+ * is not available at compile time.
+ *
+ * @param data Raw PNG file data
+ * @param size Size of data in bytes
+ * @return true if PNG has more than one frame (APNG), false otherwise or on error
+ *
+ * @note Returns false if PNG_APNG_SUPPORTED not defined
+ * @note Returns false if data is invalid or not a PNG
+ */
+bool png_is_animated(const uint8_t *data, size_t size);
 #endif
 
 #endif /* IMGCAT2_DECODER_H */
