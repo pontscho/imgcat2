@@ -218,10 +218,16 @@ Verify APNG support is enabled:
 
 **Note:** If resvg is not installed, imgcat2 will automatically use nanosvg as a fallback. Both decoders are always available at runtime for maximum compatibility.
 
-#### Linux (Debian/Ubuntu)
+#### Linux
 ```bash
-# Install Rust toolchain and cargo-c
+# Install Rust toolchain and cargo-c (on Debian/Ubuntu)
 sudo apt-get install cargo cargo-c
+
+# Install from AUR (on Arch Linux)
+yay -S resvg
+
+# Or build from source (on Arch Linux)
+sudo pacman -S rust cargo-c
 
 # Build and install resvg C API
 git clone https://github.com/linebender/resvg.git
@@ -243,18 +249,6 @@ git clone https://github.com/linebender/resvg.git
 cd resvg/crates/c-api
 cargo cinstall --release --prefix=/usr/local
 cd ../../..
-```
-
-#### Arch Linux
-```bash
-# Install from AUR (if available)
-yay -S resvg
-
-# Or build from source
-sudo pacman -S rust cargo-c
-git clone https://github.com/linebender/resvg.git
-cd resvg/crates/c-api
-cargo cinstall --release --prefix=/usr/local
 ```
 
 ### Building imgcat2 with resvg
