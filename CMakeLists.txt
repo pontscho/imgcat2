@@ -153,6 +153,10 @@ if(EXISTS "/usr/local/libpng-apng/include/png.h")
 endif()
 set(CMAKE_REQUIRED_INCLUDES ${PNG_INCLUDE_DIRS})
 set(CMAKE_REQUIRED_LIBRARIES ${PNG_LIBRARIES} ${ZLIB_LIBRARIES})
+# Add math library for libpng (needed for pow, floor functions)
+if(UNIX AND NOT APPLE)
+	list(APPEND CMAKE_REQUIRED_LIBRARIES m)
+endif()
 
 check_c_source_compiles("
 	#include <png.h>
