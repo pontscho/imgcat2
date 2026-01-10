@@ -20,8 +20,6 @@
 #include "../ansi/escape.h"
 #include "../decoders/decoder.h"
 #include "../decoders/magic.h"
-#include "../iterm2/iterm2.h"
-#include "../kitty/kitty.h"
 #include "../terminal/terminal.h"
 #include "cli.h"
 #include "image.h"

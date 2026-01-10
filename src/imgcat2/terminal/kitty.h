@@ -17,6 +17,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../core/cli.h"
+#include "../core/image.h"
+
 /**
  * @brief Check if image format is supported by Kitty graphics protocol
  *

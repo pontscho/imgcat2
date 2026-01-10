@@ -64,6 +64,7 @@ int iterm2_render(const uint8_t *data, size_t size, const cli_options_t *opts, i
 	if (opts->terminal.is_tmux) {
 		/* Wrap with tmux DCS sequence: \033Ptmux;\033 ... \033\\ */
 		printf("\033Ptmux;\033\033]1337;File=inline=1;size=%zu", size);
+
 	} else {
 		/* Standard OSC sequence */
 		printf("\033]1337;File=inline=1;size=%zu", size);

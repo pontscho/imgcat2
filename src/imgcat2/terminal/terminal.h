@@ -13,6 +13,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#if defined(__linux__) || defined(__APPLE__)
+#include "kitty.h"
+#include "iterm2.h"
+#endif
+
 /**
  * @defgroup TerminalDefaults Default Terminal Dimensions
  * @{

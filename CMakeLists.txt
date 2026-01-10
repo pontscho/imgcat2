@@ -418,7 +418,6 @@ if(JXL_FOUND)
 	include_directories(${JXL_INCLUDE_DIRS})
 endif()
 
-# Source files (PHASE 1-11 implemented)
 set(IMGCAT2_SOURCES
 	# Core module
 	src/imgcat2/core/image.c
@@ -440,12 +439,6 @@ set(IMGCAT2_SOURCES
 	# ANSI module
 	src/imgcat2/ansi/ansi.c
 	src/imgcat2/ansi/escape.c
-
-	# iTerm2 inline images protocol module
-	src/imgcat2/iterm2/iterm2.c
-
-	# Kitty graphics protocol module
-	src/imgcat2/kitty/kitty.c
 )
 
 if(GIF_FOUND)
@@ -476,8 +469,15 @@ endif()
 # Platform-specific terminal module (PHASE 8)
 if(WIN32)
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_windows.c)
+
 else()
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_unix.c)
+
+	# iTerm2 inline images protocol module
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/iterm2.c)
+
+	# Kitty graphics protocol module
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/kitty.c)
 endif()
 
 # Main executable
