@@ -43,7 +43,7 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 	 * - Animated GIF: NOT supported (fall back to ANSI rendering)
 	 */
 	switch (mime) {
-#ifdef ENABLE_WEBP
+#ifdef HAVE_WEBP
 		case MIME_WEBP:
 			if (webp_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
@@ -51,7 +51,7 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 			break;
 #endif
 
-#ifdef ENABLE_HEIF
+#ifdef HAVE_HEIF
 		case MIME_AVIF:
 		case MIME_HEIF:
 			if (heif_is_animated(data, size) && opts->animate) {

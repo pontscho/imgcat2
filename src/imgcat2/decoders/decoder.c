@@ -30,24 +30,24 @@ extern image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
-#ifdef ENABLE_WEBP
+#ifdef HAVE_WEBP
 extern image_t **decode_webp(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
-#ifdef ENABLE_HEIF
+#ifdef HAVE_HEIF
 extern image_t **decode_heif(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_avif(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
-#ifdef ENABLE_TIFF
+#ifdef HAVE_TIFF
 extern image_t **decode_tiff(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
-#ifdef ENABLE_RAW
+#ifdef HAVE_RAW
 extern image_t **decode_raw(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
-#ifdef ENABLE_JXL
+#ifdef HAVE_JXL
 extern image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
@@ -86,24 +86,24 @@ static const decoder_t s_decoder_registry[] = {
 	{ MIME_GIF,  "GIF (giflib)",         decode_gif_animated },
 #endif
 
-#ifdef ENABLE_WEBP
+#ifdef HAVE_WEBP
 	{ MIME_WEBP, "WebP (libwebp)",       decode_webp         },
 #endif
 
-#ifdef ENABLE_HEIF
+#ifdef HAVE_HEIF
 	{ MIME_HEIF, "HEIF (libheif)",       decode_heif         },
 	{ MIME_AVIF, "AVIF (libheif)",       decode_avif         },
 #endif
 
-#ifdef ENABLE_TIFF
+#ifdef HAVE_TIFF
 	{ MIME_TIFF, "TIFF (libtiff)",       decode_tiff         },
 #endif
 
-#ifdef ENABLE_RAW
+#ifdef HAVE_RAW
 	{ MIME_RAW,  "RAW (libraw)",         decode_raw          },
 #endif
 
-#ifdef ENABLE_JXL
+#ifdef HAVE_JXL
 	{ MIME_JXL,  "JXL (libjxl)",         decode_jxl          },
 #endif
 
