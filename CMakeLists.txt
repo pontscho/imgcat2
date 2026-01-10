@@ -35,9 +35,27 @@ if(UNIX AND NOT APPLE)
 	set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
 elseif(APPLE)
-	# macOS: Static link third-party libs, dynamic system libs
+	# macOS: Static link third-party libs and libc++
 	# Only search for .a files to force static linking
 	set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+
+	# Find static libc++ from LLVM (Homebrew)
+	find_library(LIBCXX_STATIC NAMES c++ libc++.a
+		PATHS /usr/local/opt/llvm/lib/c++ /usr/local/Cellar/llvm/*/lib/c++
+		NO_DEFAULT_PATH)
+	find_library(LIBCXXABI_STATIC NAMES c++abi libc++abi.a
+		PATHS /usr/local/opt/llvm/lib/c++ /usr/local/Cellar/llvm/*/lib/c++
+		NO_DEFAULT_PATH)
+
+	if(LIBCXX_STATIC AND LIBCXXABI_STATIC)
+		# Statically link libc++ and libc++abi
+		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -nostdlib++")
+		set(STATIC_LIBCXX_LIBS ${LIBCXX_STATIC} ${LIBCXXABI_STATIC})
+		message(STATUS "Using static libc++: ${LIBCXX_STATIC}")
+		message(STATUS "Using static libc++abi: ${LIBCXXABI_STATIC}")
+	else()
+		message(WARNING "Static libc++ not found, using dynamic linking")
+	endif()
 endif()
 
 # clang-tidy detection
@@ -357,9 +375,6 @@ if(ENABLE_HEIF)
 			if(SHARPYUV_STATIC)
 				list(APPEND HEIF_CUSTOM_LIBS ${SHARPYUV_STATIC})
 			endif()
-
-			# Add system libraries
-			list(APPEND HEIF_CUSTOM_LIBS "-lc++")
 		endif()
 
 		add_definitions(-DHAVE_HEIF)
@@ -424,9 +439,6 @@ if(ENABLE_RAW)
 			if(JASPER_STATIC)
 				list(APPEND RAW_CUSTOM_LIBS ${JASPER_STATIC})
 			endif()
-
-			# Add system libraries
-			list(APPEND RAW_CUSTOM_LIBS "-lstdc++")
 		endif()
 	endif()
 
@@ -481,9 +493,6 @@ if(ENABLE_JXL)
 			if(BROTLICOMMON_STATIC)
 				list(APPEND JXL_CUSTOM_LIBS ${BROTLICOMMON_STATIC})
 			endif()
-
-			# Add system libraries
-			list(APPEND JXL_CUSTOM_LIBS "-lc++")
 		endif()
 
 		add_definitions(-DHAVE_JXL)
@@ -687,6 +696,12 @@ endif()
 if(UNIX AND NOT APPLE)
 	target_link_libraries(imgcat2 PUBLIC m)  # Math library
 	target_link_libraries(imgcat2_lib PUBLIC m)  # Math library
+endif()
+
+# Static libc++ on macOS
+if(APPLE AND LIBCXX_STATIC AND LIBCXXABI_STATIC)
+	target_link_libraries(imgcat2 PRIVATE ${STATIC_LIBCXX_LIBS})
+	target_link_libraries(imgcat2_lib PUBLIC ${STATIC_LIBCXX_LIBS})
 endif()
 
 # Install target
