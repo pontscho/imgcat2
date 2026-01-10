@@ -20,7 +20,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
-- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL
+- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL, SVG
 - **Native Protocol Support** - Automatically uses iTerm2 inline images or Ghostty Kitty graphics protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
@@ -69,6 +69,7 @@ This technique provides universal compatibility with any terminal supporting tru
 - **libtiff** - For TIFF format support
 - **libraw** - For RAW camera format support
 - **libjxl** - For JPEG XL format support
+- **nanosvg** - For SVG vector graphics support (header-only, included as submodule)
 
 ### Terminal Requirements
 
@@ -98,8 +99,12 @@ sudo apt-get install cmake gcc libpng-dev zlib1g-dev libjpeg-dev
 # Install optional dependencies
 sudo apt-get install libgif-dev libwebp-dev libheif-dev libtiff-dev libraw-dev libjxl-dev
 
-# Clone repository
-git clone https://github.com/yourusername/imgcat2.git
+# Clone repository with submodules for full format support
+git clone --recurse-submodules https://github.com/yourusername/imgcat2.git
+
+# Or if already cloned, initialize submodules
+git submodule update --init --recursive
+
 cd imgcat2
 
 # Build
@@ -117,8 +122,12 @@ sudo make install
 # Install dependencies
 brew install cmake libpng zlib-ng jpeg-turbo giflib webp libheif libtiff libraw jpeg-xl
 
-# Clone repository
-git clone https://github.com/yourusername/imgcat2.git
+# Clone repository with submodules for full format support
+git clone --recurse-submodules https://github.com/yourusername/imgcat2.git
+
+# Or if already cloned, initialize submodules
+git submodule update --init --recursive
+
 cd imgcat2
 
 # Build
@@ -136,8 +145,8 @@ sudo make install
 # Install dependencies
 sudo pacman -S cmake gcc libpng zlib libjpeg-turbo giflib libwebp libheif libtiff libraw libjxl
 
-# Clone and build
-git clone https://github.com/yourusername/imgcat2.git
+# Clone with submodules and build
+git clone --recurse-submodules https://github.com/yourusername/imgcat2.git
 cd imgcat2
 mkdir build && cd build
 cmake ..
@@ -157,8 +166,8 @@ pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake
 pacman -S mingw-w64-x86_64-libpng mingw-w64-x86_64-zlib mingw-w64-x86_64-libjpeg-turbo
 pacman -S mingw-w64-x86_64-giflib mingw-w64-x86_64-libwebp mingw-w64-x86_64-libjxl
 
-# Clone and build
-git clone https://github.com/yourusername/imgcat2.git
+# Clone with submodules and build
+git clone --recurse-submodules https://github.com/yourusername/imgcat2.git
 cd imgcat2
 mkdir build && cd build
 cmake .. -G "MinGW Makefiles"
@@ -173,7 +182,7 @@ You can customize the build with CMake options:
 
 ```bash
 # Minimal build (only required formats)
-cmake -DENABLE_GIF=OFF -DENABLE_WEBP=OFF -DENABLE_HEIF=OFF -DENABLE_TIFF=OFF -DENABLE_RAW=OFF -DENABLE_JXL=OFF ..
+cmake -DENABLE_GIF=OFF -DENABLE_WEBP=OFF -DENABLE_HEIF=OFF -DENABLE_TIFF=OFF -DENABLE_RAW=OFF -DENABLE_JXL=OFF -DENABLE_SVG=OFF ..
 
 # Disable testing
 cmake -DBUILD_TESTING=OFF ..
@@ -384,6 +393,14 @@ convert input.webp png:- | imgcat2
 - **PNG** - Portable Network Graphics (with transparency)
 - **JPEG/JPG** - JPEG images (no transparency)
 - **BMP** - Windows Bitmap (uncompressed)
+- **SVG** - Scalable Vector Graphics (nanosvg rasterization)
+- **PNM** - Portable Any Map (PBM, PGM, PPM)
+- **TGA** - Targa Image File
+- **HDR** - Radiance RGBE High Dynamic Range
+- **ICO** - Windows Icon format
+- **CUR** - Windows Cursor format
+- **QOI** - Quite OK Image format (simple, fast)
+- **PSD** - Adobe Photoshop Document (partial support)
 
 ### Optionally Supported (Optional Dependencies)
 - **GIF** - Graphics Interchange Format (animated)
@@ -394,6 +411,16 @@ convert input.webp png:- | imgcat2
 - **JXL** - JPEG XL format (modern, high efficiency, HDR support)
 
 **Note:** Format support depends on which optional libraries were available at build time. Run `imgcat2 --version` to see enabled formats.
+
+### Known Limitations
+
+#### SVG Rendering
+
+- SVG gradients and filters have limited support (nanosvg limitation)
+- Text in SVGs may not render perfectly (convert to paths for best results)
+- SVGZ (compressed SVG) not supported - decompress first: `gunzip file.svgz`
+- Complex SVGs with thousands of elements may render slowly
+- No animation support (SMIL animations ignored)
 
 ## Terminal Requirements
 

@@ -73,6 +73,11 @@ const uint8_t MAGIC_CUR[4] = { 0x00, 0x00, 0x02, 0x00 }; /* CUR: Windows Cursor 
 const uint8_t MAGIC_JXL_BARE[2] = { 0xff, 0x0a }; /* Bare codestream */
 const uint8_t MAGIC_JXL_CONTAINER[12] = { 0x00, 0x00, 0x00, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a }; /* ISOBMFF container */
 
+/* SVG signatures */
+const uint8_t MAGIC_SVG_XML[5] = "<?xml"; /* XML declaration */
+const uint8_t MAGIC_SVG_ROOT[4] = "<svg"; /* Direct SVG root */
+const uint8_t MAGIC_SVG_BOM_XML[8] = { 0xEF, 0xBB, 0xBF, '<', '?', 'x', 'm', 'l' }; /* BOM + XML */
+
 /**
  * @brief Check if TIFF data is actually a TIFF-based RAW format
  *
@@ -148,6 +153,16 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	if (len >= 2) {
 		if (memcmp(data, MAGIC_JXL_BARE, 2) == 0) {
 			return MIME_JXL;
+		}
+	}
+
+	// Priority 3.65: SVG (XML-based vector format)
+	// BOM + XML check first (8 bytes, most specific)
+	if (len >= 8) {
+		if (memcmp(data, MAGIC_SVG_BOM_XML, 8) == 0 || memcmp(data, MAGIC_SVG_XML, 5) == 0) {
+			if (memmem(data, len, MAGIC_SVG_ROOT, 4) != NULL) {
+				return MIME_SVG;
+			}
 		}
 	}
 
@@ -281,6 +296,7 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_ICO: return "ICO";
 		case MIME_CUR: return "CUR";
 		case MIME_JXL: return "JXL";
+		case MIME_SVG: return "SVG";
 		case MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}

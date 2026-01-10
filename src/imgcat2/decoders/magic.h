@@ -35,6 +35,7 @@ typedef enum {
 	MIME_ICO, /**< ICO: Windows Icon format */
 	MIME_CUR, /**< CUR: Windows Cursor format */
 	MIME_JXL, /**< JXL: JPEG XL format */
+	MIME_SVG, /**< SVG: Scalable Vector Graphics */
 } mime_type_t;
 
 /**
@@ -133,6 +134,15 @@ extern const uint8_t MAGIC_JXL_BARE[2];
 
 /** JXL ISOBMFF container signature: 12 bytes */
 extern const uint8_t MAGIC_JXL_CONTAINER[12];
+
+/** SVG XML declaration signature: 5 bytes */
+extern const uint8_t MAGIC_SVG_XML[5];
+
+/** SVG direct root element signature: 4 bytes */
+extern const uint8_t MAGIC_SVG_ROOT[4];
+
+/** UTF-8 BOM + XML signature: 8 bytes */
+extern const uint8_t MAGIC_SVG_BOM_XML[8];
 
 /**
  * @brief Detect MIME type from binary data magic bytes

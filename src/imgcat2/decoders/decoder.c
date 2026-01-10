@@ -50,13 +50,16 @@ extern image_t **decode_raw(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
-/* QOI decoder (header-only, always available) */
+/* SVG decoder */
+extern image_t **decode_svg(const uint8_t *data, size_t len, int *frame_count);
+
+/* QOI decoder */
 extern image_t **decode_qoi(const uint8_t *data, size_t len, int *frame_count);
 
-/* ICO/CUR decoder (always available) */
+/* ICO/CUR decoder */
 extern image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count);
 
-/* STB fallback decoders (always available) */
+/* STB fallback decoders */
 extern image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count);
 
 /**
@@ -102,14 +105,17 @@ static const decoder_t s_decoder_registry[] = {
 	{ MIME_JXL,  "JXL (libjxl)",         decode_jxl          },
 #endif
 
-	/* QOI format (header-only, always available) */
+	/* SVG format */
+	{ MIME_SVG,  "SVG (nanosvg)",        decode_svg          },
+
+	/* QOI format */
 	{ MIME_QOI,  "QOI (header-only)",    decode_qoi          },
 
-	/* ICO/CUR formats (custom decoder, always available) */
+	/* ICO/CUR formats */
 	{ MIME_ICO,  "ICO (custom)",         decode_ico          },
 	{ MIME_CUR,  "CUR (custom)",         decode_ico          },
 
-	/* STB-supported formats (always available) */
+	/* STB-supported formats */
 	{ MIME_BMP,  "BMP (stb_image)",      decode_stb          },
 	{ MIME_TGA,  "TGA (stb_image)",      decode_stb          },
 	{ MIME_PSD,  "PSD (stb_image)",      decode_stb          },

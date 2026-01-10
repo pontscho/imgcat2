@@ -325,15 +325,29 @@ if(ENABLE_JXL)
 	endif()
 endif()
 
+# NanoSVG (optional, header-only library in vendor/)
+# Check if nanosvg submodule exists
+set(NANOSVG_HEADER ${CMAKE_SOURCE_DIR}/vendor/nanosvg/src/nanosvg.h)
+if(EXISTS ${NANOSVG_HEADER})
+else()
+	message(FATAL "nanosvg not found in vendor/nanosvg/src/, SVG support disabled")
+	message(FATAL "  Run: git submodule update --init --recursive")
+endif()
+
 # STB headers (vendored)
 set(STB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/stb)
 
 # QOI headers (vendored, header-only)
 set(QOI_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/qoi)
 
+# NanoSVG headers (vendored, header-only)
+set(NANOSVG_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/nanosvg/src)
+include_directories(${NANOSVG_INCLUDE_DIR})
+
 # Add include directories
 include_directories(
 	${CMAKE_SOURCE_DIR}/src
+	${NANOSVG_INCLUDE_DIR}
 	${STB_INCLUDE_DIR}
 	${QOI_INCLUDE_DIR}
 	${PNG_INCLUDE_DIRS}
@@ -382,6 +396,7 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_jpeg.c
 	src/imgcat2/decoders/decoder_qoi.c
 	src/imgcat2/decoders/decoder_ico.c
+	src/imgcat2/decoders/decoder_svg.c
 
 	# ANSI module
 	src/imgcat2/ansi/ansi.c

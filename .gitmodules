@@ -4,3 +4,6 @@
 [submodule "vendor/qoi"]
 	path = vendor/qoi
 	url = https://github.com/phoboslab/qoi.git
+[submodule "vendor/nanosvg"]
+	path = vendor/nanosvg
+	url = https://github.com/memononen/nanosvg.git
