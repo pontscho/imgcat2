@@ -419,6 +419,7 @@ endif()
 
 if(HEIF_FOUND)
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_heif.c)
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_avif.c)
 endif()
 
 if(TIFF_FOUND)

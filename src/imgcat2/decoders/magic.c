@@ -49,6 +49,10 @@ const uint8_t MAGIC_HEIF_HEVC[4] = "hevc";
 const uint8_t MAGIC_HEIF_HEVX[4] = "hevx";
 const uint8_t MAGIC_HEIF_MIF1[4] = "mif1";
 
+/* AVIF signatures */
+const uint8_t MAGIC_AVIF_AVIF[4] = "avif"; /* AVIF: AV1 Image File Format */
+const uint8_t MAGIC_AVIF_AVIS[4] = "avis"; /* AVIS: AVIF Image Sequence */
+
 /* TIFF signatures */
 const uint8_t MAGIC_TIFF_LE[4] = { 0x49, 0x49, 0x2A, 0x00 }; // "II*\0" little-endian
 const uint8_t MAGIC_TIFF_BE[4] = { 0x4D, 0x4D, 0x00, 0x2A }; // "MM\0*" big-endian
@@ -177,6 +181,17 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 		}
 	}
 
+	// Priority 3.75: AVIF (12+ byte match - ftyp box + brand)
+	if (len >= 12) {
+		if (memcmp(data + 4, MAGIC_HEIF_FTYP, 4) == 0) {
+			// Check major brand at offset 8
+			const uint8_t *brand = data + 8;
+			if (memcmp(brand, MAGIC_AVIF_AVIF, 4) == 0 || memcmp(brand, MAGIC_AVIF_AVIS, 4) == 0) {
+				return MIME_AVIF;
+			}
+		}
+	}
+
 	// Priority 3.8: TIFF and TIFF-based RAW (4 byte match - II or MM marker)
 	if (len >= 4) {
 		if (memcmp(data, MAGIC_TIFF_LE, 4) == 0 || memcmp(data, MAGIC_TIFF_BE, 4) == 0) {
@@ -290,6 +305,7 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_PNM: return "PNM";
 		case MIME_WEBP: return "WEBP";
 		case MIME_HEIF: return "HEIF";
+		case MIME_AVIF: return "AVIF";
 		case MIME_TIFF: return "TIFF";
 		case MIME_RAW: return "RAW";
 		case MIME_QOI: return "QOI";

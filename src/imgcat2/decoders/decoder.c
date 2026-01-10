@@ -36,6 +36,7 @@ extern image_t **decode_webp(const uint8_t *data, size_t len, int *frame_count);
 
 #ifdef ENABLE_HEIF
 extern image_t **decode_heif(const uint8_t *data, size_t len, int *frame_count);
+extern image_t **decode_avif(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
 #ifdef ENABLE_TIFF
@@ -91,6 +92,7 @@ static const decoder_t s_decoder_registry[] = {
 
 #ifdef ENABLE_HEIF
 	{ MIME_HEIF, "HEIF (libheif)",       decode_heif         },
+	{ MIME_AVIF, "AVIF (libheif)",       decode_avif         },
 #endif
 
 #ifdef ENABLE_TIFF

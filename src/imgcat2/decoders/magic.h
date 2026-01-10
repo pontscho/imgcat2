@@ -36,6 +36,7 @@ typedef enum {
 	MIME_CUR, /**< CUR: Windows Cursor format */
 	MIME_JXL, /**< JXL: JPEG XL format */
 	MIME_SVG, /**< SVG: Scalable Vector Graphics */
+	MIME_AVIF, /**< AVIF: AV1 Image File Format */
 } mime_type_t;
 
 /**
@@ -98,6 +99,12 @@ extern const uint8_t MAGIC_HEIF_HEVX[4];
 
 /** HEIF MIF1 brand: 4 bytes */
 extern const uint8_t MAGIC_HEIF_MIF1[4];
+
+/** AVIF brand: 4 bytes */
+extern const uint8_t MAGIC_AVIF_AVIF[4];
+
+/** AVIF sequence brand: 4 bytes */
+extern const uint8_t MAGIC_AVIF_AVIS[4];
 
 /** TIFF little-endian signature: 4 bytes */
 extern const uint8_t MAGIC_TIFF_LE[4];
