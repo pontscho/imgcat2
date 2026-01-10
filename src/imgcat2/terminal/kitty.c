@@ -28,7 +28,6 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 
 	/* Detect MIME type using magic bytes */
 	mime_type_t mime = detect_mime_type(data, size);
-	printf(" Detected MIME type: %d\n", mime);
 
 	/*
 	 * Kitty graphics protocol officially supports:

@@ -1,6 +1,6 @@
 /**
- * @file decoder_svg.c
- * @brief SVG (Scalable Vector Graphics) decoder implementation
+ * @file decoder_nanosvg.c
+ * @brief SVG decoder using nanosvg library
  *
  * SVG vector image decoding to RGBA8888 using nanosvg library.
  * Rasterizes SVG at native dimensions or 512x512 default.
@@ -24,7 +24,7 @@
 #include "../../vendor/nanosvg/src/nanosvgrast.h"
 
 /**
- * @brief Decode SVG image (single frame)
+ * @brief Decode SVG image using nanosvg (single frame)
  *
  * Decodes an SVG image to RGBA8888 format by rasterizing vector graphics.
  * SVG files are always single-frame (no animation support).
@@ -37,10 +37,10 @@
  * @note Output format is RGBA8888
  * @note SVGs without explicit dimensions use 512x512 default
  */
-image_t **decode_svg(const uint8_t *data, size_t len, int *frame_count)
+image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_svg\n");
+		fprintf(stderr, "Error: Invalid parameters to decode_svg_nanosvg\n");
 		return NULL;
 	}
 

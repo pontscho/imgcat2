@@ -51,8 +51,11 @@ extern image_t **decode_raw(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
-/* SVG decoder */
-extern image_t **decode_svg(const uint8_t *data, size_t len, int *frame_count);
+/* SVG decoders */
+extern image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count);
+#ifdef HAVE_RESVG
+extern image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count);
+#endif
 
 /* QOI decoder */
 extern image_t **decode_qoi(const uint8_t *data, size_t len, int *frame_count);
@@ -62,6 +65,30 @@ extern image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count);
 
 /* STB fallback decoders */
 extern image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count);
+
+/**
+ * @brief SVG decoder dispatcher
+ *
+ * Tries resvg first if available, falls back to nanosvg on error.
+ * This provides automatic fallback for better SVG compatibility.
+ *
+ * @param data Raw SVG file data
+ * @param len Length of data in bytes
+ * @param frame_count Output: always 1 (single frame)
+ * @return Array with single image_t*, or NULL on error
+ */
+static image_t **decode_svg(const uint8_t *data, size_t len, int *frame_count)
+{
+#ifdef HAVE_RESVG
+	image_t **result = decode_svg_resvg(data, len, frame_count);
+	if (result != NULL) {
+		return result;
+	}
+#endif
+
+	// Use nanosvg (always available)
+	return decode_svg_nanosvg(data, len, frame_count);
+}
 
 /**
  * @brief Static decoder registry array
@@ -107,8 +134,12 @@ static const decoder_t s_decoder_registry[] = {
 	{ MIME_JXL,  "JXL (libjxl)",         decode_jxl          },
 #endif
 
-	/* SVG format */
-	{ MIME_SVG,  "SVG (nanosvg)",        decode_svg          },
+/* SVG format */
+#ifdef HAVE_RESVG
+	{ MIME_SVG,  "SVG (resvg)",          decode_svg          },
+#else
+	{ MIME_SVG, "SVG (nanosvg)",         decode_svg          },
+#endif
 
 	/* QOI format */
 	{ MIME_QOI,  "QOI (header-only)",    decode_qoi          },

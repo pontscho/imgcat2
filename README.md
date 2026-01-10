@@ -20,7 +20,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
-- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL, SVG, APNG
+- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL, APNG. Dual SVG decoders (resvg preferred, nanosvg fallback)
 - **Native Protocol Support** - Automatically uses iTerm2 inline images or Ghostty Kitty graphics protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
@@ -64,12 +64,12 @@ This technique provides universal compatibility with any terminal supporting tru
 ### Optional Dependencies
 
 - **giflib** - For GIF animation support
+- **resvg** - For advanced SVG rendering (recommended for better SVG support)
 - **libwebp** - For WebP format support
 - **libheif** - For HEIF/HEIC format support
 - **libtiff** - For TIFF format support
 - **libraw** - For RAW camera format support
 - **libjxl** - For JPEG XL format support
-- **nanosvg** - For SVG vector graphics support (header-only, included as submodule)
 
 ### Terminal Requirements
 
@@ -95,7 +95,11 @@ Your terminal emulator must support:
 
 ```bash
 # Install required dependencies on Arch Linux
-sudo pacman -S cmake gcc libpng zlib libjpeg-turbo giflib libwebp libheif libtiff libraw libjxl
+sudo pacman -S cmake gcc libpng zlib libjpeg-turbo
+
+# Install optional dependencies
+sudo pacman -S giflib libwebp libheif libtiff libraw libjxl
+# Note: resvg may be available in AUR
 ```
 
 ```bash
@@ -202,6 +206,71 @@ make
 Verify APNG support is enabled:
 ```bash
 ./imgcat2 --version  # Should show "APNG support: YES"
+```
+
+</details>
+
+<details>
+
+<summary>resvg Support (Advanced SVG Rendering)</summary>
+
+**resvg** is an optional, high-quality SVG rendering library that provides significantly better SVG support compared to the built-in nanosvg decoder. If resvg is not installed, imgcat2 will automatically fall back to nanosvg.
+
+**Note:** If resvg is not installed, imgcat2 will automatically use nanosvg as a fallback. Both decoders are always available at runtime for maximum compatibility.
+
+#### Linux (Debian/Ubuntu)
+```bash
+# Install Rust toolchain and cargo-c
+sudo apt-get install cargo cargo-c
+
+# Build and install resvg C API
+git clone https://github.com/linebender/resvg.git
+cd resvg/crates/c-api
+cargo cinstall --release --prefix=/usr/local
+cd ../../..
+```
+
+#### macOS (Homebrew)
+```bash
+# Install Rust toolchain (if not already installed)
+brew install rust
+
+# Install cargo-c
+brew install cargo-c
+
+# Build and install resvg C API
+git clone https://github.com/linebender/resvg.git
+cd resvg/crates/c-api
+cargo cinstall --release --prefix=/usr/local
+cd ../../..
+```
+
+#### Arch Linux
+```bash
+# Install from AUR (if available)
+yay -S resvg
+
+# Or build from source
+sudo pacman -S rust cargo-c
+git clone https://github.com/linebender/resvg.git
+cd resvg/crates/c-api
+cargo cinstall --release --prefix=/usr/local
+```
+
+### Building imgcat2 with resvg
+
+```bash
+# Build with resvg support (default if installed)
+mkdir build && cd build
+cmake ..
+make
+
+# To disable resvg (use nanosvg only)
+cmake .. -DENABLE_RESVG=OFF
+make
+
+# Verify which SVG decoder is active
+./imgcat2 --version
 ```
 
 </details>

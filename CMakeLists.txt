@@ -20,9 +20,11 @@ option(ENABLE_HEIF "Enable HEIF support" ON)
 option(ENABLE_TIFF "Enable TIFF support" ON)
 option(ENABLE_RAW "Enable RAW support (libraw)" ON)
 option(ENABLE_JXL "Enable JPEG XL support (libjxl)" ON)
+option(ENABLE_RESVG "Enable resvg SVG renderer (preferred over nanosvg)" OFF)
 option(BUILD_TESTING "Build tests" ON)
 option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" OFF)
 option(ENABLE_CLANG_FORMAT "Enable clang-format code formatting" ON)
+option(ENABLE_STATIC_LIBCXX "Enable static linking of libc++ on macOS" OFF)
 
 # Static linking preference
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
@@ -34,27 +36,37 @@ if(UNIX AND NOT APPLE)
 	# Linux: Full static linking
 	set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+
 elseif(APPLE)
-	# macOS: Static link third-party libs and libc++
+	# macOS: Static link third-party libs
 	# Only search for .a files to force static linking
 	set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
-	# Find static libc++ from LLVM (Homebrew)
-	find_library(LIBCXX_STATIC NAMES c++ libc++.a
-		PATHS /usr/local/opt/llvm/lib/c++ /usr/local/Cellar/llvm/*/lib/c++
-		NO_DEFAULT_PATH)
-	find_library(LIBCXXABI_STATIC NAMES c++abi libc++abi.a
-		PATHS /usr/local/opt/llvm/lib/c++ /usr/local/Cellar/llvm/*/lib/c++
-		NO_DEFAULT_PATH)
+	# Optionally find and link static libc++ from LLVM (Homebrew)
+	if(ENABLE_STATIC_LIBCXX)
+		find_library(LIBCXX_STATIC NAMES c++ libc++.a
+			PATHS /usr/local/opt/llvm/lib/c++ /usr/local/Cellar/llvm/*/lib/c++
+			NO_DEFAULT_PATH)
+		find_library(LIBCXXABI_STATIC NAMES c++abi libc++abi.a
+			PATHS /usr/local/opt/llvm/lib/c++ /usr/local/Cellar/llvm/*/lib/c++
+			NO_DEFAULT_PATH)
 
-	if(LIBCXX_STATIC AND LIBCXXABI_STATIC)
-		# Statically link libc++ and libc++abi
-		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -nostdlib++")
-		set(STATIC_LIBCXX_LIBS ${LIBCXX_STATIC} ${LIBCXXABI_STATIC})
-		message(STATUS "Using static libc++: ${LIBCXX_STATIC}")
-		message(STATUS "Using static libc++abi: ${LIBCXXABI_STATIC}")
+		if(LIBCXX_STATIC AND LIBCXXABI_STATIC)
+			# Statically link libc++ and libc++abi
+			set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -nostdlib++")
+			set(STATIC_LIBCXX_LIBS ${LIBCXX_STATIC} ${LIBCXXABI_STATIC})
+			message(STATUS "Using static libc++: ${LIBCXX_STATIC}")
+			message(STATUS "Using static libc++abi: ${LIBCXXABI_STATIC}")
+
+		else()
+			message(WARNING "Static libc++ requested but not found, using dynamic linking")
+			# Fall back to dynamic libc++
+			set(DYNAMIC_LIBCXX_LIBS c++)
+		endif()
+
 	else()
-		message(WARNING "Static libc++ not found, using dynamic linking")
+		# Use dynamic libc++ (default)
+		set(DYNAMIC_LIBCXX_LIBS c++)
 	endif()
 endif()
 
@@ -64,6 +76,7 @@ if(ENABLE_CLANG_TIDY)
 	if(CLANG_TIDY_EXE)
 		set(CMAKE_C_CLANG_TIDY "${CLANG_TIDY_EXE}")
 		message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
+
 	else()
 		message(STATUS "clang-tidy not found, static analysis disabled")
 		set(ENABLE_CLANG_TIDY OFF)
@@ -75,6 +88,7 @@ find_program(CLANG_FORMAT_EXE NAMES clang-format)
 if(ENABLE_CLANG_FORMAT)
 	if(CLANG_FORMAT_EXE)
 		message(STATUS "clang-format found: ${CLANG_FORMAT_EXE}")
+
 	else()
 		message(STATUS "clang-format not found, code formatting disabled")
 		set(ENABLE_CLANG_FORMAT OFF)
@@ -88,9 +102,11 @@ add_compile_options(-Wall -Wextra -Werror -Wno-error=unused-but-set-variable -O3
 if(UNIX AND NOT APPLE)
 	# Linux
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,stack-size=8388608")
+
 elseif(APPLE)
 	# macOS
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-stack_size,0x800000")
+
 elseif(WIN32)
 	# Windows
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8388608")
@@ -113,6 +129,7 @@ if(NOT ZLIB_NG_FOUND)
 			set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIR})
 			set(ZLIB_FOUND TRUE)
 		endif()
+
 	else()
 		# Try pkg-config first (better for finding static libraries)
 		pkg_check_modules(ZLIB zlib)
@@ -123,6 +140,7 @@ if(NOT ZLIB_NG_FOUND)
 			set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS})
 		endif()
 	endif()
+
 else()
 	set(ZLIB_LIBRARIES ${ZLIB_NG_LIBRARIES})
 	set(ZLIB_INCLUDE_DIRS ${ZLIB_NG_INCLUDE_DIRS})
@@ -149,6 +167,7 @@ if(APPLE)
 		set(PNG_INCLUDE_DIRS ${PNG_INCLUDE_DIR})
 		set(PNG_FOUND TRUE)
 	endif()
+
 else()
 	pkg_check_modules(PNG libpng16)
 	if(NOT PNG_FOUND)
@@ -207,6 +226,7 @@ if(ENABLE_GIF)
 	if(GIF_LIBRARY AND GIF_INCLUDE_DIR)
 		add_definitions(-DHAVE_GIFLIB)
 		set(GIF_FOUND TRUE)
+
 	else()
 		message(WARNING "giflib not found, GIF support disabled")
 		set(GIF_FOUND FALSE)
@@ -233,6 +253,7 @@ if(ENABLE_WEBP)
 
 	if(WEBP_FOUND)
 		add_definitions(-DHAVE_WEBP)
+
 	else()
 		message(WARNING "libwebp not found, WebP support disabled")
 		set(ENABLE_WEBP OFF)
@@ -251,11 +272,16 @@ if(ENABLE_HEIF)
 		pkg_check_modules(AOM libaom)
 		pkg_check_modules(OPENJP2 libopenjp2)
 
+		find_library(BROTLIDEC_LIB NAMES brotlidec)
+		find_library(BROTLIENC_LIB NAMES brotlienc)
+		find_library(BROTLICOMMON_LIB NAMES brotlicommon)
+		# find_library(HEIF_STATIC_LIB NAMES libheif.a REQUIRED)
+
 		# Build custom link flags for static linking
 		# Only add codecs that have static libraries available
 		if(UNIX AND NOT APPLE)
-			# Start with base libheif (without automatic dependencies)
 			find_library(HEIF_STATIC_LIB NAMES libheif.a REQUIRED)
+			# Start with base libheif (without automatic dependencies)
 			set(HEIF_CUSTOM_LIBS ${HEIF_STATIC_LIB})
 
 			# Check and add optional codecs
@@ -263,33 +289,44 @@ if(ENABLE_HEIF)
 				find_library(DE265_STATIC NAMES libde265.a)
 				if(DE265_STATIC)
 					list(APPEND HEIF_CUSTOM_LIBS ${DE265_STATIC})
+
 				else()
 					message(STATUS "  libde265 found but no static library, skipping")
 					set(DE265_FOUND FALSE)
 				endif()
 			endif()
+
 			if(X265_FOUND)
 				find_library(X265_STATIC NAMES libx265.a)
 				if(X265_STATIC)
-					list(APPEND HEIF_CUSTOM_LIBS ${X265_STATIC})
+					find_library(NUMA_LIB NAMES numa)
+					if(NUMA_LIB)
+						list(APPEND HEIF_CUSTOM_LIBS ${X265_STATIC})
+						list(APPEND HEIF_CUSTOM_LIBS ${NUMA_LIB})
+					endif()
+
 				else()
 					message(STATUS "  libx265 found but no static library, skipping")
 					set(X265_FOUND FALSE)
 				endif()
 			endif()
+
 			if(AOM_FOUND)
 				find_library(AOM_STATIC NAMES libaom.a)
 				if(AOM_STATIC)
 					list(APPEND HEIF_CUSTOM_LIBS ${AOM_STATIC})
+
 				else()
 					message(STATUS "  libaom found but no static library, skipping")
 					set(AOM_FOUND FALSE)
 				endif()
 			endif()
+
 			if(OPENJP2_FOUND)
 				find_library(OPENJP2_STATIC NAMES libopenjp2.a)
 				if(OPENJP2_STATIC)
 					list(APPEND HEIF_CUSTOM_LIBS ${OPENJP2_STATIC})
+
 				else()
 					message(STATUS "  libopenjp2 found but no static library, skipping")
 					set(OPENJP2_FOUND FALSE)
@@ -299,35 +336,24 @@ if(ENABLE_HEIF)
 			# Add system libraries needed by libheif and its codecs
 			list(APPEND HEIF_CUSTOM_LIBS -lstdc++ -lm -lpthread)
 
-			# x265 requires libnuma
-			if(X265_FOUND)
-				find_library(NUMA_LIB NAMES numa)
-				if(NUMA_LIB)
-					list(APPEND HEIF_CUSTOM_LIBS ${NUMA_LIB})
-				endif()
-			endif()
-
 			# Check for libaom even if pkg-config didn't find it
 			if(NOT AOM_FOUND)
 				find_library(AOM_LIB NAMES aom)
 				if(AOM_LIB)
 					list(APPEND HEIF_CUSTOM_LIBS ${AOM_LIB})
 					set(AOM_FOUND TRUE)
-					message(STATUS "  libaom static library found and added (pkg-config unavailable)")
+					message(STATUS "libaom static library found and added (pkg-config unavailable)")
 				endif()
 			endif()
 
 			# libheif may need brotli for compression
-			find_library(BROTLIDEC_LIB NAMES brotlidec)
-			find_library(BROTLIENC_LIB NAMES brotlienc)
-			find_library(BROTLICOMMON_LIB NAMES brotlicommon)
 			if(BROTLIDEC_LIB AND BROTLIENC_LIB AND BROTLICOMMON_LIB)
 				list(APPEND HEIF_CUSTOM_LIBS ${BROTLIDEC_LIB} ${BROTLIENC_LIB} ${BROTLICOMMON_LIB})
-				message(STATUS "  libbrotli found and added")
+				message(STATUS "libbrotli found and added")
 			endif()
+
 		elseif(APPLE)
 			# macOS: Explicitly find static libraries
-			find_library(HEIF_STATIC_LIB NAMES libheif.a REQUIRED)
 			set(HEIF_CUSTOM_LIBS ${HEIF_STATIC_LIB})
 
 			# Check and add optional codecs (static only)
@@ -337,12 +363,14 @@ if(ENABLE_HEIF)
 					list(APPEND HEIF_CUSTOM_LIBS ${DE265_STATIC})
 				endif()
 			endif()
+
 			if(X265_FOUND)
 				find_library(X265_STATIC NAMES libx265.a)
 				if(X265_STATIC)
 					list(APPEND HEIF_CUSTOM_LIBS ${X265_STATIC})
 				endif()
 			endif()
+
 			if(AOM_FOUND)
 				find_library(AOM_STATIC NAMES libaom.a)
 				if(AOM_STATIC)
@@ -360,12 +388,12 @@ if(ENABLE_HEIF)
 				find_library(AOM_STATIC NAMES libaom.a)
 				if(AOM_STATIC)
 					list(APPEND HEIF_CUSTOM_LIBS ${AOM_STATIC})
-					message(STATUS "  libaom static library found and added")
+					message(STATUS "libaom static library found and added")
 					# AOM requires libvmaf
 					find_library(VMAF_STATIC NAMES libvmaf.a)
 					if(VMAF_STATIC)
 						list(APPEND HEIF_CUSTOM_LIBS ${VMAF_STATIC})
-						message(STATUS "  libvmaf static library found and added")
+						message(STATUS "libvmaf static library found and added")
 					endif()
 				endif()
 			endif()
@@ -523,6 +551,37 @@ set(QOI_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/qoi)
 set(NANOSVG_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/vendor/nanosvg/src)
 include_directories(${NANOSVG_INCLUDE_DIR})
 
+# resvg (optional, preferred SVG decoder)
+if(ENABLE_RESVG)
+	# Find static library explicitly on macOS
+	if(APPLE)
+		find_library(RESVG_LIBRARY NAMES resvg)
+		find_path(RESVG_INCLUDE_DIR resvg/resvg.h)
+		if(RESVG_LIBRARY AND RESVG_INCLUDE_DIR)
+			set(RESVG_LIBRARIES ${RESVG_LIBRARY})
+			set(RESVG_INCLUDE_DIRS ${RESVG_INCLUDE_DIR})
+			set(RESVG_FOUND TRUE)
+			# Get version from pkg-config if available
+			execute_process(COMMAND pkg-config --modversion resvg
+				OUTPUT_VARIABLE RESVG_VERSION
+				OUTPUT_STRIP_TRAILING_WHITESPACE
+				ERROR_QUIET)
+		endif()
+
+	else()
+		pkg_check_modules(RESVG resvg)
+	endif()
+
+	if(RESVG_FOUND)
+		add_definitions(-DHAVE_RESVG)
+		message(STATUS "resvg found: ${RESVG_VERSION} (preferred SVG decoder)")
+
+	else()
+		message(STATUS "resvg not found, using nanosvg fallback")
+		set(ENABLE_RESVG OFF)
+	endif()
+endif()
+
 # Add include directories
 include_directories(
 	${CMAKE_SOURCE_DIR}/src
@@ -558,6 +617,10 @@ if(JXL_FOUND)
 	include_directories(${JXL_INCLUDE_DIRS})
 endif()
 
+if(RESVG_FOUND)
+	include_directories(${RESVG_INCLUDE_DIRS})
+endif()
+
 set(IMGCAT2_SOURCES
 	# Core module
 	src/imgcat2/core/image.c
@@ -574,7 +637,7 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_jpeg.c
 	src/imgcat2/decoders/decoder_qoi.c
 	src/imgcat2/decoders/decoder_ico.c
-	src/imgcat2/decoders/decoder_svg.c
+	src/imgcat2/decoders/decoder_nanosvg.c
 
 	# ANSI module
 	src/imgcat2/ansi/ansi.c
@@ -604,6 +667,10 @@ endif()
 
 if(JXL_FOUND)
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_jxl.c)
+endif()
+
+if(RESVG_FOUND)
+	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_resvg.c)
 endif()
 
 # Platform-specific terminal module (PHASE 8)
@@ -692,16 +759,28 @@ if(JXL_FOUND)
 	endif()
 endif()
 
+if(RESVG_FOUND)
+	target_link_libraries(imgcat2 PRIVATE ${RESVG_LIBRARIES})
+	target_link_libraries(imgcat2_lib PUBLIC ${RESVG_LIBRARIES})
+endif()
+
 # Platform-specific libraries
 if(UNIX AND NOT APPLE)
 	target_link_libraries(imgcat2 PUBLIC m)  # Math library
 	target_link_libraries(imgcat2_lib PUBLIC m)  # Math library
 endif()
 
-# Static libc++ on macOS
-if(APPLE AND LIBCXX_STATIC AND LIBCXXABI_STATIC)
-	target_link_libraries(imgcat2 PRIVATE ${STATIC_LIBCXX_LIBS})
-	target_link_libraries(imgcat2_lib PUBLIC ${STATIC_LIBCXX_LIBS})
+# C++ standard library on macOS (static or dynamic)
+if(APPLE)
+	if(STATIC_LIBCXX_LIBS)
+		# Use static libc++
+		target_link_libraries(imgcat2 PRIVATE ${STATIC_LIBCXX_LIBS})
+		target_link_libraries(imgcat2_lib PUBLIC ${STATIC_LIBCXX_LIBS})
+	elseif(DYNAMIC_LIBCXX_LIBS)
+		# Use dynamic libc++
+		target_link_libraries(imgcat2 PRIVATE ${DYNAMIC_LIBCXX_LIBS})
+		target_link_libraries(imgcat2_lib PUBLIC ${DYNAMIC_LIBCXX_LIBS})
+	endif()
 endif()
 
 # Install target
@@ -800,6 +879,12 @@ if(NOT GIF_FOUND AND NOT WEBP_FOUND AND NOT HEIF_FOUND AND NOT TIFF_FOUND AND NO
 	message(STATUS "  (none)")
 endif()
 message(STATUS "")
+if(ENABLE_RESVG AND RESVG_FOUND)
+	message(STATUS "SVG Decoder: resvg ${RESVG_VERSION}")
+else()
+	message(STATUS "SVG Decoder: nanosvg")
+endif()
+message(STATUS "")
 message(STATUS "Optional Format Support:")
 message(STATUS "  GIF:  ${ENABLE_GIF}")
 message(STATUS "  WebP: ${ENABLE_WEBP}")
@@ -812,4 +897,11 @@ message(STATUS "Other Options:")
 message(STATUS "  Testing: ${BUILD_TESTING}")
 message(STATUS "  clang-tidy: ${ENABLE_CLANG_TIDY}")
 message(STATUS "  clang-format: ${ENABLE_CLANG_FORMAT}")
+if(APPLE)
+	if(STATIC_LIBCXX_LIBS)
+		message(STATUS "  libc++ linking: static")
+	else()
+		message(STATUS "  libc++ linking: dynamic")
+	endif()
+endif()
 message(STATUS "")

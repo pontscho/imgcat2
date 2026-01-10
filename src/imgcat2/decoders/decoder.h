@@ -10,8 +10,8 @@
 #ifndef IMGCAT2_DECODER_H
 #define IMGCAT2_DECODER_H
 
-#include <stddef.h>
 #include <png.h>
+#include <stddef.h>
 
 #include "../core/cli.h"
 #include "../core/image.h"
@@ -190,7 +190,6 @@ bool gif_is_animated(const uint8_t *data, size_t size);
 bool png_is_animated(const uint8_t *data, size_t size);
 #endif
 
-
 /**
  * @brief Check if HEIF is an image sequence (has multiple images)
  *
@@ -238,5 +237,27 @@ bool avif_is_animated(const uint8_t *data, size_t len);
  * @note Does not validate that frames are decodable, only checks for animation flag
  */
 bool webp_is_animated(const uint8_t *data, size_t len);
+
+/**
+ * @brief Decode SVG image using nanosvg (fallback decoder)
+ *
+ * @param data Raw SVG file data
+ * @param len Length of data in bytes
+ * @param frame_count Output: always 1 (single frame)
+ * @return Array with single image_t*, or NULL on error
+ */
+image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count);
+
+#ifdef HAVE_RESVG
+/**
+ * @brief Decode SVG image using resvg (preferred decoder)
+ *
+ * @param data Raw SVG file data
+ * @param len Length of data in bytes
+ * @param frame_count Output: always 1 (single frame)
+ * @return Array with single image_t*, or NULL on error
+ */
+image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count);
+#endif
 
 #endif /* IMGCAT2_DECODER_H */
