@@ -229,7 +229,7 @@ if(ENABLE_HEIF)
 		pkg_check_modules(AOM libaom)
 		pkg_check_modules(OPENJP2 libopenjp2)
 
-		# On Linux with static linking, build custom link flags
+		# Build custom link flags for static linking
 		# Only add codecs that have static libraries available
 		if(UNIX AND NOT APPLE)
 			# Start with base libheif (without automatic dependencies)
@@ -303,6 +303,59 @@ if(ENABLE_HEIF)
 				list(APPEND HEIF_CUSTOM_LIBS ${BROTLIDEC_LIB} ${BROTLIENC_LIB} ${BROTLICOMMON_LIB})
 				message(STATUS "  libbrotli found and added")
 			endif()
+		elseif(APPLE)
+			# macOS: Explicitly find static libraries
+			find_library(HEIF_STATIC_LIB NAMES libheif.a REQUIRED)
+			set(HEIF_CUSTOM_LIBS ${HEIF_STATIC_LIB})
+
+			# Check and add optional codecs (static only)
+			if(DE265_FOUND)
+				find_library(DE265_STATIC NAMES libde265.a)
+				if(DE265_STATIC)
+					list(APPEND HEIF_CUSTOM_LIBS ${DE265_STATIC})
+				endif()
+			endif()
+			if(X265_FOUND)
+				find_library(X265_STATIC NAMES libx265.a)
+				if(X265_STATIC)
+					list(APPEND HEIF_CUSTOM_LIBS ${X265_STATIC})
+				endif()
+			endif()
+			if(AOM_FOUND)
+				find_library(AOM_STATIC NAMES libaom.a)
+				if(AOM_STATIC)
+					list(APPEND HEIF_CUSTOM_LIBS ${AOM_STATIC})
+					# AOM requires libvmaf
+					find_library(VMAF_STATIC NAMES libvmaf.a)
+					if(VMAF_STATIC)
+						list(APPEND HEIF_CUSTOM_LIBS ${VMAF_STATIC})
+					endif()
+				endif()
+			endif()
+
+			# Check for libaom even if pkg-config didn't find it
+			if(NOT AOM_FOUND)
+				find_library(AOM_STATIC NAMES libaom.a)
+				if(AOM_STATIC)
+					list(APPEND HEIF_CUSTOM_LIBS ${AOM_STATIC})
+					message(STATUS "  libaom static library found and added")
+					# AOM requires libvmaf
+					find_library(VMAF_STATIC NAMES libvmaf.a)
+					if(VMAF_STATIC)
+						list(APPEND HEIF_CUSTOM_LIBS ${VMAF_STATIC})
+						message(STATUS "  libvmaf static library found and added")
+					endif()
+				endif()
+			endif()
+
+			# Add libsharpyuv (WebP dependency that AOM might need)
+			find_library(SHARPYUV_STATIC NAMES libsharpyuv.a)
+			if(SHARPYUV_STATIC)
+				list(APPEND HEIF_CUSTOM_LIBS ${SHARPYUV_STATIC})
+			endif()
+
+			# Add system libraries
+			list(APPEND HEIF_CUSTOM_LIBS "-lc++")
 		endif()
 
 		add_definitions(-DHAVE_HEIF)
@@ -320,6 +373,21 @@ if(ENABLE_TIFF)
 		pkg_check_modules(TIFF libtiff)
 	endif()
 	if(TIFF_FOUND)
+		# On macOS, explicitly find static library and its dependencies
+		if(APPLE)
+			find_library(TIFF_STATIC_LIB NAMES libtiff.a REQUIRED)
+			set(TIFF_CUSTOM_LIBS ${TIFF_STATIC_LIB})
+
+			# Add TIFF dependencies
+			find_library(ZSTD_STATIC NAMES libzstd.a)
+			find_library(LZMA_STATIC NAMES liblzma.a)
+			if(ZSTD_STATIC)
+				list(APPEND TIFF_CUSTOM_LIBS ${ZSTD_STATIC})
+			endif()
+			if(LZMA_STATIC)
+				list(APPEND TIFF_CUSTOM_LIBS ${LZMA_STATIC})
+			endif()
+		endif()
 		add_definitions(-DHAVE_TIFF)
 	else()
 		message(WARNING "libtiff not found, TIFF support disabled")
@@ -331,14 +399,30 @@ endif()
 if(ENABLE_RAW)
 	pkg_check_modules(RAW libraw)
 
-	# On Linux with static linking, verify static libraries exist
-	# libraw depends on lcms2
-	if(RAW_FOUND AND UNIX AND NOT APPLE)
-		find_library(RAW_STATIC_LIB NAMES libraw.a libraw_r.a)
-		find_library(LCMS2_STATIC_LIB NAMES liblcms2.a)
-		if(NOT RAW_STATIC_LIB OR NOT LCMS2_STATIC_LIB)
-			message(WARNING "libraw or liblcms2 static libraries not found (required for static linking on Linux), RAW support disabled")
-			set(RAW_FOUND FALSE)
+	if(RAW_FOUND)
+		# libraw depends on lcms2 and other libraries
+		if(UNIX AND NOT APPLE)
+			# Linux: verify static libraries exist
+			find_library(RAW_STATIC_LIB NAMES libraw.a libraw_r.a)
+			find_library(LCMS2_STATIC_LIB NAMES liblcms2.a)
+			if(NOT RAW_STATIC_LIB OR NOT LCMS2_STATIC_LIB)
+				message(WARNING "libraw or liblcms2 static libraries not found (required for static linking on Linux), RAW support disabled")
+				set(RAW_FOUND FALSE)
+			endif()
+		elseif(APPLE)
+			# macOS: explicitly find static libraries
+			find_library(RAW_STATIC_LIB NAMES libraw.a libraw_r.a REQUIRED)
+			find_library(LCMS2_STATIC NAMES liblcms2.a REQUIRED)
+			set(RAW_CUSTOM_LIBS ${RAW_STATIC_LIB} ${LCMS2_STATIC})
+
+			# Add optional dependencies
+			find_library(JASPER_STATIC NAMES libjasper.a)
+			if(JASPER_STATIC)
+				list(APPEND RAW_CUSTOM_LIBS ${JASPER_STATIC})
+			endif()
+
+			# Add system libraries
+			list(APPEND RAW_CUSTOM_LIBS "-lstdc++")
 		endif()
 	endif()
 
@@ -355,6 +439,49 @@ endif()
 if(ENABLE_JXL)
 	pkg_check_modules(JXL libjxl)
 	if(JXL_FOUND)
+		# On macOS, explicitly find static libraries
+		if(APPLE)
+			find_library(JXL_STATIC_LIB NAMES libjxl.a REQUIRED)
+			find_library(JXL_CMS_STATIC NAMES libjxl_cms.a)
+			set(JXL_CUSTOM_LIBS ${JXL_STATIC_LIB})
+			if(JXL_CMS_STATIC)
+				list(APPEND JXL_CUSTOM_LIBS ${JXL_CMS_STATIC})
+			endif()
+
+			# Add JXL dependencies (fall back to dynamic if static not available)
+			find_library(HWY_STATIC NAMES libhwy.a)
+			if(HWY_STATIC)
+				list(APPEND JXL_CUSTOM_LIBS ${HWY_STATIC})
+			else()
+				# libhwy static not available, use dynamic library
+				# Temporarily allow .dylib suffix for this search
+				set(_OLD_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+				set(CMAKE_FIND_LIBRARY_SUFFIXES ".dylib")
+				find_library(HWY_DYNAMIC NAMES hwy
+					PATHS /usr/local/opt/highway/lib /usr/local/Cellar/highway/1.3.0/lib
+					REQUIRED)
+				set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_SUFFIXES})
+				list(APPEND JXL_CUSTOM_LIBS ${HWY_DYNAMIC})
+				message(STATUS "  libhwy: using dynamic library ${HWY_DYNAMIC}")
+			endif()
+
+			find_library(BROTLIENC_STATIC NAMES libbrotlienc.a)
+			find_library(BROTLIDEC_STATIC NAMES libbrotlidec.a)
+			find_library(BROTLICOMMON_STATIC NAMES libbrotlicommon.a)
+			if(BROTLIENC_STATIC)
+				list(APPEND JXL_CUSTOM_LIBS ${BROTLIENC_STATIC})
+			endif()
+			if(BROTLIDEC_STATIC)
+				list(APPEND JXL_CUSTOM_LIBS ${BROTLIDEC_STATIC})
+			endif()
+			if(BROTLICOMMON_STATIC)
+				list(APPEND JXL_CUSTOM_LIBS ${BROTLICOMMON_STATIC})
+			endif()
+
+			# Add system libraries
+			list(APPEND JXL_CUSTOM_LIBS "-lc++")
+		endif()
+
 		add_definitions(-DHAVE_JXL)
 		message(STATUS "libjxl found: ${JXL_VERSION}")
 
@@ -511,41 +638,45 @@ if(WEBP_FOUND)
 endif()
 
 if(HEIF_FOUND)
-	# Use custom libs on Linux for static linking (only available codecs)
-	if(UNIX AND NOT APPLE)
-		target_link_libraries(imgcat2 PRIVATE ${HEIF_CUSTOM_LIBS})
-		target_link_libraries(imgcat2_lib PUBLIC ${HEIF_CUSTOM_LIBS})
-	else()
-		target_link_libraries(imgcat2 PRIVATE ${HEIF_LDFLAGS})
-		target_link_libraries(imgcat2_lib PUBLIC ${HEIF_LDFLAGS})
-	endif()
+	# Use custom libs for static linking on both Linux and macOS
+	target_link_libraries(imgcat2 PRIVATE ${HEIF_CUSTOM_LIBS})
+	target_link_libraries(imgcat2_lib PUBLIC ${HEIF_CUSTOM_LIBS})
 endif()
 
 if(TIFF_FOUND)
-	# Use STATIC_LDFLAGS on Linux for full static linking with all dependencies
-	if(UNIX AND NOT APPLE)
+	if(APPLE)
+		# Use custom libs on macOS for static linking
+		target_link_libraries(imgcat2 PRIVATE ${TIFF_CUSTOM_LIBS})
+		target_link_libraries(imgcat2_lib PUBLIC ${TIFF_CUSTOM_LIBS})
+	else()
+		# Use STATIC_LDFLAGS on Linux for full static linking with all dependencies
 		target_link_libraries(imgcat2 PRIVATE ${TIFF_STATIC_LDFLAGS})
 		target_link_libraries(imgcat2_lib PUBLIC ${TIFF_STATIC_LDFLAGS})
-	else()
-		target_link_libraries(imgcat2 PRIVATE ${TIFF_LDFLAGS})
-		target_link_libraries(imgcat2_lib PUBLIC ${TIFF_LDFLAGS})
 	endif()
 endif()
 
 if(RAW_FOUND)
-	# Use STATIC_LDFLAGS on Linux for full static linking with all dependencies
-	if(UNIX AND NOT APPLE)
+	if(APPLE)
+		# Use custom libs on macOS for static linking
+		target_link_libraries(imgcat2 PRIVATE ${RAW_CUSTOM_LIBS})
+		target_link_libraries(imgcat2_lib PUBLIC ${RAW_CUSTOM_LIBS})
+	else()
+		# Use STATIC_LDFLAGS on Linux for full static linking with all dependencies
 		target_link_libraries(imgcat2 PRIVATE ${RAW_STATIC_LDFLAGS})
 		target_link_libraries(imgcat2_lib PUBLIC ${RAW_STATIC_LDFLAGS})
-	else()
-		target_link_libraries(imgcat2 PRIVATE ${RAW_LDFLAGS})
-		target_link_libraries(imgcat2_lib PUBLIC ${RAW_LDFLAGS})
 	endif()
 endif()
 
 if(JXL_FOUND)
-	target_link_libraries(imgcat2 PRIVATE ${JXL_LDFLAGS})
-	target_link_libraries(imgcat2_lib PUBLIC ${JXL_LDFLAGS})
+	if(APPLE)
+		# Use custom libs on macOS for static linking
+		target_link_libraries(imgcat2 PRIVATE ${JXL_CUSTOM_LIBS})
+		target_link_libraries(imgcat2_lib PUBLIC ${JXL_CUSTOM_LIBS})
+	else()
+		# Use STATIC_LDFLAGS on Linux for static linking
+		target_link_libraries(imgcat2 PRIVATE ${JXL_STATIC_LDFLAGS})
+		target_link_libraries(imgcat2_lib PUBLIC ${JXL_STATIC_LDFLAGS})
+	endif()
 endif()
 
 # Platform-specific libraries
