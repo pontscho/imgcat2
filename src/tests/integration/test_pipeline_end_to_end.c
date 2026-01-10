@@ -28,17 +28,17 @@ CTEST(integration, target_dimensions)
 	target_dimensions_t dims;
 
 	/* 80x24 terminal, no offset, resize mode (exact dimensions) */
-	dims = calculate_target_terminal_dimensions(80, 24, 800, 600, false);
+	dims = calculate_target_terminal_dimensions(80, 24, 1280, 720, 800, 600, false);
 	ASSERT_EQUAL(80, dims.width);
 	ASSERT_EQUAL(48, dims.height); /* 24 * 2 for half-blocks */
 
 	/* 100x30 terminal, resize mode (exact dimensions) */
-	dims = calculate_target_terminal_dimensions(100, 30, 800, 600, false);
+	dims = calculate_target_terminal_dimensions(100, 30, 1280, 720, 800, 600, false);
 	ASSERT_EQUAL(100, dims.width);
 	ASSERT_EQUAL(56, dims.height); /* (30 - 2) * 2 */
 
 	/* Zero dimensions should return {0, 0} */
-	dims = calculate_target_terminal_dimensions(0, 24, 800, 600, false);
+	dims = calculate_target_terminal_dimensions(0, 24, 1280, 720, 800, 600, false);
 	ASSERT_EQUAL(0, dims.width);
 	ASSERT_EQUAL(0, dims.height);
 }
