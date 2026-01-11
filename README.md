@@ -280,14 +280,10 @@ When running in iTerm2, imgcat2 automatically uses the native inline images prot
 - **Native Animations** - Smooth GIF playback handled by iTerm2
 - **Original Image Size** - Displays images at their native resolution by default
 - **Custom Sizing** - Supports `-w` and `-H` flags for pixel-perfect sizing
-
-### How It Works
-imgcat2 automatically detects iTerm2 by checking the `TERM_PROGRAM` environment variable. When detected:
-1. Validates image format is supported (PNG, JPEG, GIF, BMP)
-2. Sends image data via iTerm2's OSC 1337 protocol
-3. **Default behavior**: Displays image at original size (no scaling)
-4. **With `-w` or `-H`**: Scales to specified pixel dimensions
-5. Automatically falls back to ANSI rendering if protocol fails
+- Validates image format is supported (PNG, JPEG, GIF, BMP)
+- Sends image data via iTerm2's OSC 1337 protocol
+- **Default behavior**: Displays image at original size (no scaling)
+- Automatically falls back to ANSI rendering if protocol fails
 
 ### Force ANSI Rendering
 To disable native protocols (iTerm2/Ghostty) and use ANSI rendering:
@@ -323,27 +319,21 @@ imgcat2 animation.gif
 
 </details>
 
-## Ghostty Native Support
+## Kitty Native Support
 
-When running in Ghostty terminal, imgcat2 automatically uses the Kitty graphics protocol for high-quality image rendering:
+When running in Kitty terminal, imgcat2 automatically uses the Kitty graphics protocol for high-quality image rendering:
 
-### Advantages in Ghostty or Kitty
-- **Higher Quality** - Native rendering using Kitty graphics protocol (PNG direct, JPEG/GIF decoded)
+### Advantages in Kitty
+- **Higher Quality** - Native rendering using Kitty graphics protocol (PNG direct, others decoded)
 - **Better Colors** - No color quantization or dithering
 - **Faster Rendering** - Direct image display without pixel-by-pixel processing
 - **Automatic Scaling** - Images scale to fit terminal window while preserving aspect ratio
 - **Custom Sizing** - Supports `-w` and `-H` flags for precise control
-- **Format Support:** PNG (direct f=100), JPEG (decoded f=32), static GIF (decoded f=32)
 - **Note:** Animated GIFs will use ANSI rendering for frame-by-frame animation
+- **Default behavior**: Fits image to terminal width, preserving aspect ratio
 
-### How It Works
-imgcat2 automatically detects Ghostty by checking the `TERM_PROGRAM` environment variable. When detected:
-1. **PNG images**: Sent directly via Kitty protocol with `f=100` (no decoding needed)
-2. **JPEG images**: Decoded to RGBA and sent with `f=32` format
-3. **Static GIF images**: Decoded to RGBA and sent with `f=32` format
-4. **Animated GIF images**: Fall back to ANSI rendering for frame-by-frame animation
-5. **Default behavior**: Fits image to terminal width, preserving aspect ratio
-6. **With `-w` or `-H`**: Scales to specified pixel dimensions (converted to terminal cells)
+### SSH Sessions
+Kitty's graphics protocol works over SSH by default, so imgcat2 will use it even in remote sessions just enable or add TERM_PROGRAM=kitty in your SSH environment.
 
 <details>
 
