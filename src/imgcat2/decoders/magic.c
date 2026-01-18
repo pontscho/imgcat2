@@ -162,7 +162,13 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	}
 
 	// Priority 3.65: SVG (XML-based vector format)
-	// BOM + XML check first (8 bytes, most specific)
+	// Check for direct <svg root tag first (most common in standalone SVG files)
+	if (len >= 4) {
+		if (memcmp(data, MAGIC_SVG_ROOT, 4) == 0) {
+			return MIME_SVG;
+		}
+	}
+	// BOM + XML check (8 bytes, for SVG files with XML declaration)
 	if (len >= 8) {
 		if (memcmp(data, MAGIC_SVG_BOM_XML, 8) == 0 || memcmp(data, MAGIC_SVG_XML, 5) == 0) {
 			if (memmem(data, len, MAGIC_SVG_ROOT, 4) != NULL) {

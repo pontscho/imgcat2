@@ -342,3 +342,77 @@ CTEST(magic, detect_tga)
 	ASSERT_NOT_NULL(name);
 	ASSERT_STR("TGA", name);
 }
+
+/**
+ * @test Test SVG magic bytes detection
+ *
+ * Verifies that detect_mime_type() correctly identifies SVG files
+ * in various formats: direct <svg tag, XML declaration + <svg tag,
+ * and BOM + XML declaration.
+ */
+CTEST(magic, detect_svg)
+{
+	/* SVG with direct <svg tag (most common in standalone SVG files) */
+	const uint8_t svg_direct[] = {
+		'<', 's', 'v', 'g', ' ', /* <svg  */
+		'w', 'i', 'd', 't', 'h', '=', '"', '8', '0', '0', '"', /* width="800" */
+		0x00
+	};
+
+	mime_type_t mime1 = detect_mime_type(svg_direct, sizeof(svg_direct));
+	ASSERT_EQUAL(MIME_SVG, mime1);
+
+	/* SVG with XML declaration */
+	const uint8_t svg_xml[] = {
+		'<', '?', 'x', 'm', 'l', ' ', /* <?xml  */
+		'v', 'e', 'r', 's', 'i', 'o', 'n', '=', '"', '1', '.', '0', '"', '?', '>', '\n', /* version="1.0"?> */
+		'<', 's', 'v', 'g', ' ', /* <svg  */
+		0x00
+	};
+
+	mime_type_t mime2 = detect_mime_type(svg_xml, sizeof(svg_xml));
+	ASSERT_EQUAL(MIME_SVG, mime2);
+
+	/* SVG with BOM + XML declaration */
+	const uint8_t svg_bom_xml[] = {
+		0xEF, 0xBB, 0xBF, /* UTF-8 BOM */
+		'<', '?', 'x', 'm', 'l', ' ', /* <?xml  */
+		'v', 'e', 'r', 's', 'i', 'o', 'n', '=', '"', '1', '.', '0', '"', '?', '>', '\n', /* version="1.0"?> */
+		'<', 's', 'v', 'g', ' ', /* <svg  */
+		0x00
+	};
+
+	mime_type_t mime3 = detect_mime_type(svg_bom_xml, sizeof(svg_bom_xml));
+	ASSERT_EQUAL(MIME_SVG, mime3);
+
+	/* Minimal SVG with just <svg tag */
+	const uint8_t svg_minimal[] = { '<', 's', 'v', 'g', '>', 0x00, 0x00, 0x00 };
+
+	mime_type_t mime4 = detect_mime_type(svg_minimal, sizeof(svg_minimal));
+	ASSERT_EQUAL(MIME_SVG, mime4);
+
+	/* Verify mime_type_name returns correct string */
+	const char *name = mime_type_name(MIME_SVG);
+	ASSERT_NOT_NULL(name);
+	ASSERT_STR("SVG", name);
+}
+
+/**
+ * @test Test SVG false positive prevention
+ *
+ * Verifies that detect_mime_type() does NOT identify files as SVG
+ * when they have XML declaration but no <svg tag.
+ */
+CTEST(magic, detect_svg_false_positive)
+{
+	/* XML file without <svg tag (should not be detected as SVG) */
+	const uint8_t xml_no_svg[] = {
+		'<', '?', 'x', 'm', 'l', ' ', /* <?xml  */
+		'v', 'e', 'r', 's', 'i', 'o', 'n', '=', '"', '1', '.', '0', '"', '?', '>', '\n', /* version="1.0"?> */
+		'<', 'r', 'o', 'o', 't', '>', /* <root> */
+		0x00
+	};
+
+	mime_type_t mime = detect_mime_type(xml_no_svg, sizeof(xml_no_svg));
+	ASSERT_EQUAL(MIME_UNKNOWN, mime);
+}
