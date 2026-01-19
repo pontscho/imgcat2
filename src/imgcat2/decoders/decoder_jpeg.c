@@ -17,6 +17,11 @@
 
 #include "decoder.h"
 
+/* EXIF/XMP metadata support */
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 /**
  * @struct jpeg_error_mgr_ext
  * @brief Extended JPEG error manager with longjmp support
@@ -53,6 +58,7 @@ static void jpeg_error_exit(j_common_ptr cinfo)
  *
  * Decodes baseline and progressive JPEG images to RGBA8888 format.
  * Converts RGB output from libjpeg to RGBA by adding alpha=255.
+ * Also extracts EXIF/XMP metadata if available.
  *
  * @param data Raw JPEG file data
  * @param len Length of data in bytes
@@ -174,6 +180,46 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 
 	// Cleanup
 	jpeg_destroy_decompress(&cinfo);
+
+	// Parse EXIF/XMP metadata (Phase 3)
+#ifdef HAVE_EXIF_READER
+	exif_info_t *exif = malloc(sizeof(exif_info_t));
+	xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+
+	if (exif && xmp) {
+		exif_info_init(exif);
+		xmp_info_init(xmp);
+
+		// Try to parse EXIF data
+		if (parse_exif(exif, data, len) != 0) {
+			// No EXIF data or parse failed
+			free(exif);
+			exif = NULL;
+		}
+
+		// Try to parse XMP data
+		if (parse_xmp(xmp, data, len) != 0) {
+			// No XMP data or parse failed
+			xmp_info_free(xmp);
+			free(xmp);
+			xmp = NULL;
+		}
+
+		// Store metadata in image structure
+		img->exif = exif;
+		img->xmp = xmp;
+
+	} else {
+		// Allocation failed - free what we have
+		if (exif) {
+			free(exif);
+		}
+		if (xmp) {
+			xmp_info_free(xmp);
+			free(xmp);
+		}
+	}
+#endif
 
 	// Allocate frames array (single frame for JPEG)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));

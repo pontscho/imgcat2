@@ -325,3 +325,75 @@ add_test(NAME test_convert COMMAND test_convert)
 set_tests_properties(test_convert PROPERTIES
 	TIMEOUT 10
 )
+
+# XML parser tests (EXIF/XMP metadata support)
+add_executable(test_xml_parser
+	unit/main.c
+	unit/test_xml_parser.c
+	../imgcat2/metadata/xml_parser.c
+)
+
+target_link_libraries(test_xml_parser
+	imgcat2_lib
+)
+
+add_test(NAME test_xml_parser COMMAND test_xml_parser)
+
+set_tests_properties(test_xml_parser PROPERTIES
+	TIMEOUT 10
+)
+
+# EXIF reader tests (EXIF/XMP metadata support)
+add_executable(test_exif_reader
+	unit/main.c
+	unit/test_exif_reader.c
+	../imgcat2/metadata/exif_reader.c
+	../imgcat2/metadata/xml_parser.c
+)
+
+target_link_libraries(test_exif_reader
+	imgcat2_lib
+)
+
+add_test(NAME test_exif_reader COMMAND test_exif_reader)
+
+set_tests_properties(test_exif_reader PROPERTIES
+	TIMEOUT 10
+)
+
+# JPEG EXIF integration test
+add_executable(test_jpeg_exif_integration
+	integration/main.c
+	integration/test_jpeg_exif_integration.c
+	../imgcat2/decoders/decoder_jpeg.c
+)
+
+target_link_libraries(test_jpeg_exif_integration
+	imgcat2_lib
+	${JPEG_LIBRARIES}
+)
+
+add_test(NAME test_jpeg_exif_integration COMMAND test_jpeg_exif_integration)
+
+set_tests_properties(test_jpeg_exif_integration PROPERTIES
+	TIMEOUT 10
+)
+
+# Metadata output tests
+add_executable(test_metadata_output
+	unit/main.c
+	unit/test_metadata_output.c
+	../imgcat2/core/metadata.c
+	../imgcat2/metadata/exif_reader.c
+	../imgcat2/metadata/xml_parser.c
+)
+
+target_link_libraries(test_metadata_output
+	imgcat2_lib
+)
+
+add_test(NAME test_metadata_output COMMAND test_metadata_output)
+
+set_tests_properties(test_metadata_output PROPERTIES
+	TIMEOUT 10
+)

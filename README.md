@@ -26,6 +26,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
 - **Animation Support** - Displays animated GIFs with smooth playback (native in iTerm2)
 - **High-Quality Scaling** - Uses advanced interpolation for photographic images
+- **Metadata Extraction** - Read EXIF and XMP metadata from JPEG files (camera, GPS, copyright, keywords)
 - **Pure C Implementation** - Fast, efficient, and lightweight (C11 standard)
 - **Static Linking** - Produces fully static binaries where possible
 - **Intelligent Fallback** - Automatically falls back to ANSI rendering when needed
@@ -407,8 +408,11 @@ Options:
       --fps N               Animation FPS (1-15, default: 15)
   -a, --animate             Animate GIF frames
       --force-ansi          Force ANSI rendering (disable iTerm2 protocol)
+
+Metadata Options:
       --info                Output image metadata instead of rendering
       --json                Format --info output as JSON (single line)
+      --exif-detailed       Include all EXIF fields (default: summary only)
 
 Arguments:
   FILE                      Input image file (omit or '-' for stdin)
@@ -458,6 +462,18 @@ curl -sL https://picsum.photos/800/600 | imgcat2
 **Use with ImageMagick for format conversion:**
 ```bash
 convert input.webp png:- | imgcat2
+```
+
+**Extract EXIF metadata from JPEG:**
+```bash
+# Human-readable format
+imgcat2 --info photo.jpg
+
+# JSON format for scripting
+imgcat2 --info --json photo.jpg | jq .exif.gps
+
+# Check GPS coordinates
+imgcat2 --info photo.jpg | grep "GPS:"
 ```
 
 </details>
@@ -512,6 +528,94 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - **PNG** preserves transparency - ideal for images with alpha channel
 - Output to stdout by default (use `>` to redirect or `--output` flag)
 - Quality and compression affect both file size and processing time
+
+## Metadata Extraction
+
+imgcat2 can extract EXIF and XMP metadata from JPEG files, including camera settings, GPS coordinates, copyright information, and more.
+
+### Text Output
+
+Display metadata in human-readable format:
+```bash
+imgcat2 --info photo.jpg
+```
+
+Example output:
+```
+Type: JPEG (image/jpeg)
+Dimensions: 4000x3000 (1 frame)
+
+Camera:
+  Make/Model: Canon EOS 5D Mark IV
+  Software: Adobe Lightroom 12.0
+
+Exposure:
+  Shutter Speed: 1/200 s
+  Aperture: f/4.0
+  ISO: 800
+  Exposure Compensation: +0.3 EV
+
+Lens:
+  Model: EF 24-70mm f/2.8L II USM
+  Focal Length: 50mm (35mm equiv: 50mm)
+  Max Aperture: f/2.8
+
+GPS:
+  Coordinates: 37.7749°N, 122.4194°W
+  Altitude: 15.0m
+
+XMP Metadata:
+  Creator: John Doe
+  Copyright: © 2024 John Doe
+  Keywords: landscape, sunset, california
+  Rating: 5 stars
+  Location: San Francisco, USA
+```
+
+### JSON Output
+
+Get metadata as JSON for programmatic processing:
+```bash
+imgcat2 --info --json photo.jpg
+```
+
+Example output:
+```json
+{"type":"JPEG","mime":"image/jpeg","width":4000,"height":3000,"frames":1,"exif":{"camera":{"make":"Canon","model":"EOS 5D Mark IV","software":"Adobe Lightroom 12.0"},"exposure":{"time":0.005000,"aperture":4.0,"iso":800,"compensation":0.3},"lens":{"model":"EF 24-70mm f/2.8L II USM","focalLength":50,"focalLength35mm":50,"maxAperture":2.8},"image":{"width":4000,"height":3000,"orientation":1,"dateTime":"2024:12:15 14:23:56"},"gps":{"latitude":37.774900,"longitude":-122.419400,"altitude":15.0}},"xmp":{"creator":"John Doe","copyright":"© 2024 John Doe","keywords":"landscape, sunset, california","rating":5,"location":{"city":"San Francisco","country":"USA"}}}
+```
+
+### Metadata Options
+
+- `--info` - Extract and display image metadata instead of rendering
+- `--json` - Output metadata as single-line JSON (requires `--info`)
+- `--exif-detailed` - Show all EXIF fields instead of summary (future feature)
+
+### Supported Metadata
+
+**EXIF Data (from camera):**
+- Camera make, model, software
+- Exposure settings (shutter speed, aperture, ISO, exposure compensation)
+- Lens information (model, focal length, max aperture)
+- Date/time original
+- GPS coordinates (latitude, longitude, altitude)
+- Image orientation
+- Flash settings, white balance, metering mode
+
+**XMP Data (from editing software):**
+- Creator, copyright, rights information
+- Title, description, keywords
+- Star rating, color label
+- Creation/modification dates
+- Location (city, country)
+- IPTC metadata (credit, source)
+
+### Metadata Notes
+
+- Metadata extraction is **JPEG-only** (PNG, GIF, etc. show basic info only)
+- Zero parsing overhead when `--info` is not used
+- Handles both little-endian (Canon, most cameras) and big-endian (Nikon) EXIF data
+- Gracefully handles missing or malformed metadata
+- Built-in XML parser for XMP data (zero dependencies)
 
 ## Supported Formats
 

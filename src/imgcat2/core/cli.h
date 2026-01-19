@@ -41,6 +41,7 @@ typedef struct {
 	bool force_ansi; /**< true = force ANSI rendering (disable iTerm2 protocol) */
 	bool info_mode; /**< true = output metadata instead of rendering */
 	bool json_output; /**< true = format output as JSON */
+	bool exif_detailed; /**< true = include all EXIF fields (default: summary only) */
 	bool list_fonts; /**< true = list available fonts and exit */
 
 	/* Conversion/encoder options */

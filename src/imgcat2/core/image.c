@@ -13,6 +13,11 @@
 #include "image.h"
 #include "stb_image_resize2.h"
 
+/* EXIF/XMP metadata support */
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 bool image_calculate_size(uint32_t width, uint32_t height, size_t *out_size)
 {
 	if (out_size == NULL) {
@@ -71,6 +76,8 @@ image_t *image_create(uint32_t width, uint32_t height)
 	/* Initialize fields */
 	img->width = width;
 	img->height = height;
+	img->exif = NULL;
+	img->xmp = NULL;
 
 	return img;
 }
@@ -86,6 +93,22 @@ void image_destroy(image_t *img)
 		free(img->pixels);
 		img->pixels = NULL;
 	}
+
+#ifdef HAVE_EXIF_READER
+	/* Free EXIF metadata */
+	if (img->exif != NULL) {
+		exif_info_free(img->exif);
+		free(img->exif);
+		img->exif = NULL;
+	}
+
+	/* Free XMP metadata */
+	if (img->xmp != NULL) {
+		xmp_info_free(img->xmp);
+		free(img->xmp);
+		img->xmp = NULL;
+	}
+#endif
 
 	/* Free image structure */
 	free(img);

@@ -42,6 +42,7 @@ int main(int argc, char **argv)
 		.force_ansi = false,
 		.info_mode = false,
 		.json_output = false,
+		.exif_detailed = false,
 		.list_fonts = false,
 
 		/* Encoder options */
@@ -182,9 +183,25 @@ int main(int argc, char **argv)
 		mime_type_t mime = detect_mime_type(buffer, buffer_size);
 
 		if (opts.json_output) {
+#ifdef HAVE_EXIF_READER
+			/* Build complete JSON with EXIF/XMP data */
+			const char *type = mime_type_name(mime);
+			const char *mime_str = get_mime_string(mime);
+			printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d", type, mime_str, frames[0]->width, frames[0]->height, frame_count);
+				output_exif_json(frames[0]->exif, false);
+				output_xmp_json(frames[0]->xmp, false);
+			printf("}\n");
+
+#else
 			output_metadata_json(mime, frames[0]->width, frames[0]->height, frame_count);
+#endif
+
 		} else {
 			output_metadata_text(mime, frames[0]->width, frames[0]->height, frame_count);
+#ifdef HAVE_EXIF_READER
+			output_exif_text(frames[0]->exif);
+			output_xmp_text(frames[0]->xmp);
+#endif
 		}
 
 		/* Success - skip scaling and rendering */

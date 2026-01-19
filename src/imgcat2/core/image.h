@@ -29,6 +29,10 @@
 
 /** @} */
 
+/* Forward declarations for EXIF/XMP metadata structures (defined in exif_reader.h) */
+typedef struct exif_info_t exif_info_t;
+typedef struct xmp_info_t xmp_info_t;
+
 /**
  * @struct image_t
  * @brief RGBA8888 image representation
@@ -41,6 +45,10 @@ typedef struct {
 	uint32_t width; /**< Image width in pixels */
 	uint32_t height; /**< Image height in pixels */
 	uint8_t *pixels; /**< RGBA8888 pixel data: width × height × 4 bytes */
+
+	/* EXIF/XMP metadata (JPEG only) */
+	exif_info_t *exif; /**< EXIF metadata, NULL if not JPEG or no EXIF */
+	xmp_info_t *xmp; /**< XMP metadata, NULL if no XMP */
 } image_t;
 
 /**

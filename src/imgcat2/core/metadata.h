@@ -9,9 +9,16 @@
 #ifndef IMGCAT2_METADATA_H
 #define IMGCAT2_METADATA_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "../decoders/magic.h"
+
+/* Forward declarations for EXIF/XMP structures */
+#ifdef HAVE_EXIF_READER
+struct exif_info_t;
+struct xmp_info_t;
+#endif
 
 /**
  * @brief Output image metadata in human-readable format
@@ -42,6 +49,49 @@ void output_metadata_text(mime_type_t mime, uint32_t width, uint32_t height, int
  * @param frame_count Number of frames (1 for static, N for animated)
  */
 void output_metadata_json(mime_type_t mime, uint32_t width, uint32_t height, int frame_count);
+
+#ifdef HAVE_EXIF_READER
+/**
+ * @brief Output EXIF metadata in human-readable format
+ *
+ * Prints EXIF metadata in a structured, readable format with sections
+ * for camera info, exposure settings, lens info, and GPS data.
+ *
+ * @param exif EXIF metadata structure (can be NULL)
+ */
+void output_exif_text(const struct exif_info_t *exif);
+
+/**
+ * @brief Output XMP metadata in human-readable format
+ *
+ * Prints XMP metadata including Dublin Core, IPTC, and Photoshop fields.
+ *
+ * @param xmp XMP metadata structure (can be NULL)
+ */
+void output_xmp_text(const struct xmp_info_t *xmp);
+
+/**
+ * @brief Output EXIF metadata as JSON object
+ *
+ * Outputs EXIF metadata as a compact JSON object with nested structure
+ * for camera, exposure, lens, and GPS data.
+ *
+ * @param exif EXIF metadata structure (can be NULL)
+ * @param first Set to false if this is not the first JSON field (adds leading comma)
+ */
+void output_exif_json(const struct exif_info_t *exif, bool first);
+
+/**
+ * @brief Output XMP metadata as JSON object
+ *
+ * Outputs XMP metadata as a compact JSON object with fields for
+ * Dublin Core, IPTC, and Photoshop metadata.
+ *
+ * @param xmp XMP metadata structure (can be NULL)
+ * @param first Set to false if this is not the first JSON field (adds leading comma)
+ */
+void output_xmp_json(const struct xmp_info_t *xmp, bool first);
+#endif
 
 /**
  * @brief Get MIME type string (e.g., "image/png")

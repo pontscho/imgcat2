@@ -48,8 +48,11 @@ void print_usage(const char *program_name)
 	printf("      --fps N               Animation FPS (1-15, default: 15)\n");
 	printf("  -a, --animate             Animate GIF frames\n");
 	printf("      --force-ansi          Force ANSI rendering (disable iTerm2 protocol)\n");
+	printf("\n");
+	printf("Metadata Options:\n");
 	printf("      --info                Output image metadata instead of rendering\n");
 	printf("      --json                Format --info output as JSON (single line)\n");
+	printf("      --exif-detailed       Include all EXIF fields (default: summary only)\n");
 	printf("\n");
 	printf("Conversion Options:\n");
 	printf("  -j, --jpeg <quality>      Convert to JPEG format (0-100, default: 90)\n");
@@ -148,6 +151,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "force-ansi",    no_argument,       0, 'A' },
 		{ "info",          no_argument,       0, 'I' },
 		{ "json",          no_argument,       0, 'J' },
+		{ "exif-detailed", no_argument,       0, 'E' },
 		{ "fonts",         no_argument,       0, 'L' },
 		{ "jpeg",          required_argument, 0, 'j' },
 		{ "png",           required_argument, 0, 'p' },
@@ -160,7 +164,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hb:i:frvaF:w:H:AIJLj:p:o:n:", long_options, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hb:i:frvaF:w:H:AIJELj:p:o:n:", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;
@@ -173,6 +177,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			case 'A': opts->force_ansi = true; break;
 			case 'I': opts->info_mode = true; break;
 			case 'J': opts->json_output = true; break;
+			case 'E': opts->exif_detailed = true; break;
 			case 'L': opts->list_fonts = true; break;
 
 			case 'w':
