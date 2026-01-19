@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="300" height="150" xmlns="http://www.w3.org/2000/svg">
+  <rect width="300" height="150" fill="white"/>
+
+  <!-- Reference lines to show positioning -->
+  <line x1="0" y1="30" x2="300" y2="30" stroke="red" stroke-width="1" opacity="0.3"/>
+  <line x1="0" y1="55" x2="300" y2="55" stroke="blue" stroke-width="1" opacity="0.3"/>
+  <line x1="0" y1="80" x2="300" y2="80" stroke="green" stroke-width="1" opacity="0.3"/>
+
+  <!-- Multi-line text with tspan -->
+  <text x="20" y="30" font-family="monospace" font-size="16" fill="black">First Line<tspan x="20" dy="25">Second Line</tspan><tspan x="20" dy="25">Third Line</tspan></text>
+</svg>

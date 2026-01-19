@@ -430,7 +430,7 @@ bool font_manager_init(void)
 	}
 
 	g_initialized = true;
-	fprintf(stderr, "Font manager initialized, found %d fonts (including 4 embedded variants)\n", font_count);
+	// fprintf(stderr, "Font manager initialized, found %d fonts (including 4 embedded variants)\n", font_count);
 
 	return true;
 }
