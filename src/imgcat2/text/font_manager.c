@@ -358,7 +358,60 @@ bool font_manager_init(void)
 		scan_font_directory(path);
 	}
 
-	/* Load embedded fallback font */
+	/* Add embedded fallback fonts to cache (all 4 variants) */
+	/* Regular */
+	font_cache_entry_t *regular = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
+	if (regular != NULL) {
+		regular->family = strdup("DejaVu Sans Mono");
+		regular->path = strdup("[embedded]");
+		regular->weight = FONT_WEIGHT_NORMAL;
+		regular->style = FONT_STYLE_NORMAL;
+		regular->data = (uint8_t *)embedded_dejavu_regular.data;
+		regular->data_size = embedded_dejavu_regular.size;
+		regular->next = g_font_cache;
+		g_font_cache = regular;
+	}
+
+	/* Bold */
+	font_cache_entry_t *bold = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
+	if (bold != NULL) {
+		bold->family = strdup("DejaVu Sans Mono");
+		bold->path = strdup("[embedded]");
+		bold->weight = FONT_WEIGHT_BOLD;
+		bold->style = FONT_STYLE_NORMAL;
+		bold->data = (uint8_t *)embedded_dejavu_bold.data;
+		bold->data_size = embedded_dejavu_bold.size;
+		bold->next = g_font_cache;
+		g_font_cache = bold;
+	}
+
+	/* Italic */
+	font_cache_entry_t *italic = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
+	if (italic != NULL) {
+		italic->family = strdup("DejaVu Sans Mono");
+		italic->path = strdup("[embedded]");
+		italic->weight = FONT_WEIGHT_NORMAL;
+		italic->style = FONT_STYLE_ITALIC;
+		italic->data = (uint8_t *)embedded_dejavu_italic.data;
+		italic->data_size = embedded_dejavu_italic.size;
+		italic->next = g_font_cache;
+		g_font_cache = italic;
+	}
+
+	/* Bold-Italic */
+	font_cache_entry_t *bold_italic = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
+	if (bold_italic != NULL) {
+		bold_italic->family = strdup("DejaVu Sans Mono");
+		bold_italic->path = strdup("[embedded]");
+		bold_italic->weight = FONT_WEIGHT_BOLD;
+		bold_italic->style = FONT_STYLE_ITALIC;
+		bold_italic->data = (uint8_t *)embedded_dejavu_bold_italic.data;
+		bold_italic->data_size = embedded_dejavu_bold_italic.size;
+		bold_italic->next = g_font_cache;
+		g_font_cache = bold_italic;
+	}
+
+	/* Keep first embedded font as default fallback */
 	g_fallback_font = (font_t *)malloc(sizeof(font_t));
 	if (g_fallback_font != NULL) {
 		g_fallback_font->family = strdup("DejaVu Sans Mono");
@@ -368,8 +421,16 @@ bool font_manager_init(void)
 		g_fallback_font->data_size = embedded_dejavu_regular.size;
 	}
 
+	/* Count fonts in cache */
+	int font_count = 0;
+	font_cache_entry_t *entry = g_font_cache;
+	while (entry != NULL) {
+		font_count++;
+		entry = entry->next;
+	}
+
 	g_initialized = true;
-	fprintf(stderr, "Font manager initialized, found %d fonts\n", g_font_cache ? 1 : 0); /* TODO: count properly */
+	fprintf(stderr, "Font manager initialized, found %d fonts (including 4 embedded variants)\n", font_count);
 
 	return true;
 }

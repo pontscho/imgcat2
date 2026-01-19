@@ -699,8 +699,11 @@ add_custom_command(
 	        ${CMAKE_SOURCE_DIR}/src/imgcat2/font
 	        ${CMAKE_SOURCE_DIR}/src/imgcat2/font/embedded_fonts
 	DEPENDS ${CMAKE_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.book.ttf
+	        ${CMAKE_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.bold.ttf
+	        ${CMAKE_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.oblique.ttf
+	        ${CMAKE_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.bold-oblique.ttf
 	        ${CMAKE_SOURCE_DIR}/tools/embed_font.py
-	COMMENT "Embedding DejaVu Sans Mono font family"
+	COMMENT "Embedding DejaVu Sans Mono font family (Regular, Bold, Italic, Bold-Italic)"
 )
 
 add_custom_target(embed_fonts ALL DEPENDS
