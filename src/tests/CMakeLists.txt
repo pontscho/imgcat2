@@ -162,6 +162,70 @@ set_tests_properties(test_image_create_destroy PROPERTIES
 	TIMEOUT 10
 )
 
+# Encoder registry tests (task-022)
+add_executable(test_encoder
+	unit/main.c
+	unit/test_encoder.c
+)
+
+target_link_libraries(test_encoder
+	imgcat2_lib
+)
+
+add_test(NAME test_encoder COMMAND test_encoder)
+
+set_tests_properties(test_encoder PROPERTIES
+	TIMEOUT 10
+)
+
+# JPEG encoder tests (task-023)
+add_executable(test_encoder_jpeg
+	unit/main.c
+	unit/test_encoder_jpeg.c
+)
+
+target_link_libraries(test_encoder_jpeg
+	imgcat2_lib
+)
+
+add_test(NAME test_encoder_jpeg COMMAND test_encoder_jpeg)
+
+set_tests_properties(test_encoder_jpeg PROPERTIES
+	TIMEOUT 10
+)
+
+# PNG encoder tests (task-024)
+add_executable(test_encoder_png
+	unit/main.c
+	unit/test_encoder_png.c
+)
+
+target_link_libraries(test_encoder_png
+	imgcat2_lib
+)
+
+add_test(NAME test_encoder_png COMMAND test_encoder_png)
+
+set_tests_properties(test_encoder_png PROPERTIES
+	TIMEOUT 10
+)
+
+# File render tests (task-025)
+add_executable(test_file_render
+	unit/main.c
+	unit/test_file_render.c
+)
+
+target_link_libraries(test_file_render
+	imgcat2_lib
+)
+
+add_test(NAME test_file_render COMMAND test_file_render)
+
+set_tests_properties(test_file_render PROPERTIES
+	TIMEOUT 10
+)
+
 # ============================================================================
 # INTEGRATION TESTS
 # ============================================================================
@@ -243,5 +307,21 @@ target_link_libraries(test_cross_platform
 add_test(NAME test_cross_platform COMMAND test_cross_platform)
 
 set_tests_properties(test_cross_platform PROPERTIES
+	TIMEOUT 10
+)
+
+# Conversion pipeline integration tests (task-026)
+add_executable(test_convert
+	integration/main.c
+	integration/test_convert.c
+)
+
+target_link_libraries(test_convert
+	imgcat2_lib
+)
+
+add_test(NAME test_convert COMMAND test_convert)
+
+set_tests_properties(test_convert PROPERTIES
 	TIMEOUT 10
 )

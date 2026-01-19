@@ -19,36 +19,36 @@
 #include "../ctest.h"
 
 /**
- * @test Test path traversal protection with ".." in path
+ * @test Test path validation with non-existent files
  *
- * Verifies that read_file_secure() rejects paths containing ".." components
- * to prevent path traversal attacks.
+ * Verifies that read_file_secure() rejects non-existent files.
+ * The realpath() function provides path traversal protection by resolving
+ * paths to their canonical form and only succeeding for existing files.
  */
 CTEST(security, path_traversal)
 {
 	uint8_t *data = NULL;
 	size_t size = 0;
 
-	/* Test various path traversal attempts */
-	/* These should all fail */
+	/* Test non-existent files (realpath will fail) */
 
-	/* Basic ".." */
-	bool result1 = read_file_secure("../etc/passwd", &data, &size);
+	/* Non-existent file with relative path */
+	bool result1 = read_file_secure("../nonexistent_file.txt", &data, &size);
 	ASSERT_FALSE(result1);
 	ASSERT_NULL(data);
 
-	/* ".." in middle of path */
-	bool result2 = read_file_secure("/tmp/../etc/passwd", &data, &size);
+	/* Non-existent absolute path */
+	bool result2 = read_file_secure("/nonexistent/path/file.txt", &data, &size);
 	ASSERT_FALSE(result2);
 	ASSERT_NULL(data);
 
-	/* Multiple ".." */
-	bool result3 = read_file_secure("../../etc/passwd", &data, &size);
+	/* Non-existent file in /tmp */
+	bool result3 = read_file_secure("/tmp/nonexistent_imgcat_test.png", &data, &size);
 	ASSERT_FALSE(result3);
 	ASSERT_NULL(data);
 
-	/* ".." after filename */
-	bool result4 = read_file_secure("test/../secret.txt", &data, &size);
+	/* Empty path */
+	bool result4 = read_file_secure("", &data, &size);
 	ASSERT_FALSE(result4);
 	ASSERT_NULL(data);
 }

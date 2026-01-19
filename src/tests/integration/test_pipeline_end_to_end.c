@@ -27,15 +27,27 @@ CTEST(integration, target_dimensions)
 {
 	target_dimensions_t dims;
 
-	/* 80x24 terminal, no offset, resize mode (exact dimensions) */
+	/* 80x24 terminal with 800x600 image (4:3 aspect ratio)
+	 * max_width = 80, max_height = 24*2-2 = 46
+	 * aspect = 800/600 = 1.333
+	 * calc_height = 80/1.333 = 60
+	 * Since calc_height (60) > max_height (46), height is the constraint
+	 * result.height = 46, result.width = 46 * 1.333 = 61
+	 */
 	dims = calculate_target_terminal_dimensions(80, 24, 1280, 720, 800, 600, false);
-	ASSERT_EQUAL(80, dims.width);
-	ASSERT_EQUAL(48, dims.height); /* 24 * 2 for half-blocks */
+	ASSERT_EQUAL(61, dims.width);
+	ASSERT_EQUAL(46, dims.height);
 
-	/* 100x30 terminal, resize mode (exact dimensions) */
+	/* 100x30 terminal with 800x600 image
+	 * max_width = 100, max_height = 30*2-2 = 58
+	 * aspect = 800/600 = 1.333
+	 * calc_height = 100/1.333 = 75
+	 * Since calc_height (75) > max_height (58), height is the constraint
+	 * result.height = 58, result.width = 58 * 1.333 = 77
+	 */
 	dims = calculate_target_terminal_dimensions(100, 30, 1280, 720, 800, 600, false);
-	ASSERT_EQUAL(100, dims.width);
-	ASSERT_EQUAL(56, dims.height); /* (30 - 2) * 2 */
+	ASSERT_EQUAL(77, dims.width);
+	ASSERT_EQUAL(58, dims.height);
 
 	/* Zero dimensions should return {0, 0} */
 	dims = calculate_target_terminal_dimensions(0, 24, 1280, 720, 800, 600, false);

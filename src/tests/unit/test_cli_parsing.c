@@ -83,7 +83,7 @@ CTEST(cli, parse_options)
 		.input_file = NULL,
 		.interpolation = "lanczos",
 		.fit_mode = true,
-		.silent = false,
+		.silent = true,
 		.fps = 15,
 		.animate = true,
 	};
@@ -91,7 +91,7 @@ CTEST(cli, parse_options)
 	/* Reset getopt state */
 	optind = 1;
 
-	char *argv[] = { "imgcat2", "-o", "10", "-i", "bilinear", "-F", "20", "--silent", "test.png" };
+	char *argv[] = { "imgcat2", "-o", "output.jpg", "-i", "bilinear", "--fps", "20", "-v", "test.png" };
 	int argc = 9;
 
 	int result = parse_arguments(argc, argv, &opts);
@@ -99,7 +99,7 @@ CTEST(cli, parse_options)
 	ASSERT_EQUAL(0, result);
 	ASSERT_STR("bilinear", opts.interpolation);
 	ASSERT_EQUAL(20, opts.fps);
-	ASSERT_TRUE(opts.silent);
+	ASSERT_FALSE(opts.silent); /* -v sets silent to false */
 	ASSERT_NOT_NULL(opts.input_file);
 	ASSERT_STR("test.png", opts.input_file);
 }
@@ -115,7 +115,7 @@ CTEST(cli, parse_long_options)
 		.input_file = NULL,
 		.interpolation = "lanczos",
 		.fit_mode = true,
-		.silent = false,
+		.silent = true,
 		.fps = 15,
 		.animate = true,
 	};
@@ -123,7 +123,7 @@ CTEST(cli, parse_long_options)
 	/* Reset getopt state */
 	optind = 1;
 
-	char *argv[] = { "imgcat2", "--interpolation", "cubic", "--fps", "10", "--silent", "animation.gif" };
+	char *argv[] = { "imgcat2", "--interpolation", "cubic", "--fps", "10", "--verbose", "animation.gif" };
 	int argc = 7;
 
 	int result = parse_arguments(argc, argv, &opts);
@@ -131,7 +131,7 @@ CTEST(cli, parse_long_options)
 	ASSERT_EQUAL(0, result);
 	ASSERT_STR("cubic", opts.interpolation);
 	ASSERT_EQUAL(10, opts.fps);
-	ASSERT_TRUE(opts.silent);
+	ASSERT_FALSE(opts.silent); /* --verbose sets silent to false */
 	ASSERT_NOT_NULL(opts.input_file);
 	ASSERT_STR("animation.gif", opts.input_file);
 }
@@ -399,7 +399,7 @@ CTEST(cli, parse_combined_short_options)
 		.input_file = NULL,
 		.interpolation = "lanczos",
 		.fit_mode = true,
-		.silent = false,
+		.silent = true,
 		.fps = 15,
 		.animate = true,
 	};
@@ -407,13 +407,13 @@ CTEST(cli, parse_combined_short_options)
 	/* Reset getopt state */
 	optind = 1;
 
-	char *argv[] = { "imgcat2", "-s", "-o", "5", "test.png" };
+	char *argv[] = { "imgcat2", "-v", "-o", "output.jpg", "test.png" };
 	int argc = 5;
 
 	int result = parse_arguments(argc, argv, &opts);
 
 	ASSERT_EQUAL(0, result);
-	ASSERT_TRUE(opts.silent);
+	ASSERT_FALSE(opts.silent); /* -v sets silent to false */
 	ASSERT_NOT_NULL(opts.input_file);
 	ASSERT_STR("test.png", opts.input_file);
 }
