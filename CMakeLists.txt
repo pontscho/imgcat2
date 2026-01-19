@@ -639,6 +639,10 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_ico.c
 	src/imgcat2/decoders/decoder_nanosvg.c
 
+	# Text/Font module
+	src/imgcat2/text/font_manager.c
+	src/imgcat2/font/embedded_fonts.c
+
 	# ANSI module
 	src/imgcat2/ansi/ansi.c
 	src/imgcat2/ansi/escape.c
@@ -687,11 +691,30 @@ else()
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/kitty.c)
 endif()
 
+# Font embedding
+add_custom_command(
+	OUTPUT ${CMAKE_SOURCE_DIR}/src/imgcat2/font/embedded_fonts.c
+	       ${CMAKE_SOURCE_DIR}/src/imgcat2/font/embedded_fonts.h
+	COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/embed_font.py
+	        ${CMAKE_SOURCE_DIR}/src/imgcat2/font
+	        ${CMAKE_SOURCE_DIR}/src/imgcat2/font/embedded_fonts
+	DEPENDS ${CMAKE_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.book.ttf
+	        ${CMAKE_SOURCE_DIR}/tools/embed_font.py
+	COMMENT "Embedding DejaVu Sans Mono font family"
+)
+
+add_custom_target(embed_fonts ALL DEPENDS
+	${CMAKE_SOURCE_DIR}/src/imgcat2/font/embedded_fonts.c
+	${CMAKE_SOURCE_DIR}/src/imgcat2/font/embedded_fonts.h
+)
+
 # Main executable
 add_executable(imgcat2 ${IMGCAT2_SOURCES} src/imgcat2/main.c)
+add_dependencies(imgcat2 embed_fonts)
 
 # Library for tests (without main.c)
 add_library(imgcat2_lib STATIC ${IMGCAT2_SOURCES})
+add_dependencies(imgcat2_lib embed_fonts)
 
 # Link libraries for executable
 target_link_libraries(imgcat2 PRIVATE

@@ -15,6 +15,7 @@
 #include <math.h>
 /* clang-format on */
 
+#include "../text/font_manager.h"
 #include "decoder.h"
 
 /* NanoSVG implementation */
@@ -49,7 +50,9 @@ static char *inline_svg_styles(const char *svg_data)
 
 	// Extract CSS content
 	char *css = (char *)malloc(style_len + 1);
-	if (css == NULL) return NULL;
+	if (css == NULL) {
+		return NULL;
+	}
 	memcpy(css, style_start, style_len);
 	css[style_len] = '\0';
 
@@ -121,7 +124,9 @@ static char *inline_svg_styles(const char *svg_data)
 
 		size_t class_len = class_end - class_value;
 		char classes[512];
-		if (class_len >= sizeof(classes)) class_len = sizeof(classes) - 1;
+		if (class_len >= sizeof(classes)) {
+			class_len = sizeof(classes) - 1;
+		}
 		memcpy(classes, class_value, class_len);
 		classes[class_len] = '\0';
 
@@ -133,12 +138,18 @@ static char *inline_svg_styles(const char *svg_data)
 		const char *c = classes;
 		while (*c != '\0' && style_pos < sizeof(style_buffer) - 1) {
 			// Skip whitespace
-			while (*c == ' ' || *c == '\t' || *c == '\n') c++;
-			if (*c == '\0') break;
+			while (*c == ' ' || *c == '\t' || *c == '\n') {
+				c++;
+			}
+			if (*c == '\0') {
+				break;
+			}
 
 			// Find end of class name
 			const char *class_name_start = c;
-			while (*c != '\0' && *c != ' ' && *c != '\t' && *c != '\n') c++;
+			while (*c != '\0' && *c != ' ' && *c != '\t' && *c != '\n') {
+				c++;
+			}
 			size_t class_name_len = c - class_name_start;
 
 			// Look up CSS rule for this class
@@ -174,9 +185,7 @@ static char *inline_svg_styles(const char *svg_data)
 				style_start++;
 			}
 			size_t style_len = strlen(style_start);
-			while (style_len > 0 && (style_start[style_len - 1] == ' ' ||
-			                         style_start[style_len - 1] == '\n' ||
-			                         style_start[style_len - 1] == '\t')) {
+			while (style_len > 0 && (style_start[style_len - 1] == ' ' || style_start[style_len - 1] == '\n' || style_start[style_len - 1] == '\t')) {
 				style_len--;
 			}
 
@@ -250,6 +259,14 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	if (svg_processed == NULL) {
 		fprintf(stderr, "Error: Failed to process SVG styles\n");
 		return NULL;
+	}
+
+	// Initialize font manager (for text rendering)
+	static bool font_mgr_initialized = false;
+	if (!font_mgr_initialized) {
+		if (font_manager_init()) {
+			font_mgr_initialized = true;
+		}
 	}
 
 	// Parse SVG image

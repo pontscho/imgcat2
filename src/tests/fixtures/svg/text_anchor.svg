@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="120" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="120" fill="#fafafa"/>
+  <!-- Center line reference -->
+  <line x1="200" y1="0" x2="200" y2="120" stroke="red" stroke-width="1"/>
+  <!-- Text anchor examples -->
+  <text x="200" y="30" text-anchor="start" font-size="16" fill="black">Start Anchor</text>
+  <text x="200" y="60" text-anchor="middle" font-size="16" fill="black">Middle Anchor</text>
+  <text x="200" y="90" text-anchor="end" font-size="16" fill="black">End Anchor</text>
+</svg>

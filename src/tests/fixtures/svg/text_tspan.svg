@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="300" height="100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="300" height="100" fill="#e0e0e0"/>
+  <text x="10" y="30" font-size="16" fill="black">
+    Line 1
+    <tspan x="10" dy="20">Line 2</tspan>
+    <tspan x="10" dy="20">Line 3</tspan>
+  </text>
+</svg>
