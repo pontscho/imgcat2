@@ -462,6 +462,57 @@ convert input.webp png:- | imgcat2
 
 </details>
 
+## Image Conversion
+
+imgcat2 can convert images to JPEG or PNG formats:
+
+### JPEG Conversion
+```bash
+# Convert to JPEG with default quality (90)
+imgcat2 --jpeg 90 image.png > output.jpg
+
+# Convert with custom quality (0-100)
+imgcat2 --jpeg 80 image.png > output.jpg
+
+# Save to file
+imgcat2 --jpeg 95 --output output.jpg image.png
+```
+
+### PNG Conversion
+```bash
+# Convert to PNG with default compression (6)
+imgcat2 --png 6 image.jpg > output.png
+
+# Convert with custom compression (0-9)
+imgcat2 --png 9 image.jpg > output.png
+
+# Save to file
+imgcat2 --png 5 --output output.png image.jpg
+```
+
+### Animated Images
+```bash
+# Convert first frame of animated GIF
+imgcat2 --jpeg 90 --output output.jpg animation.gif
+
+# Convert specific frame (0-based index)
+imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
+```
+
+### Conversion Options
+- `--jpeg <quality>` - Convert to JPEG format (quality: 0-100, default: 90)
+  - Higher quality = better image quality but larger file size
+- `--png <level>` - Convert to PNG format (compression: 0-9, default: 6)
+  - Higher compression = smaller file size but slower encoding
+- `--output <file>` or `-o <file>` - Output file path (stdout if not specified)
+- `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
+
+### Conversion Notes
+- **JPEG** does not support transparency - alpha channel will be removed
+- **PNG** preserves transparency - ideal for images with alpha channel
+- Output to stdout by default (use `>` to redirect or `--output` flag)
+- Quality and compression affect both file size and processing time
+
 ## Supported Formats
 
 ### Always Supported (Required Dependencies)
