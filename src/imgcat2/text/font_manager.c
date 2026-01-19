@@ -594,7 +594,7 @@ font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t
 
 	/* 5. Try fallback as last resort */
 	if (entry == NULL) {
-		fprintf(stderr, "Warning: Font '%s' not found, using fallback\n", family);
+		// fprintf(stderr, "Warning: Font '%s' not found, using fallback\n", family);
 		return font_manager_load_fallback();
 	}
 

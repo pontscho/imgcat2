@@ -639,6 +639,14 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_ico.c
 	src/imgcat2/decoders/decoder_nanosvg.c
 
+	# Encoders module
+	src/imgcat2/encoders/encoder.c
+	src/imgcat2/encoders/encoder_jpeg.c
+	src/imgcat2/encoders/encoder_png.c
+
+	# Terminal module - file renderer
+	src/imgcat2/terminal/file.c
+
 	# Text/Font module
 	src/imgcat2/text/font_manager.c
 	src/imgcat2/font/embedded_fonts.c

@@ -51,6 +51,12 @@ void print_usage(const char *program_name)
 	printf("      --info                Output image metadata instead of rendering\n");
 	printf("      --json                Format --info output as JSON (single line)\n");
 	printf("\n");
+	printf("Conversion Options:\n");
+	printf("  -j, --jpeg <quality>      Convert to JPEG format (0-100, default: 90)\n");
+	printf("  -p, --png <level>         Convert to PNG format (0-9, default: 6)\n");
+	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
+	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
+	printf("\n");
 	printf("Arguments:\n");
 	printf("  FILE                      Input image file (omit or '-' for stdin)\n");
 	printf("\n");
@@ -59,6 +65,8 @@ void print_usage(const char *program_name)
 	printf("  %s -a animation.gif       Animate GIF\n", program_name);
 	printf("  cat image.jpg | %s        Read from stdin\n", program_name);
 	printf("  %s --fps 10 anim.gif      Animate at 10 FPS\n", program_name);
+	printf("  %s --jpeg 90 img.png > out.jpg  Convert to JPEG (stdout)\n", program_name);
+	printf("  %s --png 6 --output out.png img.jpg  Convert to PNG file\n", program_name);
 	printf("\n");
 }
 
@@ -128,27 +136,31 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	/* Long options definition */
 	static struct option long_options[] = {
 		{ "help",          no_argument,       0, 'h' },
-        { "version",       no_argument,       0, 'b' },
-        { "interpolation", required_argument, 0, 'i' },
+		{ "version",       no_argument,       0, 'b' },
+		{ "interpolation", required_argument, 0, 'i' },
 		{ "fit",           no_argument,       0, 'f' },
-        { "resize",        no_argument,       0, 'r' },
-        { "verbose",       no_argument,       0, 'v' },
+		{ "resize",        no_argument,       0, 'r' },
+		{ "verbose",       no_argument,       0, 'v' },
 		{ "fps",           required_argument, 0, 'F' },
-        { "animate",       no_argument,       0, 'a' },
-        { "width",         required_argument, 0, 'w' },
+		{ "animate",       no_argument,       0, 'a' },
+		{ "width",         required_argument, 0, 'w' },
 		{ "height",        required_argument, 0, 'H' },
-        { "force-ansi",    no_argument,       0, 'A' },
-        { "info",          no_argument,       0, 'I' },
+		{ "force-ansi",    no_argument,       0, 'A' },
+		{ "info",          no_argument,       0, 'I' },
 		{ "json",          no_argument,       0, 'J' },
-        { "fonts",         no_argument,       0, 'L' },
-        { 0,               0,                 0, 0   },
+		{ "fonts",         no_argument,       0, 'L' },
+		{ "jpeg",          required_argument, 0, 'j' },
+		{ "png",           required_argument, 0, 'p' },
+		{ "output",        required_argument, 0, 'o' },
+		{ "frame",         required_argument, 0, 'n' },
+		{ 0,		       0,		         0, 0   },
 	};
 
 	/* Parse options */
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hb:i:frvaF:w:H:AIJL", long_options, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hb:i:frvaF:w:H:AIJLj:p:o:n:", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;
@@ -172,6 +184,22 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 				opts->target_height = atoi(optarg);
 				opts->has_custom_dimensions = true;
 				break;
+
+			case 'j':
+				opts->convert_mode = true;
+				opts->output_format = FORMAT_JPEG;
+				opts->jpeg_quality = atoi(optarg);
+				break;
+
+			case 'p':
+				opts->convert_mode = true;
+				opts->output_format = FORMAT_PNG;
+				opts->png_compression = atoi(optarg);
+				break;
+
+			case 'o': opts->output_file = optarg; break;
+
+			case 'n': opts->frame_index = atoi(optarg); break;
 
 			case '?':
 				/* getopt_long already printed error message */
@@ -265,6 +293,41 @@ int validate_options(cli_options_t *opts)
 	if (opts->json_output && !opts->info_mode) {
 		fprintf(stderr, "Error: --json can only be used with --info\n");
 		return -1;
+	}
+
+	/* Validate encoder options */
+	if (opts->convert_mode) {
+		/* Require output format to be set */
+		if (opts->output_format == FORMAT_NONE) {
+			fprintf(stderr, "Error: Conversion mode requires --jpeg or --png\n");
+			return -1;
+		}
+
+		/* Validate frame index */
+		if (opts->frame_index < 0) {
+			fprintf(stderr, "Error: Frame index must be non-negative (got %d)\n", opts->frame_index);
+			return -1;
+		}
+	}
+
+	/* Clamp JPEG quality to valid range [0, 100] */
+	if (opts->jpeg_quality < 0) {
+		fprintf(stderr, "Warning: JPEG quality %d < 0, clamping to 0\n", opts->jpeg_quality);
+		opts->jpeg_quality = 0;
+	}
+	if (opts->jpeg_quality > 100) {
+		fprintf(stderr, "Warning: JPEG quality %d > 100, clamping to 100\n", opts->jpeg_quality);
+		opts->jpeg_quality = 100;
+	}
+
+	/* Clamp PNG compression to valid range [0, 9] */
+	if (opts->png_compression < 0) {
+		fprintf(stderr, "Warning: PNG compression %d < 0, clamping to 0\n", opts->png_compression);
+		opts->png_compression = 0;
+	}
+	if (opts->png_compression > 9) {
+		fprintf(stderr, "Warning: PNG compression %d > 9, clamping to 9\n", opts->png_compression);
+		opts->png_compression = 9;
 	}
 
 	return 0;

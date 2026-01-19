@@ -13,6 +13,16 @@
 #include <stdbool.h>
 
 /**
+ * @enum output_format_t
+ * @brief Supported output image formats
+ */
+typedef enum {
+	FORMAT_NONE = 0, /**< No format selected */
+	FORMAT_JPEG, /**< JPEG format */
+	FORMAT_PNG, /**< PNG format */
+} output_format_t;
+
+/**
  * @struct cli_options_t
  * @brief Command-line options structure
  *
@@ -32,6 +42,14 @@ typedef struct {
 	bool info_mode; /**< true = output metadata instead of rendering */
 	bool json_output; /**< true = format output as JSON */
 	bool list_fonts; /**< true = list available fonts and exit */
+
+	/* Conversion/encoder options */
+	bool convert_mode; /**< true = convert to file instead of terminal rendering */
+	output_format_t output_format; /**< Target output format (FORMAT_JPEG, FORMAT_PNG) */
+	char *output_file; /**< Output file path, or NULL for stdout */
+	int jpeg_quality; /**< JPEG quality 0-100 (default: 90) */
+	int png_compression; /**< PNG compression 0-9 (default: 6) */
+	int frame_index; /**< Frame to convert for animated images (default: 0) */
 
 	/* internal options */
 	struct {

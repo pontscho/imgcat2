@@ -16,6 +16,8 @@
 #include "core/pipeline.h"
 #include "decoders/decoder.h"
 #include "decoders/magic.h"
+#include "encoders/encoder.h"
+#include "terminal/file.h"
 #include "terminal/terminal.h"
 #include "text/font_manager.h"
 
@@ -41,6 +43,14 @@ int main(int argc, char **argv)
 		.info_mode = false,
 		.json_output = false,
 		.list_fonts = false,
+
+		/* Encoder options */
+		.convert_mode = false,
+		.output_format = FORMAT_NONE,
+		.output_file = NULL,
+		.jpeg_quality = 90,
+		.png_compression = 6,
+		.frame_index = 0,
 
 		.terminal = {
 			.rows = 0,
@@ -93,6 +103,9 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Warning: Terminal pixel size unknown, forcing ANSI rendering\n");
 		}
 	}
+
+	/* Initialize encoder registry */
+	encoder_registry_init(&opts);
 
 	/* Initialize decoder registry */
 	decoder_registry_init(&opts);
@@ -187,6 +200,20 @@ int main(int argc, char **argv)
 
 	if (!opts.silent) {
 		fprintf(stderr, "Scaled to %ux%u pixels\n", scaled_frames[0]->width, scaled_frames[0]->height);
+	}
+
+	/* STEP 4.0: Terminal rendering or file conversion */
+	if (opts.convert_mode) {
+		/* Validate frame index */
+		if (opts.frame_index >= frame_count) {
+			fprintf(stderr, "Error: Frame index %d out of range (0-%d)\n", opts.frame_index, frame_count - 1);
+		} else if (file_render(scaled_frames, frame_count, &opts) < 0) {
+			fprintf(stderr, "Error: Failed to convert and save image\n");
+		} else {
+			exit_code = EXIT_SUCCESS;
+		}
+
+		goto cleanup;
 	}
 
 	/* STEP 4.1: Render using Kitty graphics protocol */
