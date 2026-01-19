@@ -20,9 +20,9 @@
 
 /* NanoSVG implementation */
 #define NANOSVG_IMPLEMENTATION
-#include "../../vendor/nanosvg/src/nanosvg.h"
+#include "nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
-#include "../../vendor/nanosvg/src/nanosvgrast.h"
+#include "nanosvgrast.h"
 
 /**
  * @brief Simple CSS class to inline style converter for SVG
