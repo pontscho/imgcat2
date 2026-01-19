@@ -101,6 +101,14 @@ const uint8_t *font_get_data(const font_t *font, size_t *size_out);
  */
 const char *font_get_family(const font_t *font);
 
+/**
+ * @brief List all available fonts
+ *
+ * Prints all available fonts (both system and embedded) to stdout.
+ * Each font is printed on a separate line with family name, weight, and style.
+ */
+void font_manager_list_fonts(void);
+
 #ifdef __cplusplus
 }
 #endif

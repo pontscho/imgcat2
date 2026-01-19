@@ -31,6 +31,7 @@ typedef struct {
 	bool force_ansi; /**< true = force ANSI rendering (disable iTerm2 protocol) */
 	bool info_mode; /**< true = output metadata instead of rendering */
 	bool json_output; /**< true = format output as JSON */
+	bool list_fonts; /**< true = list available fonts and exit */
 
 	/* internal options */
 	struct {

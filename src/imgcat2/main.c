@@ -17,6 +17,7 @@
 #include "decoders/decoder.h"
 #include "decoders/magic.h"
 #include "terminal/terminal.h"
+#include "text/font_manager.h"
 
 /**
  * @brief Main program entry point
@@ -39,6 +40,7 @@ int main(int argc, char **argv)
 		.force_ansi = false,
 		.info_mode = false,
 		.json_output = false,
+		.list_fonts = false,
 
 		.terminal = {
 			.rows = 0,
@@ -70,15 +72,17 @@ int main(int argc, char **argv)
 		/* Validate options */
 	} else if (validate_options(&opts) < 0) {
 		return EXIT_FAILURE;
+
+		/* Handle --fonts option: list available fonts and exit */
+	} else if (opts.list_fonts) {
+		font_manager_init();
+		font_manager_list_fonts();
+		font_manager_cleanup();
+		return EXIT_SUCCESS;
 	}
 
 	if (!opts.silent) {
-		const char *terminal_type = opts.terminal.is_iterm2 ? "iTerm2" :
-			opts.terminal.is_ghostty ? "Ghostty" :
-			opts.terminal.is_kitty ? "Kitty" :
-			opts.terminal.is_wezterm ? "WezTerm" :
-			opts.terminal.is_konsole ? "Konsole" :
-			"ANSI";
+		const char *terminal_type = opts.terminal.is_iterm2 ? "iTerm2" : opts.terminal.is_ghostty ? "Ghostty" : opts.terminal.is_kitty ? "Kitty" : opts.terminal.is_wezterm ? "WezTerm" : opts.terminal.is_konsole ? "Konsole" : "ANSI";
 
 		fprintf(stderr, "Terminal size: %dx%d (%dx%d) pixels, is %s\n", opts.terminal.width, opts.terminal.height, opts.terminal.cols, opts.terminal.rows, terminal_type);
 	}

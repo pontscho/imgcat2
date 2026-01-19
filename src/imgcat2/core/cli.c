@@ -34,6 +34,7 @@ void print_usage(const char *program_name)
 	printf("Options:\n");
 	printf("  -h, --help                Show this help message and exit\n");
 	printf("      --version             Show version information and exit\n");
+	printf("      --fonts               List available fonts and exit\n");
 	printf("  -i, --interpolation TYPE  Interpolation method (default: lanczos)\n");
 	printf("                            Available: lanczos, bilinear, nearest, cubic\n");
 	printf("  -f, --fit                 Fit image to terminal (maintain aspect ratio, default)\n");
@@ -127,26 +128,27 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	/* Long options definition */
 	static struct option long_options[] = {
 		{ "help",          no_argument,       0, 'h' },
-		{ "version",       no_argument,       0, 'b' },
-		{ "interpolation", required_argument, 0, 'i' },
+        { "version",       no_argument,       0, 'b' },
+        { "interpolation", required_argument, 0, 'i' },
 		{ "fit",           no_argument,       0, 'f' },
-		{ "resize",        no_argument,       0, 'r' },
-		{ "verbose",       no_argument,       0, 'v' },
+        { "resize",        no_argument,       0, 'r' },
+        { "verbose",       no_argument,       0, 'v' },
 		{ "fps",           required_argument, 0, 'F' },
-		{ "animate",       no_argument,       0, 'a' },
-		{ "width",         required_argument, 0, 'w' },
+        { "animate",       no_argument,       0, 'a' },
+        { "width",         required_argument, 0, 'w' },
 		{ "height",        required_argument, 0, 'H' },
-		{ "force-ansi",    no_argument,       0, 'A' },
-		{ "info",          no_argument,       0, 'I' },
+        { "force-ansi",    no_argument,       0, 'A' },
+        { "info",          no_argument,       0, 'I' },
 		{ "json",          no_argument,       0, 'J' },
-		{ 0,		       0,		         0, 0   },
+        { "fonts",         no_argument,       0, 'L' },
+        { 0,               0,                 0, 0   },
 	};
 
 	/* Parse options */
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hb:i:frvaF:w:H:AIJ", long_options, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hb:i:frvaF:w:H:AIJL", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;
@@ -159,6 +161,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			case 'A': opts->force_ansi = true; break;
 			case 'I': opts->info_mode = true; break;
 			case 'J': opts->json_output = true; break;
+			case 'L': opts->list_fonts = true; break;
 
 			case 'w':
 				opts->target_width = atoi(optarg);
