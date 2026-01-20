@@ -191,14 +191,14 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 		xmp_info_init(xmp);
 
 		// Try to parse EXIF data
-		if (parse_exif(exif, data, len) != 0) {
+		if (parse_exif_from_jpeg(exif, data, len) != 0) {
 			// No EXIF data or parse failed
 			free(exif);
 			exif = NULL;
 		}
 
 		// Try to parse XMP data
-		if (parse_xmp(xmp, data, len) != 0) {
+		if (parse_xmp_from_jpeg(xmp, data, len) != 0) {
 			// No XMP data or parse failed
 			xmp_info_free(xmp);
 			free(xmp);

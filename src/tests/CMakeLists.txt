@@ -379,6 +379,24 @@ set_tests_properties(test_jpeg_exif_integration PROPERTIES
 	TIMEOUT 10
 )
 
+# PNG EXIF integration tests
+add_executable(test_png_exif_integration
+	integration/main.c
+	integration/test_png_exif_integration.c
+	../imgcat2/decoders/decoder_png.c
+)
+
+target_link_libraries(test_png_exif_integration
+	imgcat2_lib
+	${PNG_LIBRARIES}
+)
+
+add_test(NAME test_png_exif_integration COMMAND test_png_exif_integration)
+
+set_tests_properties(test_png_exif_integration PROPERTIES
+	TIMEOUT 10
+)
+
 # Metadata output tests
 add_executable(test_metadata_output
 	unit/main.c

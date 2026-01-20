@@ -637,63 +637,72 @@ void xmp_info_init(xmp_info_t *xmp)
 	memset(xmp, 0, sizeof(xmp_info_t));
 }
 
-int parse_exif(exif_info_t *exif, const uint8_t *jpeg_data, size_t len)
+int parse_exif_from_tiff(exif_info_t *exif, const uint8_t *tiff_data, size_t len)
 {
-	if (!exif || !jpeg_data) {
+	if (!exif || !tiff_data) {
 		return -1;
 	}
 
-	/* Find EXIF APP1 segment */
-	const uint8_t *exif_data = NULL;
-	size_t exif_len = 0;
-	if (find_app1_segment(jpeg_data, len, "Exif\0\0", 6, &exif_data, &exif_len) != 0) {
-		return -1;
-
-	} else if (exif_len < 8) {
+	if (len < 8) {
 		return -1;
 	}
 
-	/* Parse TIFF header */
+	/* Validate TIFF magic ('II' or 'MM' + 0x002A) */
 	byte_order_t byte_order;
-	if (exif_data[0] == 'I' && exif_data[1] == 'I') {
+	if (tiff_data[0] == 'I' && tiff_data[1] == 'I') {
 		byte_order = BYTE_ORDER_LITTLE_ENDIAN;
-	} else if (exif_data[0] == 'M' && exif_data[1] == 'M') {
+	} else if (tiff_data[0] == 'M' && tiff_data[1] == 'M') {
 		byte_order = BYTE_ORDER_BIG_ENDIAN;
 	} else {
 		return -1;
 	}
 
 	/* Verify TIFF magic number (0x002A) */
-	uint16_t magic = read_u16(exif_data + 2, byte_order);
+	uint16_t magic = read_u16(tiff_data + 2, byte_order);
 	if (magic != 0x002A) {
 		return -1;
 	}
 
 	/* Read IFD0 offset */
-	uint32_t ifd0_offset = read_u32(exif_data + 4, byte_order);
+	uint32_t ifd0_offset = read_u32(tiff_data + 4, byte_order);
 
-	/* Setup TIFF context */
+	/* Initialize tiff_context_t */
 	tiff_context_t ctx;
-	ctx.tiff_data = exif_data;
-	ctx.tiff_len = exif_len;
+	ctx.tiff_data = tiff_data;
+	ctx.tiff_len = len;
 	ctx.byte_order = byte_order;
 
-	/* Parse IFD0 */
+	/* Call parse_ifd() for IFD0 */
 	parse_ifd(&ctx, exif, ifd0_offset, false);
 
 	return 0;
 }
 
-int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
+int parse_exif(exif_info_t *exif, const uint8_t *jpeg_data, size_t len)
 {
-	if (!xmp || !jpeg_data) {
+	return parse_exif_from_jpeg(exif, jpeg_data, len);
+}
+
+int parse_exif_from_jpeg(exif_info_t *exif, const uint8_t *jpeg_data, size_t len)
+{
+	if (!exif || !jpeg_data) {
 		return -1;
 	}
 
-	/* Find XMP APP1 segment */
-	const uint8_t *xmp_data = NULL;
-	size_t xmp_len = 0;
-	if (find_app1_segment(jpeg_data, len, "http://ns.adobe.com/xap/1.0/\0", 29, &xmp_data, &xmp_len) != 0) {
+	/* Find EXIF APP1 segment with "Exif\0\0" marker */
+	const uint8_t *tiff_data = NULL;
+	size_t tiff_len = 0;
+	if (find_app1_segment(jpeg_data, len, "Exif\0\0", 6, &tiff_data, &tiff_len) != 0) {
+		return -1;
+	}
+
+	/* Call parse_exif_from_tiff() with extracted TIFF data */
+	return parse_exif_from_tiff(exif, tiff_data, tiff_len);
+}
+
+int parse_xmp_from_xml(xmp_info_t *xmp, const char *xml_data, size_t len)
+{
+	if (!xmp || !xml_data) {
 		return -1;
 	}
 
@@ -703,7 +712,7 @@ int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
 		return -1;
 	}
 
-	if (xml_document_parse(doc, (const char *)xmp_data, xmp_len) != 0) {
+	if (xml_document_parse(doc, xml_data, len) != 0) {
 		xml_document_destroy(doc);
 		return -1;
 	}
@@ -721,7 +730,7 @@ int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
 		return -1;
 	}
 
-	/* Extract Dublin Core fields */
+	/* Extract Dublin Core, XMP Basic, and IPTC/Photoshop fields */
 	xml_node_t *child = desc->first_child;
 	while (child) {
 		const char *name = xml_element_name(child);
@@ -791,6 +800,28 @@ int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
 
 	xml_document_destroy(doc);
 	return 0;
+}
+
+int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
+{
+	return parse_xmp_from_jpeg(xmp, jpeg_data, len);
+}
+
+int parse_xmp_from_jpeg(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
+{
+	if (!xmp || !jpeg_data) {
+		return -1;
+	}
+
+	/* Find XMP APP1 segment with "http://ns.adobe.com/xap/1.0/\0" marker */
+	const uint8_t *xml_data = NULL;
+	size_t xml_len = 0;
+	if (find_app1_segment(jpeg_data, len, "http://ns.adobe.com/xap/1.0/\0", 29, &xml_data, &xml_len) != 0) {
+		return -1;
+	}
+
+	/* Call parse_xmp_from_xml() with extracted XML data */
+	return parse_xmp_from_xml(xmp, (const char *)xml_data, xml_len);
 }
 
 void exif_info_free(exif_info_t *exif)

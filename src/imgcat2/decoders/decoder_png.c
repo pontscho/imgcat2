@@ -15,6 +15,10 @@
 
 #include "decoder.h"
 
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 /**
  * @brief Maximum number of frames for APNG (DoS protection)
  */
@@ -29,7 +33,6 @@ typedef struct {
 	size_t offset; /**< Current read offset */
 } png_mem_reader;
 
-#ifdef PNG_APNG_SUPPORTED
 /**
  * @brief Custom read function for libpng to read from memory
  *
@@ -58,6 +61,267 @@ static void png_read_func(png_structp png_ptr, png_bytep data, size_t length)
 	memcpy(data, reader->data + reader->offset, length);
 	reader->offset += length;
 }
+
+#ifdef HAVE_EXIF_READER
+/**
+ * @brief Extract EXIF metadata from PNG using full libpng API
+ *
+ * Uses the full libpng API to access eXIf chunk data and parse it as TIFF.
+ * PNG stores EXIF data in raw TIFF format in the eXIf chunk.
+ *
+ * @param data Raw PNG file data
+ * @param len Length of data in bytes
+ * @return Pointer to exif_info_t structure, or NULL if no EXIF found or on error
+ */
+static exif_info_t *extract_png_exif(const uint8_t *data, size_t len)
+{
+	if (data == NULL || len == 0) {
+		return NULL;
+	}
+
+	/* Setup memory reader */
+	png_mem_reader reader;
+	reader.data = data;
+	reader.size = len;
+	reader.offset = 0;
+
+	/* Create PNG read structures */
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png_ptr == NULL) {
+		return NULL;
+	}
+
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL) {
+		png_destroy_read_struct(&png_ptr, NULL, NULL);
+		return NULL;
+	}
+
+	/* Set up error handling */
+	if (setjmp(png_jmpbuf(png_ptr))) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return NULL;
+	}
+
+	/* Set custom read function */
+	png_set_read_fn(png_ptr, &reader, png_read_func);
+
+	/* Read PNG header and chunks */
+	png_read_info(png_ptr, info_ptr);
+
+	/* Try to get eXIf chunk */
+	png_uint_32 exif_size = 0;
+	png_bytep exif_data = NULL;
+
+#if PNG_LIBPNG_VER >= 10617
+	/* png_get_eXIf() available in libpng >= 1.6.17 */
+	if (png_get_eXIf_1(png_ptr, info_ptr, &exif_size, &exif_data) != 0 && exif_data != NULL && exif_size > 0) {
+		/* Allocate and initialize exif_info_t */
+		exif_info_t *exif = malloc(sizeof(exif_info_t));
+		if (exif == NULL) {
+			png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+			return NULL;
+		}
+
+		exif_info_init(exif);
+
+		/* Parse EXIF data (raw TIFF format) */
+		if (parse_exif_from_tiff(exif, exif_data, exif_size) != 0) {
+			/* Parse failed */
+			free(exif);
+			exif = NULL;
+		}
+
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return exif;
+	}
+#endif
+
+	/* No EXIF data found or libpng version too old */
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+	return NULL;
+}
+
+/**
+ * @brief Extract text metadata from PNG tEXt chunks and populate EXIF structure
+ *
+ * Reads PNG tEXt chunks and maps common keywords to EXIF fields:
+ * - Title, Description -> description
+ * - Author, Artist -> artist
+ * - Copyright -> copyright
+ * - Comment -> user_comment
+ * - Software -> software
+ *
+ * @param exif EXIF structure to populate (must be initialized)
+ * @param data Raw PNG file data
+ * @param len Length of data in bytes
+ * @return 0 on success, -1 on error
+ */
+static int extract_png_text_to_exif(exif_info_t *exif, const uint8_t *data, size_t len)
+{
+	if (exif == NULL || data == NULL || len == 0) {
+		return -1;
+	}
+
+	/* Setup memory reader */
+	png_mem_reader reader;
+	reader.data = data;
+	reader.size = len;
+	reader.offset = 0;
+
+	/* Create PNG read structures */
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png_ptr == NULL) {
+		return -1;
+	}
+
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL) {
+		png_destroy_read_struct(&png_ptr, NULL, NULL);
+		return -1;
+	}
+
+	/* Set up error handling */
+	if (setjmp(png_jmpbuf(png_ptr))) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return -1;
+	}
+
+	/* Set custom read function */
+	png_set_read_fn(png_ptr, &reader, png_read_func);
+
+	/* Read PNG header and chunks */
+	png_read_info(png_ptr, info_ptr);
+
+	/* Try to get text chunks */
+	png_textp text_ptr = NULL;
+	int num_text = 0;
+
+	if (png_get_text(png_ptr, info_ptr, &text_ptr, &num_text) > 0 && text_ptr != NULL) {
+		/* Process each text chunk */
+		for (int i = 0; i < num_text; i++) {
+			if (text_ptr[i].key == NULL || text_ptr[i].text == NULL) {
+				continue;
+			}
+
+			const char *key = text_ptr[i].key;
+			const char *text = text_ptr[i].text;
+
+			/* Map common PNG tEXt keywords to EXIF fields */
+			if (strcmp(key, "Title") == 0 || strcmp(key, "Description") == 0) {
+				strncpy(exif->description, text, sizeof(exif->description) - 1);
+				exif->description[sizeof(exif->description) - 1] = 0;
+
+			} else if (strcmp(key, "Author") == 0 || strcmp(key, "Artist") == 0) {
+				strncpy(exif->artist, text, sizeof(exif->artist) - 1);
+				exif->artist[sizeof(exif->artist) - 1] = 0;
+
+			} else if (strcmp(key, "Copyright") == 0) {
+				strncpy(exif->copyright, text, sizeof(exif->copyright) - 1);
+				exif->copyright[sizeof(exif->copyright) - 1] = 0;
+
+			} else if (strcmp(key, "Comment") == 0) {
+				strncpy(exif->user_comment, text, sizeof(exif->user_comment) - 1);
+				exif->user_comment[sizeof(exif->user_comment) - 1] = 0;
+
+			} else if (strcmp(key, "Software") == 0) {
+				strncpy(exif->software, text, sizeof(exif->software) - 1);
+				exif->software[sizeof(exif->software) - 1] = 0;
+			}
+		}
+	}
+
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+	return 0;
+}
+
+/**
+ * @brief Extract XMP metadata from PNG using full libpng API
+ *
+ * Uses the full libpng API to access iTXt chunks and search for XMP data.
+ * PNG stores XMP data in iTXt chunks with keyword "XML:com.adobe.xmp".
+ *
+ * @param data Raw PNG file data
+ * @param len Length of data in bytes
+ * @return Pointer to xmp_info_t structure, or NULL if no XMP found or on error
+ */
+static xmp_info_t *extract_png_xmp(const uint8_t *data, size_t len)
+{
+	if (data == NULL || len == 0) {
+		return NULL;
+	}
+
+	/* Setup memory reader */
+	png_mem_reader reader;
+	reader.data = data;
+	reader.size = len;
+	reader.offset = 0;
+
+	/* Create PNG read structures */
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png_ptr == NULL) {
+		return NULL;
+	}
+
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL) {
+		png_destroy_read_struct(&png_ptr, NULL, NULL);
+		return NULL;
+	}
+
+	/* Set up error handling */
+	if (setjmp(png_jmpbuf(png_ptr))) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return NULL;
+	}
+
+	/* Set custom read function */
+	png_set_read_fn(png_ptr, &reader, png_read_func);
+
+	/* Read PNG header and chunks */
+	png_read_info(png_ptr, info_ptr);
+
+	/* Try to get text chunks */
+	png_textp text_ptr = NULL;
+	int num_text = 0;
+
+	if (png_get_text(png_ptr, info_ptr, &text_ptr, &num_text) > 0 && text_ptr != NULL) {
+		/* Search for XMP chunk with keyword "XML:com.adobe.xmp" */
+		for (int i = 0; i < num_text; i++) {
+			if (text_ptr[i].key != NULL && strcmp(text_ptr[i].key, "XML:com.adobe.xmp") == 0) {
+				/* Found XMP data */
+				if (text_ptr[i].text != NULL && text_ptr[i].text_length > 0) {
+					/* Allocate and initialize xmp_info_t */
+					xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+					if (xmp == NULL) {
+						png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+						return NULL;
+					}
+
+					xmp_info_init(xmp);
+
+					/* Parse XMP data (raw XML string) */
+					if (parse_xmp_from_xml(xmp, text_ptr[i].text, text_ptr[i].text_length) != 0) {
+						/* Parse failed */
+						xmp_info_free(xmp);
+						free(xmp);
+						xmp = NULL;
+					}
+
+					png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+					return xmp;
+				}
+			}
+		}
+	}
+
+	/* No XMP data found */
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+	return NULL;
+}
+#endif /* HAVE_EXIF_READER */
+
+#ifdef PNG_APNG_SUPPORTED
 
 /**
  * @brief Check if PNG is animated (APNG format)
@@ -556,6 +820,32 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 
 	// Free temporary buffer
 	free(buffer);
+
+	// Parse EXIF/XMP metadata
+#ifdef HAVE_EXIF_READER
+	// Extract EXIF from eXIf chunk using full libpng API
+	exif_info_t *exif = extract_png_exif(data, len);
+
+	// If no EXIF from eXIf chunk, allocate empty structure for tEXt data
+	if (exif == NULL) {
+		exif = malloc(sizeof(exif_info_t));
+		if (exif != NULL) {
+			exif_info_init(exif);
+		}
+	}
+
+	// Extract text metadata from tEXt chunks and populate EXIF fields
+	if (exif != NULL) {
+		extract_png_text_to_exif(exif, data, len);
+	}
+
+	// Extract XMP from iTXt chunks using full libpng API
+	xmp_info_t *xmp = extract_png_xmp(data, len);
+
+	// Store metadata in image structure
+	img->exif = exif;
+	img->xmp = xmp;
+#endif
 
 	// Cleanup png_image structure
 	png_image_free(&image);

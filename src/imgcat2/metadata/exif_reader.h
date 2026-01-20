@@ -2,7 +2,7 @@
  * @file exif_reader.h
  * @brief Pure C EXIF/XMP metadata parser (TinyEXIF port)
  *
- * Extracts EXIF and XMP metadata from JPEG images.
+ * Extracts EXIF and XMP metadata from multiple image formats (JPEG, PNG, WebP, HEIF, JXL, TIFF, RAW).
  * Read-only implementation with zero external dependencies.
  */
 
@@ -148,6 +148,36 @@ void xmp_info_init(xmp_info_t *xmp);
 int parse_exif(exif_info_t *exif, const uint8_t *jpeg_data, size_t len);
 
 /**
+ * @brief Parse EXIF metadata from JPEG data (format-specific)
+ *
+ * Extracts all available EXIF metadata from a JPEG file buffer.
+ * Searches for APP1 segment with "Exif\0\0" marker and parses
+ * TIFF/IFD structure. This is the JPEG-specific wrapper around
+ * the core TIFF parser.
+ *
+ * @param exif Output structure for EXIF data
+ * @param jpeg_data JPEG file data buffer
+ * @param len Length of jpeg_data in bytes
+ * @return 0 on success, -1 on error or no EXIF data found
+ */
+int parse_exif_from_jpeg(exif_info_t *exif, const uint8_t *jpeg_data, size_t len);
+
+/**
+ * @brief Parse EXIF metadata from raw TIFF/IFD data
+ *
+ * Extracts EXIF metadata from raw TIFF data (format-agnostic core parser).
+ * Validates TIFF magic ('II' or 'MM' + 0x002A), determines byte order,
+ * and parses IFD0 structure. This is the core parser used by all format-specific
+ * parsers (JPEG, PNG, WebP, HEIF, JXL, TIFF).
+ *
+ * @param exif Output structure for EXIF data
+ * @param tiff_data Raw TIFF/IFD data buffer (starting with TIFF header)
+ * @param len Length of tiff_data in bytes
+ * @return 0 on success, -1 on error or invalid TIFF structure
+ */
+int parse_exif_from_tiff(exif_info_t *exif, const uint8_t *tiff_data, size_t len);
+
+/**
  * @brief Parse XMP metadata from JPEG data
  *
  * Extracts XMP metadata from a JPEG file buffer. Searches for APP1
@@ -160,6 +190,36 @@ int parse_exif(exif_info_t *exif, const uint8_t *jpeg_data, size_t len);
  * @return 0 on success, -1 on error or no XMP data found
  */
 int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len);
+
+/**
+ * @brief Parse XMP metadata from JPEG data (format-specific)
+ *
+ * Extracts XMP metadata from a JPEG file buffer. Searches for APP1
+ * segment with "http://ns.adobe.com/xap/1.0/\0" marker and parses
+ * the embedded XML. This is the JPEG-specific wrapper around the
+ * core XML parser.
+ *
+ * @param xmp Output structure for XMP data
+ * @param jpeg_data JPEG file data buffer
+ * @param len Length of jpeg_data in bytes
+ * @return 0 on success, -1 on error or no XMP data found
+ */
+int parse_xmp_from_jpeg(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len);
+
+/**
+ * @brief Parse XMP metadata from raw XML string
+ *
+ * Extracts XMP metadata from raw XML data (format-agnostic core parser).
+ * Parses Dublin Core (dc:creator, dc:rights, dc:description),
+ * XMP Basic (xmp:Rating, xmp:CreateDate), and IPTC/Photoshop fields.
+ * This is the core parser used by all format-specific parsers.
+ *
+ * @param xmp Output structure for XMP data
+ * @param xml_data Raw XML string buffer
+ * @param len Length of xml_data in bytes
+ * @return 0 on success, -1 on error or invalid XML structure
+ */
+int parse_xmp_from_xml(xmp_info_t *xmp, const char *xml_data, size_t len);
 
 /**
  * @brief Free dynamically allocated fields in EXIF info

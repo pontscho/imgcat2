@@ -14,12 +14,142 @@
 #include <string.h>
 #include <webp/decode.h>
 #include <webp/demux.h>
+#include <webp/mux.h>
 /* clang-format on */
 
 #include "decoder.h"
 
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 /** Maximum number of WebP frames to decode (prevents DoS) */
 #define MAX_WEBP_FRAMES 200
+
+#ifdef HAVE_EXIF_READER
+/**
+ * @brief Extract EXIF metadata from WebP using WebPDemux
+ *
+ * Uses WebPDemux to access the EXIF chunk and parse it as TIFF.
+ * WebP stores EXIF data in raw TIFF format in the EXIF chunk.
+ *
+ * @param data Raw WebP file data
+ * @param len Length of data in bytes
+ * @return Pointer to exif_info_t structure, or NULL if no EXIF found or on error
+ */
+static exif_info_t *extract_webp_exif(const uint8_t *data, size_t len)
+{
+	if (data == NULL || len == 0) {
+		return NULL;
+	}
+
+	/* Setup WebPData */
+	WebPData webp_data;
+	webp_data.bytes = data;
+	webp_data.size = len;
+
+	/* Create demuxer */
+	WebPDemuxer *demux = WebPDemux(&webp_data);
+	if (demux == NULL) {
+		return NULL;
+	}
+
+	/* Try to get EXIF chunk */
+	WebPChunkIterator chunk_iter;
+	if (WebPDemuxGetChunk(demux, "EXIF", 1, &chunk_iter)) {
+		/* EXIF chunk found */
+		if (chunk_iter.chunk.bytes != NULL && chunk_iter.chunk.size > 0) {
+			/* Allocate and initialize exif_info_t */
+			exif_info_t *exif = malloc(sizeof(exif_info_t));
+			if (exif == NULL) {
+				WebPDemuxReleaseChunkIterator(&chunk_iter);
+				WebPDemuxDelete(demux);
+				return NULL;
+			}
+
+			exif_info_init(exif);
+
+			/* Parse EXIF data (raw TIFF format) */
+			if (parse_exif_from_tiff(exif, chunk_iter.chunk.bytes, chunk_iter.chunk.size) != 0) {
+				/* Parse failed */
+				free(exif);
+				exif = NULL;
+			}
+
+			WebPDemuxReleaseChunkIterator(&chunk_iter);
+			WebPDemuxDelete(demux);
+			return exif;
+		}
+		WebPDemuxReleaseChunkIterator(&chunk_iter);
+	}
+
+	/* No EXIF data found */
+	WebPDemuxDelete(demux);
+	return NULL;
+}
+
+/**
+ * @brief Extract XMP metadata from WebP using WebPDemux
+ *
+ * Uses WebPDemux to access the XMP chunk and parse it as XML.
+ * WebP stores XMP data in raw XML format in the XMP chunk.
+ *
+ * @param data Raw WebP file data
+ * @param len Length of data in bytes
+ * @return Pointer to xmp_info_t structure, or NULL if no XMP found or on error
+ */
+static xmp_info_t *extract_webp_xmp(const uint8_t *data, size_t len)
+{
+	if (data == NULL || len == 0) {
+		return NULL;
+	}
+
+	/* Setup WebPData */
+	WebPData webp_data;
+	webp_data.bytes = data;
+	webp_data.size = len;
+
+	/* Create demuxer */
+	WebPDemuxer *demux = WebPDemux(&webp_data);
+	if (demux == NULL) {
+		return NULL;
+	}
+
+	/* Try to get XMP chunk */
+	WebPChunkIterator chunk_iter;
+	if (WebPDemuxGetChunk(demux, "XMP ", 1, &chunk_iter)) {
+		/* XMP chunk found */
+		if (chunk_iter.chunk.bytes != NULL && chunk_iter.chunk.size > 0) {
+			/* Allocate and initialize xmp_info_t */
+			xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+			if (xmp == NULL) {
+				WebPDemuxReleaseChunkIterator(&chunk_iter);
+				WebPDemuxDelete(demux);
+				return NULL;
+			}
+
+			xmp_info_init(xmp);
+
+			/* Parse XMP data (raw XML string) */
+			if (parse_xmp_from_xml(xmp, (const char *)chunk_iter.chunk.bytes, chunk_iter.chunk.size) != 0) {
+				/* Parse failed */
+				xmp_info_free(xmp);
+				free(xmp);
+				xmp = NULL;
+			}
+
+			WebPDemuxReleaseChunkIterator(&chunk_iter);
+			WebPDemuxDelete(demux);
+			return xmp;
+		}
+		WebPDemuxReleaseChunkIterator(&chunk_iter);
+	}
+
+	/* No XMP data found */
+	WebPDemuxDelete(demux);
+	return NULL;
+}
+#endif /* HAVE_EXIF_READER */
 
 /**
  * @brief Decode static WebP image (single frame)
@@ -67,6 +197,19 @@ static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_
 
 	// Free WebP decoder buffer
 	WebPFree(pixels);
+
+	// Parse EXIF/XMP metadata
+#ifdef HAVE_EXIF_READER
+	// Extract EXIF from EXIF chunk using WebPDemux
+	exif_info_t *exif = extract_webp_exif(data, len);
+
+	// Extract XMP from XMP chunk using WebPDemux
+	xmp_info_t *xmp = extract_webp_xmp(data, len);
+
+	// Store metadata in image structure
+	img->exif = exif;
+	img->xmp = xmp;
+#endif
 
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));

@@ -498,3 +498,166 @@ CTEST(exif_reader, parse_exif_big_endian)
 
 	exif_info_free(&exif);
 }
+
+/**
+ * @test Test parse_exif_from_tiff() with raw TIFF data
+ */
+CTEST(exif_reader, parse_exif_from_tiff_raw_data)
+{
+	exif_info_t exif;
+	exif_info_init(&exif);
+
+	/* Raw TIFF data (little-endian) without JPEG wrapper */
+	uint8_t tiff_data[] = { /* TIFF header - little endian */
+		                    'I',
+		                    'I', /* Byte order (little-endian) */
+		                    0x2A,
+		                    0x00, /* TIFF magic number (0x002A) */
+		                    0x08,
+		                    0x00,
+		                    0x00,
+		                    0x00, /* Offset to IFD0 */
+
+		                    /* IFD0 - 2 entries */
+		                    0x02,
+		                    0x00, /* Number of entries */
+
+		                    /* Entry 1: Make (0x010F) */
+		                    0x0F,
+		                    0x01, /* Tag: Make */
+		                    0x02,
+		                    0x00, /* Type: ASCII */
+		                    0x05,
+		                    0x00,
+		                    0x00,
+		                    0x00, /* Count: 5 bytes */
+		                    0x26,
+		                    0x00,
+		                    0x00,
+		                    0x00, /* Offset to data */
+
+		                    /* Entry 2: Model (0x0110) */
+		                    0x10,
+		                    0x01, /* Tag: Model */
+		                    0x02,
+		                    0x00, /* Type: ASCII */
+		                    0x05,
+		                    0x00,
+		                    0x00,
+		                    0x00, /* Count: 5 bytes */
+		                    0x2B,
+		                    0x00,
+		                    0x00,
+		                    0x00, /* Offset to data */
+
+		                    /* Next IFD offset (0 = no more IFDs) */
+		                    0x00,
+		                    0x00,
+		                    0x00,
+		                    0x00,
+
+		                    /* Data for Make tag at offset 0x26 */
+		                    'S',
+		                    'o',
+		                    'n',
+		                    'y',
+		                    0x00,
+
+		                    /* Data for Model tag at offset 0x2B */
+		                    'A',
+		                    '7',
+		                    'R',
+		                    'V',
+		                    0x00
+	};
+
+	/* Test parse_exif_from_tiff() with raw TIFF data */
+	int result = parse_exif_from_tiff(&exif, tiff_data, sizeof(tiff_data));
+
+	ASSERT_EQUAL(0, result);
+	ASSERT_STR("Sony", exif.make);
+	ASSERT_STR("A7RV", exif.model);
+
+	exif_info_free(&exif);
+}
+
+/**
+ * @test Test parse_exif_from_tiff() with big-endian byte order
+ */
+CTEST(exif_reader, parse_exif_from_tiff_big_endian)
+{
+	exif_info_t exif;
+	exif_info_init(&exif);
+
+	/* Raw TIFF data (big-endian) */
+	uint8_t tiff_data[] = { /* TIFF header - BIG endian */
+		                    'M',
+		                    'M', /* Byte order (big-endian) */
+		                    0x00,
+		                    0x2A, /* TIFF magic number */
+		                    0x00,
+		                    0x00,
+		                    0x00,
+		                    0x08, /* Offset to IFD0 */
+
+		                    /* IFD0 - 1 entry */
+		                    0x00,
+		                    0x01, /* Number of entries */
+
+		                    /* Entry 1: Make */
+		                    0x01,
+		                    0x0F, /* Tag: Make (big-endian) */
+		                    0x00,
+		                    0x02, /* Type: ASCII */
+		                    0x00,
+		                    0x00,
+		                    0x00,
+		                    0x06, /* Count: 6 bytes */
+		                    0x00,
+		                    0x00,
+		                    0x00,
+		                    0x1A, /* Offset to data */
+
+		                    /* Next IFD offset */
+		                    0x00,
+		                    0x00,
+		                    0x00,
+		                    0x00,
+
+		                    /* Data for Make tag */
+		                    'F',
+		                    'u',
+		                    'j',
+		                    'i',
+		                    'X',
+		                    0x00
+	};
+
+	/* Test TIFF magic validation */
+	int result = parse_exif_from_tiff(&exif, tiff_data, sizeof(tiff_data));
+
+	ASSERT_EQUAL(0, result);
+	ASSERT_STR("FujiX", exif.make);
+
+	exif_info_free(&exif);
+}
+
+/**
+ * @test Test parse_exif_from_tiff() with invalid TIFF magic
+ */
+CTEST(exif_reader, parse_exif_from_tiff_invalid_magic)
+{
+	exif_info_t exif;
+	exif_info_init(&exif);
+
+	/* Invalid TIFF magic number */
+	uint8_t tiff_data[] = { 'I',  'I', /* Byte order */
+		                    0x2B, 0x00, /* Wrong magic (0x002B instead of 0x002A) */
+		                    0x08, 0x00, 0x00, 0x00 };
+
+	int result = parse_exif_from_tiff(&exif, tiff_data, sizeof(tiff_data));
+
+	ASSERT_NOT_EQUAL(0, result);
+
+	exif_info_free(&exif);
+}
