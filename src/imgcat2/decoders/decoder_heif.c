@@ -17,6 +17,10 @@
 
 #include "decoder.h"
 
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 /** Maximum number of HEIF frames to decode (prevents DoS) */
 #define MAX_HEIF_FRAMES 200
 
@@ -151,6 +155,143 @@ static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_
 		uint8_t *dst_row = output->pixels + y * width * 4;
 		memcpy(dst_row, src_row, width * 4);
 	}
+
+	// Parse EXIF/XMP metadata (Phase 4)
+#ifdef HAVE_EXIF_READER
+	exif_info_t *exif = malloc(sizeof(exif_info_t));
+	xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+
+	if (exif && xmp) {
+		exif_info_init(exif);
+		xmp_info_init(xmp);
+
+		// Get list of metadata block IDs
+		int num_metadata = heif_image_handle_get_number_of_metadata_blocks(handle, NULL);
+		if (num_metadata > 0) {
+			heif_item_id *metadata_ids = malloc(sizeof(heif_item_id) * num_metadata);
+			if (metadata_ids != NULL) {
+				heif_image_handle_get_list_of_metadata_block_IDs(handle, NULL, metadata_ids, num_metadata);
+
+				// Iterate through metadata blocks
+				for (int i = 0; i < num_metadata; i++) {
+					const char *type = heif_image_handle_get_metadata_type(handle, metadata_ids[i]);
+					if (type == NULL) {
+						continue;
+					}
+
+					// Extract EXIF metadata
+					if (strcmp(type, "Exif") == 0) {
+						size_t exif_size = heif_image_handle_get_metadata_size(handle, metadata_ids[i]);
+						if (exif_size > 0) {
+							uint8_t *exif_data = malloc(exif_size);
+							if (exif_data != NULL) {
+								struct heif_error err = heif_image_handle_get_metadata(handle, metadata_ids[i], exif_data);
+								if (err.code == heif_error_Ok) {
+									// Handle HEIF EXIF format: 4-byte offset + "Exif\0\0" + TIFF data
+									// The 4-byte offset indicates where TIFF data starts relative to "Exif"
+									const uint8_t *tiff_data = exif_data;
+									size_t tiff_size = exif_size;
+
+									// Check if it starts with 4-byte offset + "Exif" marker
+									if (exif_size > 10 && exif_data[4] == 'E' && exif_data[5] == 'x' && exif_data[6] == 'i' && exif_data[7] == 'f') {
+										// Get offset from first 4 bytes (big-endian)
+										uint32_t offset = (exif_data[0] << 24) | (exif_data[1] << 16) | (exif_data[2] << 8) | exif_data[3];
+
+										// Skip 4-byte prefix + offset (usually "Exif\0\0" = 6 bytes)
+										size_t skip = 4 + offset;
+										if (skip < exif_size) {
+											tiff_data = exif_data + skip;
+											tiff_size = exif_size - skip;
+										}
+									} else {
+										// Try legacy format: just 4-byte offset prefix
+										if (exif_size > 4) {
+											bool has_magic_at_0 = (exif_data[0] == 'I' && exif_data[1] == 'I') || (exif_data[0] == 'M' && exif_data[1] == 'M');
+											if (!has_magic_at_0 && exif_size > 8) {
+												bool has_magic_at_4 = (exif_data[4] == 'I' && exif_data[5] == 'I') || (exif_data[4] == 'M' && exif_data[5] == 'M');
+												if (has_magic_at_4) {
+													tiff_data = exif_data + 4;
+													tiff_size = exif_size - 4;
+												}
+											}
+										}
+									}
+
+									// Parse EXIF from TIFF data
+									if (parse_exif_from_tiff(exif, tiff_data, tiff_size) != 0) {
+										free(exif);
+										exif = NULL;
+									}
+								}
+								free(exif_data);
+							}
+						}
+					}
+
+					// Extract XMP metadata
+					if (strcmp(type, "mime") == 0) {
+						const char *content_type = heif_image_handle_get_metadata_content_type(handle, metadata_ids[i]);
+						if (content_type != NULL && strcmp(content_type, "application/rdf+xml") == 0) {
+							size_t xmp_size = heif_image_handle_get_metadata_size(handle, metadata_ids[i]);
+							if (xmp_size > 0) {
+								char *xmp_data = malloc(xmp_size + 1);
+								if (xmp_data != NULL) {
+									struct heif_error err = heif_image_handle_get_metadata(handle, metadata_ids[i], xmp_data);
+									if (err.code == heif_error_Ok) {
+										xmp_data[xmp_size] = '\0'; // Null-terminate XML string
+										if (parse_xmp_from_xml(xmp, xmp_data, xmp_size) != 0) {
+											xmp_info_free(xmp);
+											free(xmp);
+											xmp = NULL;
+										}
+									}
+									free(xmp_data);
+								}
+							}
+						}
+					}
+				}
+
+				free(metadata_ids);
+			}
+		}
+
+		// Store metadata in image structure
+		// Only keep exif if we actually found any data
+		// Check multiple fields to determine if EXIF has useful data
+		if (exif != NULL) {
+			if (strlen(exif->make) > 0 || strlen(exif->model) > 0 || strlen(exif->software) > 0 || strlen(exif->description) > 0 || exif->has_iso || exif->has_gps || exif->has_exposure_time || exif->has_f_number || exif->has_focal_length || exif->orientation > 1) {
+				output->exif = exif;
+			} else {
+				free(exif);
+				output->exif = NULL;
+			}
+		} else {
+			output->exif = NULL;
+		}
+
+		// Only keep xmp if we actually found any data
+		if (xmp != NULL && (strlen(xmp->creator) > 0 || strlen(xmp->title) > 0)) {
+			output->xmp = xmp;
+		} else {
+			xmp_info_free(xmp);
+			free(xmp);
+			output->xmp = NULL;
+		}
+
+	} else {
+		// Allocation failed - free what we have
+		if (exif) {
+			free(exif);
+		}
+		if (xmp) {
+			xmp_info_free(xmp);
+			free(xmp);
+		}
+		output->exif = NULL;
+		output->xmp = NULL;
+	}
+#endif
 
 	// Cleanup HEIF resources
 	heif_image_release(img);
