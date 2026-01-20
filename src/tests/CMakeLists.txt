@@ -451,6 +451,41 @@ set_tests_properties(test_jxl_exif_integration PROPERTIES
 	TIMEOUT 10
 )
 
+# RAW EXIF integration tests (task-022)
+add_executable(test_raw_exif_integration
+	integration/main.c
+	integration/test_raw_exif_integration.c
+	../imgcat2/decoders/decoder_raw.c
+)
+
+target_link_libraries(test_raw_exif_integration
+	imgcat2_lib
+	${RAW_CUSTOM_LIBS}
+)
+
+add_test(NAME test_raw_exif_integration COMMAND test_raw_exif_integration)
+
+set_tests_properties(test_raw_exif_integration PROPERTIES
+	TIMEOUT 30
+)
+
+# TIFF EXIF integration test
+add_executable(test_tiff_exif_integration
+	integration/main.c
+	integration/test_tiff_exif_integration.c
+	../imgcat2/decoders/decoder_tiff.c
+)
+
+target_link_libraries(test_tiff_exif_integration
+	imgcat2_lib
+)
+
+add_test(NAME test_tiff_exif_integration COMMAND test_tiff_exif_integration)
+
+set_tests_properties(test_tiff_exif_integration PROPERTIES
+	TIMEOUT 10
+)
+
 # Metadata output tests
 add_executable(test_metadata_output
 	unit/main.c

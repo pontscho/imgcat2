@@ -94,7 +94,7 @@ const uint8_t MAGIC_SVG_BOM_XML[8] = { 0xEF, 0xBB, 0xBF, '<', '?', 'x', 'm', 'l'
  * @return true if detected as TIFF-based RAW, false otherwise
  *
  * @note CR2 (Canon) has explicit "CR\x02\x00" marker at offset 8
- * @note NEF/ARW/DNG detection relies on LibRAW (acceptable ambiguity)
+ * @note NEF/ARW/DNG: detected by scanning TIFF IFD for camera manufacturer strings
  */
 static bool is_tiff_based_raw(const uint8_t *data, size_t len)
 {
@@ -107,8 +107,39 @@ static bool is_tiff_based_raw(const uint8_t *data, size_t len)
 		return true;
 	}
 
-	// For NEF/ARW/DNG: we accept ambiguity and rely on LibRAW
-	// If this function returns false, TIFF decoder will be tried
+	// Check for camera manufacturer strings in TIFF header
+	// NEF (Nikon), ARW (Sony), DNG, and other RAW formats contain
+	// manufacturer information in the TIFF IFD structure
+	// We scan the first 2048 bytes for these strings (heuristic approach)
+	// Note: DNG "Adobe" string can be at offset ~800-1000 bytes
+	size_t scan_len = (len > 2048) ? 2048 : len;
+
+	// Common camera manufacturer strings found in RAW files
+	const char *raw_markers[] = {
+		"NIKON", // Nikon NEF
+		"SONY", // Sony ARW
+		"Canon", // Canon (additional to CR2 marker)
+		"OLYMPUS", // Olympus ORF (TIFF-based)
+		"Panasonic", // Panasonic RW2 (TIFF-based)
+		"PENTAX", // Pentax PEF
+		"LEICA", // Leica RAW
+		"Phase One", // Phase One IIQ
+		"Hasselblad", // Hasselblad 3FR
+		"Kodak", // Kodak DCS/DCR
+		"Mamiya", // Mamiya MEF
+		"Samsung", // Samsung SRW
+		"SIGMA", // Sigma X3F
+		"Adobe DNG", // Adobe DNG (contains "Adobe DNG Converter" string)
+		"DNG", // Generic DNG marker
+	};
+
+	for (size_t i = 0; i < sizeof(raw_markers) / sizeof(raw_markers[0]); i++) {
+		if (memmem(data, scan_len, raw_markers[i], strlen(raw_markers[i])) != NULL) {
+			return true;
+		}
+	}
+
+	// For ambiguous cases, default to regular TIFF
 	return false;
 }
 

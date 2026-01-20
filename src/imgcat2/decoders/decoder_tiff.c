@@ -17,6 +17,10 @@
 
 #include "decoder.h"
 
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 /** Maximum number of TIFF frames to decode (prevents DoS) */
 #define MAX_TIFF_FRAMES 200
 
@@ -238,6 +242,24 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 	_TIFFfree(raster);
 	TIFFClose(tif);
 
+	// Parse EXIF metadata - TIFF IS EXIF format (direct pass-through)
+#ifdef HAVE_EXIF_READER
+	exif_info_t *exif = malloc(sizeof(exif_info_t));
+	if (exif) {
+		exif_info_init(exif);
+
+		// Pass entire TIFF file to parser (TIFF file = valid IFD structure)
+		if (parse_exif_from_tiff(exif, data, len) != 0) {
+			// No EXIF data or parse failed
+			free(exif);
+			exif = NULL;
+		}
+
+		// Store metadata in image structure
+		img->exif = exif;
+	}
+#endif
+
 	// Allocate frames array
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
@@ -353,6 +375,27 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 	}
 
 	TIFFClose(tif);
+
+	// Parse EXIF metadata from first frame - TIFF IS EXIF format (direct pass-through)
+#ifdef HAVE_EXIF_READER
+	exif_info_t *exif = malloc(sizeof(exif_info_t));
+	if (exif) {
+		exif_info_init(exif);
+
+		// Pass entire TIFF file to parser (TIFF file = valid IFD structure)
+		if (parse_exif_from_tiff(exif, data, len) != 0) {
+			// No EXIF data or parse failed
+			free(exif);
+			exif = NULL;
+		}
+
+		// Store metadata in first frame's image structure
+		if (exif && frames[0]) {
+			frames[0]->exif = exif;
+		}
+	}
+#endif
+
 	*frame_count = num_frames;
 	return frames;
 

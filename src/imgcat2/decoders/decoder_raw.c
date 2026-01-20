@@ -17,6 +17,10 @@
 
 #include "decoder.h"
 
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 /**
  * @brief Decode static RAW image (single frame)
  *
@@ -114,6 +118,94 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 			*dst++ = 0xFF; // A (fully opaque)
 		}
 	}
+
+	// Extract EXIF metadata from libraw structures
+#ifdef HAVE_EXIF_READER
+	exif_info_t *exif = malloc(sizeof(exif_info_t));
+	if (exif) {
+		exif_info_init(exif);
+
+		// Map libraw fields to exif_info_t
+		// Camera make/model
+		if (raw->idata.make[0] != '\0') {
+			strncpy(exif->make, raw->idata.make, sizeof(exif->make) - 1);
+			exif->make[sizeof(exif->make) - 1] = '\0';
+		}
+		if (raw->idata.model[0] != '\0') {
+			strncpy(exif->model, raw->idata.model, sizeof(exif->model) - 1);
+			exif->model[sizeof(exif->model) - 1] = '\0';
+		}
+
+		// Software
+		if (raw->idata.software[0] != '\0') {
+			strncpy(exif->software, raw->idata.software, sizeof(exif->software) - 1);
+			exif->software[sizeof(exif->software) - 1] = '\0';
+		}
+
+		// ISO speed
+		if (raw->other.iso_speed > 0) {
+			exif->iso_speed = (uint16_t)raw->other.iso_speed;
+		}
+
+		// Exposure time (shutter speed)
+		if (raw->other.shutter > 0) {
+			exif->exposure_time = raw->other.shutter;
+		}
+
+		// Aperture (f-number)
+		if (raw->other.aperture > 0) {
+			exif->f_number = raw->other.aperture;
+		}
+
+		// Focal length
+		if (raw->other.focal_len > 0) {
+			exif->focal_length = raw->other.focal_len;
+		}
+
+		// Lens information
+		if (raw->lens.Lens[0] != '\0') {
+			strncpy(exif->lens_model, raw->lens.Lens, sizeof(exif->lens_model) - 1);
+			exif->lens_model[sizeof(exif->lens_model) - 1] = '\0';
+		}
+		if (raw->lens.LensMake[0] != '\0') {
+			strncpy(exif->lens_make, raw->lens.LensMake, sizeof(exif->lens_make) - 1);
+			exif->lens_make[sizeof(exif->lens_make) - 1] = '\0';
+		}
+		if (raw->lens.MinFocal > 0) {
+			exif->min_focal_length = raw->lens.MinFocal;
+		}
+		if (raw->lens.MaxFocal > 0) {
+			exif->max_focal_length = raw->lens.MaxFocal;
+		}
+		if (raw->lens.MaxAp4MinFocal > 0) {
+			exif->max_aperture = raw->lens.MaxAp4MinFocal;
+		}
+
+		// Image description and artist
+		if (raw->other.desc[0] != '\0') {
+			strncpy(exif->description, raw->other.desc, sizeof(exif->description) - 1);
+			exif->description[sizeof(exif->description) - 1] = '\0';
+		}
+		if (raw->other.artist[0] != '\0') {
+			strncpy(exif->artist, raw->other.artist, sizeof(exif->artist) - 1);
+			exif->artist[sizeof(exif->artist) - 1] = '\0';
+		}
+
+		// GPS coordinates
+		if (raw->other.parsed_gps.gpsparsed) {
+			exif->has_gps = true;
+			exif->gps_latitude = raw->other.parsed_gps.latitude[0] + raw->other.parsed_gps.latitude[1] / 60.0 + raw->other.parsed_gps.latitude[2] / 3600.0;
+			exif->gps_longitude = raw->other.parsed_gps.longitude[0] + raw->other.parsed_gps.longitude[1] / 60.0 + raw->other.parsed_gps.longitude[2] / 3600.0;
+			exif->gps_altitude = raw->other.parsed_gps.altitude;
+			exif->gps_latitude_ref = raw->other.parsed_gps.latref;
+			exif->gps_longitude_ref = raw->other.parsed_gps.longref;
+			exif->gps_altitude_ref = (char)raw->other.parsed_gps.altref;
+		}
+
+		// Store EXIF in image structure
+		output->exif = exif;
+	}
+#endif
 
 	// Cleanup LibRAW resources
 	libraw_dcraw_clear_mem(processed);
