@@ -433,6 +433,24 @@ set_tests_properties(test_heif_exif_integration PROPERTIES
 	TIMEOUT 10
 )
 
+# JXL EXIF integration tests
+add_executable(test_jxl_exif_integration
+	integration/main.c
+	integration/test_jxl_exif_integration.c
+	../imgcat2/decoders/decoder_jxl.c
+)
+
+target_link_libraries(test_jxl_exif_integration
+	imgcat2_lib
+	${JXL_CUSTOM_LIBS}
+)
+
+add_test(NAME test_jxl_exif_integration COMMAND test_jxl_exif_integration)
+
+set_tests_properties(test_jxl_exif_integration PROPERTIES
+	TIMEOUT 10
+)
+
 # Metadata output tests
 add_executable(test_metadata_output
 	unit/main.c

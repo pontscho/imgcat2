@@ -17,6 +17,10 @@
 
 #include "decoder.h"
 
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 /** Maximum number of JXL frames to decode (prevents DoS) */
 #define MAX_JXL_FRAMES 200
 
@@ -52,6 +56,18 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
  * @return Array of image_t* frames, or NULL on error
  */
 static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames);
+
+#ifdef HAVE_EXIF_READER
+/**
+ * @brief Extract EXIF and XMP metadata from JXL boxes
+ *
+ * @param data Raw JXL file data
+ * @param len Length of data in bytes
+ * @param exif_out Output: EXIF metadata (allocated on success, NULL on failure)
+ * @param xmp_out Output: XMP metadata (allocated on success, NULL on failure)
+ */
+static void jxl_extract_metadata(const uint8_t *data, size_t len, exif_info_t **exif_out, xmp_info_t **xmp_out);
+#endif
 
 static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32_t *height, int *num_frames)
 {
@@ -472,6 +488,121 @@ cleanup_error:
 	return NULL;
 }
 
+#ifdef HAVE_EXIF_READER
+/**
+ * @brief Find a box in JXL ISOBMFF container by scanning memory
+ *
+ * WORKAROUND: The libjxl box API is complex and hard to use correctly.
+ * This function directly scans the file memory for box headers.
+ *
+ * @param data File data
+ * @param len File length
+ * @param box_type 4-character box type (e.g. "Exif")
+ * @param box_data_out Output: pointer to box data (within input data buffer)
+ * @param box_size_out Output: size of box data
+ * @return 0 on success, -1 if not found
+ */
+static int jxl_find_box(const uint8_t *data, size_t len, const char *box_type, const uint8_t **box_data_out, size_t *box_size_out)
+{
+	if (data == NULL || len < 12 || box_type == NULL || box_data_out == NULL || box_size_out == NULL) {
+		return -1;
+	}
+
+	// Scan for box headers in ISOBMFF format:
+	// 4 bytes: box size (big-endian)
+	// 4 bytes: box type
+	// N bytes: box data
+
+	for (size_t i = 0; i + 8 < len; i++) {
+		// Read box size (big-endian uint32)
+		uint32_t box_size = ((uint32_t)data[i] << 24) | ((uint32_t)data[i + 1] << 16) | ((uint32_t)data[i + 2] << 8) | ((uint32_t)data[i + 3]);
+
+		// Check if box type matches
+		if (data[i + 4] == box_type[0] && data[i + 5] == box_type[1] && data[i + 6] == box_type[2] && data[i + 7] == box_type[3]) {
+
+			// Found the box!
+			// Box data starts at i+8, size is (box_size - 8)
+			if (box_size >= 8 && i + box_size <= len) {
+				*box_data_out = data + i + 8;
+				*box_size_out = box_size - 8;
+				return 0;
+			}
+		}
+
+		// Skip to next potential box (advance by 1 byte for safety)
+	}
+
+	return -1; // Not found
+}
+
+static void jxl_extract_metadata(const uint8_t *data, size_t len, exif_info_t **exif_out, xmp_info_t **xmp_out)
+{
+	if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
+		return;
+	}
+
+	// Initialize outputs
+	*exif_out = NULL;
+	*xmp_out = NULL;
+
+	// Find Exif box in JXL file
+	const uint8_t *exif_data = NULL;
+	size_t exif_size = 0;
+	if (jxl_find_box(data, len, "Exif", &exif_data, &exif_size) == 0) {
+		// Exif box often has a 4-byte offset prefix before TIFF data
+		// Check if data starts with TIFF magic, if not skip 4 bytes
+		const uint8_t *tiff_data = exif_data;
+		size_t tiff_size = exif_size;
+
+		// Check for TIFF magic at offset 0
+		if (exif_size >= 4 && (exif_data[0] == 'I' || exif_data[0] == 'M')) {
+			// Looks like TIFF header at offset 0, use as-is
+			tiff_data = exif_data;
+			tiff_size = exif_size;
+		} else if (exif_size >= 8 && (exif_data[4] == 'I' || exif_data[4] == 'M')) {
+			// TIFF header is at offset 4, skip the 4-byte prefix
+			tiff_data = exif_data + 4;
+			tiff_size = exif_size - 4;
+		} else {
+			// Invalid EXIF data
+			return;
+		}
+
+		// Parse EXIF data
+		exif_info_t *exif = malloc(sizeof(exif_info_t));
+		if (exif != NULL) {
+			exif_info_init(exif);
+			// Call parse_exif_from_tiff with raw TIFF data
+			if (parse_exif_from_tiff(exif, tiff_data, tiff_size) == 0) {
+				*exif_out = exif;
+			} else {
+				// Parse failed
+				free(exif);
+			}
+		}
+	}
+
+	// Find xml box (XMP) in JXL file
+	const uint8_t *xmp_data = NULL;
+	size_t xmp_size = 0;
+	if (jxl_find_box(data, len, "xml ", &xmp_data, &xmp_size) == 0) {
+		// Parse XMP data
+		xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+		if (xmp != NULL) {
+			xmp_info_init(xmp);
+			// Call parse_xmp_from_xml with XML data
+			if (parse_xmp_from_xml(xmp, (const char *)xmp_data, xmp_size) == 0) {
+				*xmp_out = xmp;
+			} else {
+				// Parse failed
+				xmp_info_free(xmp);
+				free(xmp);
+			}
+		}
+	}
+}
+#endif
+
 image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
@@ -494,9 +625,38 @@ image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count)
 	}
 
 	// Route to appropriate decoder
+	image_t **frames = NULL;
 	if (num_frames == 1) {
-		return decode_jxl_static(data, len, frame_count);
+		frames = decode_jxl_static(data, len, frame_count);
 	} else {
-		return decode_jxl_animated(data, len, frame_count, num_frames);
+		frames = decode_jxl_animated(data, len, frame_count, num_frames);
 	}
+
+	// Extract EXIF/XMP metadata if decoding succeeded
+#ifdef HAVE_EXIF_READER
+	if (frames != NULL && *frame_count > 0) {
+		exif_info_t *exif = NULL;
+		xmp_info_t *xmp = NULL;
+
+		// Extract metadata from JXL boxes
+		jxl_extract_metadata(data, len, &exif, &xmp);
+
+		// Attach metadata to the first frame (metadata applies to entire image)
+		if (frames[0] != NULL) {
+			frames[0]->exif = exif;
+			frames[0]->xmp = xmp;
+		} else {
+			// Cleanup metadata if frame is NULL
+			if (exif != NULL) {
+				free(exif);
+			}
+			if (xmp != NULL) {
+				xmp_info_free(xmp);
+				free(xmp);
+			}
+		}
+	}
+#endif
+
+	return frames;
 }
