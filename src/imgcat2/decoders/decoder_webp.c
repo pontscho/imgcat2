@@ -69,8 +69,31 @@ static exif_info_t *extract_webp_exif(const uint8_t *data, size_t len)
 
 			exif_info_init(exif);
 
+			/* Handle WebP EXIF chunk format:
+			 * Some encoders prepend "Exif\0\0" (6 bytes) before TIFF data,
+			 * following JPEG convention. We need to skip this prefix to find
+			 * the actual TIFF data starting with "II" or "MM" magic.
+			 */
+			const uint8_t *tiff_data = chunk_iter.chunk.bytes;
+			size_t tiff_size = chunk_iter.chunk.size;
+
+			/* Check if chunk starts with "Exif\0\0" prefix */
+			if (tiff_size >= 6 && memcmp(tiff_data, "Exif\0\0", 6) == 0) {
+				/* Skip "Exif\0\0" prefix (6 bytes) */
+				tiff_data += 6;
+				tiff_size -= 6;
+			}
+
+			/* Verify we have enough data for TIFF header (minimum 8 bytes) */
+			if (tiff_size < 8) {
+				free(exif);
+				WebPDemuxReleaseChunkIterator(&chunk_iter);
+				WebPDemuxDelete(demux);
+				return NULL;
+			}
+
 			/* Parse EXIF data (raw TIFF format) */
-			if (parse_exif_from_tiff(exif, chunk_iter.chunk.bytes, chunk_iter.chunk.size) != 0) {
+			if (parse_exif_from_tiff(exif, tiff_data, tiff_size) != 0) {
 				/* Parse failed */
 				free(exif);
 				exif = NULL;
