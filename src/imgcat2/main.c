@@ -48,6 +48,7 @@ int main(int argc, char **argv)
 		/* Encoder options */
 		.convert_mode = false,
 		.output_format = FORMAT_NONE,
+		.iterm2_format = FORMAT_JPEG,
 		.output_file = NULL,
 		.jpeg_quality = 90,
 		.png_compression = 6,
@@ -128,26 +129,14 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Read %zu bytes from %s\n", buffer_size, opts.input_file ? opts.input_file : "stdin");
 	}
 
-	/* DECISION POINT: iTerm2 / Ghostty / ANSI rendering */
+	/* DECISION POINT: Kitty / ANSI rendering */
 
 	if (!opts.force_ansi && opts.terminal.is_iterm2) {
 		/* Check if format is supported by iTerm2 protocol */
-		if (iterm2_is_format_supported(buffer, buffer_size)) {
+		if (iterm2_is_format_supported(buffer, buffer_size, &opts)) {
 			if (!opts.silent) {
-				fprintf(stderr, "Using iTerm2 inline images protocol\n");
+				fprintf(stderr, "iTerm2 terminal detected, will use decode → scale → encode pipeline\n");
 			}
-
-			if (pipeline_render_iterm2(buffer, buffer_size, &opts) == 0) {
-				/* Success - skip ANSI pipeline */
-				exit_code = EXIT_SUCCESS;
-				goto cleanup;
-			}
-		}
-
-		opts.terminal.is_iterm2 = false;
-		opts.force_ansi = true;
-		if (!opts.silent) {
-			fprintf(stderr, "Format not supported by iTerm2 or rendering failed, using ANSI rendering\n");
 		}
 
 	} else if (!opts.force_ansi && opts.terminal.has_kitty) {
@@ -188,8 +177,8 @@ int main(int argc, char **argv)
 			const char *type = mime_type_name(mime);
 			const char *mime_str = get_mime_string(mime);
 			printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d", type, mime_str, frames[0]->width, frames[0]->height, frame_count);
-				output_exif_json(frames[0]->exif, false);
-				output_xmp_json(frames[0]->xmp, false);
+			output_exif_json(frames[0]->exif, false);
+			output_xmp_json(frames[0]->xmp, false);
 			printf("}\n");
 
 #else
@@ -233,15 +222,21 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* STEP 4.1: Render using Kitty graphics protocol */
-	if (opts.terminal.has_kitty && !opts.force_ansi) {
+	/* STEP 4.2: Render using Kitty or iTerm2 graphics protocol */
+	if (opts.terminal.is_iterm2 && !opts.force_ansi) {
+		if (iterm2_render(scaled_frames, frame_count, &opts, buffer_size) == 0) {
+			exit_code = EXIT_SUCCESS;
+			goto cleanup;
+		}
+
+	} else if (opts.terminal.has_kitty && !opts.force_ansi) {
 		if (kitty_render(scaled_frames, frame_count, &opts) == 0) {
 			exit_code = EXIT_SUCCESS;
 			goto cleanup;
 		}
 	}
 
-	/* STEP 4.2: Render to terminal */
+	/* STEP 4.3: Render to terminal */
 	if (pipeline_render(scaled_frames, frame_count, &opts) < 0) {
 		fprintf(stderr, "Error: Failed to render output\n");
 		goto cleanup;

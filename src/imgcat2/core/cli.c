@@ -59,6 +59,9 @@ void print_usage(const char *program_name)
 	printf("  -p, --png <level>         Convert to PNG format (0-9, default: 6)\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
+	printf("      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)\n");
+	printf("                            png: lossless, transparency support\n");
+	printf("                            jpeg: smaller files, no transparency\n");
 	printf("\n");
 	printf("Arguments:\n");
 	printf("  FILE                      Input image file (omit or '-' for stdin)\n");
@@ -157,14 +160,15 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "png",           required_argument, 0, 'p' },
 		{ "output",        required_argument, 0, 'o' },
 		{ "frame",         required_argument, 0, 'n' },
-		{ 0,		       0,		         0, 0   },
+		{ "iterm2-format", required_argument, 0, 't' },
+		{ 0,		       0,		          0, 0   },
 	};
 
 	/* Parse options */
 	int opt;
 	int option_index = 0;
 
-	while ((opt = getopt_long(argc, argv, "hb:i:frvaF:w:H:AIJELj:p:o:n:", long_options, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hb:i:frvaFt:w:H:AIJELj:p:o:n:", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;
@@ -205,6 +209,21 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			case 'o': opts->output_file = optarg; break;
 
 			case 'n': opts->frame_index = atoi(optarg); break;
+
+			case 't':
+				/* Long-only option */
+				if (strcmp(long_options[option_index].name, "iterm2-format") == 0) {
+					/* Parse iterm2-format argument */
+					if (strcasecmp(optarg, "png") == 0) {
+						opts->iterm2_format = FORMAT_PNG;
+					} else if (strcasecmp(optarg, "jpeg") == 0) {
+						opts->iterm2_format = FORMAT_JPEG;
+					} else {
+						fprintf(stderr, "Error: Invalid iterm2-format '%s' (must be 'png' or 'jpeg')\n", optarg);
+						return -1;
+					}
+				}
+				break;
 
 			case '?':
 				/* getopt_long already printed error message */

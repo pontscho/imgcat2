@@ -527,7 +527,8 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 			fprintf(stderr, "(final: %ux%u)\n", target.width, target.height);
 		}
 
-	} else if (opts->terminal.has_kitty && !opts->force_ansi) {
+	} else if ((opts->terminal.has_kitty || opts->terminal.is_iterm2) && !opts->force_ansi) {
+		/* Kitty and iTerm2: use terminal pixel dimensions for scaling */
 		uint32_t img_height = frames[0]->height;
 		uint32_t half_terminal_height = opts->terminal.height / 2;
 		float aspect = (float)frames[0]->width / (float)frames[0]->height;
@@ -553,6 +554,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 			if (calc_height > opts->terminal.height) {
 				target.height = opts->terminal.height;
 				target.width = (uint32_t)roundf((float)target.height * aspect);
+
 			} else {
 				target.width = max_width;
 				target.height = calc_height;
@@ -775,24 +777,4 @@ int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts
 	}
 
 	return render_static_frame(frames[0]);
-}
-
-/**
- * @brief Render using iTerm2 inline images protocol
- */
-int pipeline_render_iterm2(const uint8_t *buffer, size_t buffer_size, const cli_options_t *opts)
-{
-	/* Validate inputs */
-	if (buffer == NULL || buffer_size == 0 || opts == NULL) {
-		fprintf(stderr, "pipeline_render_iterm2: invalid parameters\n");
-		return -1;
-	}
-
-	/* Extract sizing parameters from CLI options */
-	int target_width = opts->target_width;
-	int target_height = opts->target_height;
-
-	/* Render using iTerm2 protocol with sizing parameters */
-	/* Note: iTerm2 uses original image size by default unless dimensions specified */
-	return iterm2_render(buffer, buffer_size, opts, target_width, target_height);
 }

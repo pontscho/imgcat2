@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <libraw/libraw.h>
 /* clang-format on */
 
@@ -23,6 +24,186 @@
 
 // Forward declaration for JPEG decoder (used for thumbnail extraction)
 extern image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count);
+
+#ifdef HAVE_EXIF_READER
+/**
+ * @brief Check if string has meaningful content (not just whitespace)
+ */
+static bool has_content(const char *str)
+{
+	if (!str || str[0] == '\0') {
+		return false;
+	}
+	for (const char *p = str; *p; p++) {
+		if (*p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * @brief Extract EXIF metadata from LibRaw structure
+ *
+ * Extracts all available EXIF metadata from a parsed LibRaw structure
+ * into an exif_info_t. Used by both thumbnail and full processing paths.
+ *
+ * @param raw LibRaw data structure (after open_buffer)
+ * @return Allocated exif_info_t with metadata, or NULL on failure
+ */
+static exif_info_t *extract_raw_exif(libraw_data_t *raw)
+{
+	exif_info_t *exif = malloc(sizeof(exif_info_t));
+	if (!exif) {
+		return NULL;
+	}
+	exif_info_init(exif);
+
+	// Camera make/model
+	if (raw->idata.make[0] != '\0') {
+		strncpy(exif->make, raw->idata.make, sizeof(exif->make) - 1);
+		exif->make[sizeof(exif->make) - 1] = '\0';
+	}
+	if (raw->idata.model[0] != '\0') {
+		strncpy(exif->model, raw->idata.model, sizeof(exif->model) - 1);
+		exif->model[sizeof(exif->model) - 1] = '\0';
+	}
+
+	// Software
+	if (raw->idata.software[0] != '\0') {
+		strncpy(exif->software, raw->idata.software, sizeof(exif->software) - 1);
+		exif->software[sizeof(exif->software) - 1] = '\0';
+	}
+
+	// Timestamp -> date_time string (EXIF format: "YYYY:MM:DD HH:MM:SS")
+	if (raw->other.timestamp > 0) {
+		struct tm tm_info;
+		if (localtime_r(&raw->other.timestamp, &tm_info)) {
+			strftime(exif->date_time, sizeof(exif->date_time), "%Y:%m:%d %H:%M:%S", &tm_info);
+			exif->has_datetime = true;
+		}
+	}
+
+	// ISO speed
+	if (raw->other.iso_speed > 0) {
+		exif->iso_speed = (uint16_t)raw->other.iso_speed;
+		exif->has_iso = true;
+	}
+
+	// Exposure time (shutter speed)
+	if (raw->other.shutter > 0) {
+		exif->exposure_time = raw->other.shutter;
+		exif->has_exposure_time = true;
+	}
+
+	// Aperture (f-number)
+	if (raw->other.aperture > 0) {
+		exif->f_number = raw->other.aperture;
+		exif->has_f_number = true;
+	}
+
+	// Focal length
+	if (raw->other.focal_len > 0) {
+		exif->focal_length = raw->other.focal_len;
+		exif->has_focal_length = true;
+	}
+
+	// Image orientation from flip field
+	// LibRaw flip: 0=none, 3=180, 5=90CCW, 6=90CW
+	// EXIF orientation: 1=normal, 3=180, 6=90CW, 8=90CCW
+	switch (raw->sizes.flip) {
+		case 0: exif->orientation = 1; break; // Normal
+		case 3: exif->orientation = 3; break; // 180 degrees
+		case 5: exif->orientation = 8; break; // 90 CCW (270 CW)
+		case 6: exif->orientation = 6; break; // 90 CW
+		default: exif->orientation = 1; break;
+	}
+
+	// Image dimensions (raw sensor size)
+	exif->image_width = raw->sizes.width;
+	exif->image_height = raw->sizes.height;
+
+	// Lens information
+	if (raw->lens.Lens[0] != '\0') {
+		strncpy(exif->lens_model, raw->lens.Lens, sizeof(exif->lens_model) - 1);
+		exif->lens_model[sizeof(exif->lens_model) - 1] = '\0';
+	}
+	if (raw->lens.LensMake[0] != '\0') {
+		strncpy(exif->lens_make, raw->lens.LensMake, sizeof(exif->lens_make) - 1);
+		exif->lens_make[sizeof(exif->lens_make) - 1] = '\0';
+	}
+	if (raw->lens.MinFocal > 0) {
+		exif->min_focal_length = raw->lens.MinFocal;
+	}
+	if (raw->lens.MaxFocal > 0) {
+		exif->max_focal_length = raw->lens.MaxFocal;
+	}
+	if (raw->lens.MaxAp4MinFocal > 0) {
+		exif->max_aperture = raw->lens.MaxAp4MinFocal;
+	}
+	if (raw->lens.FocalLengthIn35mmFormat > 0) {
+		exif->focal_length_35mm = raw->lens.FocalLengthIn35mmFormat;
+	}
+
+	// Image description and artist (skip whitespace-only strings)
+	if (has_content(raw->other.desc)) {
+		strncpy(exif->description, raw->other.desc, sizeof(exif->description) - 1);
+		exif->description[sizeof(exif->description) - 1] = '\0';
+	}
+	if (has_content(raw->other.artist)) {
+		strncpy(exif->artist, raw->other.artist, sizeof(exif->artist) - 1);
+		exif->artist[sizeof(exif->artist) - 1] = '\0';
+	}
+
+	// GPS coordinates
+	if (raw->other.parsed_gps.gpsparsed) {
+		exif->has_gps = true;
+		// Convert DMS to decimal degrees
+		double lat = raw->other.parsed_gps.latitude[0] + raw->other.parsed_gps.latitude[1] / 60.0 + raw->other.parsed_gps.latitude[2] / 3600.0;
+		double lon = raw->other.parsed_gps.longitude[0] + raw->other.parsed_gps.longitude[1] / 60.0 + raw->other.parsed_gps.longitude[2] / 3600.0;
+
+		// Apply reference direction
+		exif->gps_latitude = (raw->other.parsed_gps.latref == 'S') ? -lat : lat;
+		exif->gps_longitude = (raw->other.parsed_gps.longref == 'W') ? -lon : lon;
+		exif->gps_altitude = raw->other.parsed_gps.altitude;
+		exif->gps_latitude_ref = raw->other.parsed_gps.latref;
+		exif->gps_longitude_ref = raw->other.parsed_gps.longref;
+		exif->gps_altitude_ref = (char)raw->other.parsed_gps.altref;
+	}
+
+	return exif;
+}
+
+/**
+ * @brief Extract XMP metadata from LibRaw structure
+ *
+ * Parses embedded XMP data from the RAW file if available.
+ *
+ * @param raw LibRaw data structure (after open_buffer)
+ * @return Allocated xmp_info_t with metadata, or NULL if no XMP or failure
+ */
+static xmp_info_t *extract_raw_xmp(libraw_data_t *raw)
+{
+	// Check if XMP data is available
+	if (!raw->idata.xmpdata || raw->idata.xmplen == 0) {
+		return NULL;
+	}
+
+	xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+	if (!xmp) {
+		return NULL;
+	}
+	xmp_info_init(xmp);
+
+	// Parse XMP from raw XML data
+	if (parse_xmp_from_xml(xmp, raw->idata.xmpdata, raw->idata.xmplen) != 0) {
+		free(xmp);
+		return NULL;
+	}
+
+	return xmp;
+}
+#endif
 
 /**
  * @brief Decode static RAW image (single frame)
@@ -109,31 +290,10 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 			}
 
 			if (output) {
-				// Add EXIF metadata
+				// Add EXIF and XMP metadata using helper functions
 #ifdef HAVE_EXIF_READER
-				exif_info_t *exif = malloc(sizeof(exif_info_t));
-				if (exif) {
-					exif_info_init(exif);
-					if (raw->idata.make[0]) {
-						strncpy(exif->make, raw->idata.make, sizeof(exif->make) - 1);
-					}
-					if (raw->idata.model[0]) {
-						strncpy(exif->model, raw->idata.model, sizeof(exif->model) - 1);
-					}
-					if (raw->other.iso_speed > 0) {
-						exif->iso_speed = (uint16_t)raw->other.iso_speed;
-					}
-					if (raw->other.shutter > 0) {
-						exif->exposure_time = raw->other.shutter;
-					}
-					if (raw->other.aperture > 0) {
-						exif->f_number = raw->other.aperture;
-					}
-					if (raw->other.focal_len > 0) {
-						exif->focal_length = raw->other.focal_len;
-					}
-					output->exif = exif;
-				}
+				output->exif = extract_raw_exif(raw);
+				output->xmp = extract_raw_xmp(raw);
 #endif
 				libraw_dcraw_clear_mem(thumb);
 				libraw_close(raw);
@@ -224,92 +384,10 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 		}
 	}
 
-	// Extract EXIF metadata from libraw structures
+	// Extract EXIF and XMP metadata using helper functions
 #ifdef HAVE_EXIF_READER
-	exif_info_t *exif = malloc(sizeof(exif_info_t));
-	if (exif) {
-		exif_info_init(exif);
-
-		// Map libraw fields to exif_info_t
-		// Camera make/model
-		if (raw->idata.make[0] != '\0') {
-			strncpy(exif->make, raw->idata.make, sizeof(exif->make) - 1);
-			exif->make[sizeof(exif->make) - 1] = '\0';
-		}
-		if (raw->idata.model[0] != '\0') {
-			strncpy(exif->model, raw->idata.model, sizeof(exif->model) - 1);
-			exif->model[sizeof(exif->model) - 1] = '\0';
-		}
-
-		// Software
-		if (raw->idata.software[0] != '\0') {
-			strncpy(exif->software, raw->idata.software, sizeof(exif->software) - 1);
-			exif->software[sizeof(exif->software) - 1] = '\0';
-		}
-
-		// ISO speed
-		if (raw->other.iso_speed > 0) {
-			exif->iso_speed = (uint16_t)raw->other.iso_speed;
-		}
-
-		// Exposure time (shutter speed)
-		if (raw->other.shutter > 0) {
-			exif->exposure_time = raw->other.shutter;
-		}
-
-		// Aperture (f-number)
-		if (raw->other.aperture > 0) {
-			exif->f_number = raw->other.aperture;
-		}
-
-		// Focal length
-		if (raw->other.focal_len > 0) {
-			exif->focal_length = raw->other.focal_len;
-		}
-
-		// Lens information
-		if (raw->lens.Lens[0] != '\0') {
-			strncpy(exif->lens_model, raw->lens.Lens, sizeof(exif->lens_model) - 1);
-			exif->lens_model[sizeof(exif->lens_model) - 1] = '\0';
-		}
-		if (raw->lens.LensMake[0] != '\0') {
-			strncpy(exif->lens_make, raw->lens.LensMake, sizeof(exif->lens_make) - 1);
-			exif->lens_make[sizeof(exif->lens_make) - 1] = '\0';
-		}
-		if (raw->lens.MinFocal > 0) {
-			exif->min_focal_length = raw->lens.MinFocal;
-		}
-		if (raw->lens.MaxFocal > 0) {
-			exif->max_focal_length = raw->lens.MaxFocal;
-		}
-		if (raw->lens.MaxAp4MinFocal > 0) {
-			exif->max_aperture = raw->lens.MaxAp4MinFocal;
-		}
-
-		// Image description and artist
-		if (raw->other.desc[0] != '\0') {
-			strncpy(exif->description, raw->other.desc, sizeof(exif->description) - 1);
-			exif->description[sizeof(exif->description) - 1] = '\0';
-		}
-		if (raw->other.artist[0] != '\0') {
-			strncpy(exif->artist, raw->other.artist, sizeof(exif->artist) - 1);
-			exif->artist[sizeof(exif->artist) - 1] = '\0';
-		}
-
-		// GPS coordinates
-		if (raw->other.parsed_gps.gpsparsed) {
-			exif->has_gps = true;
-			exif->gps_latitude = raw->other.parsed_gps.latitude[0] + raw->other.parsed_gps.latitude[1] / 60.0 + raw->other.parsed_gps.latitude[2] / 3600.0;
-			exif->gps_longitude = raw->other.parsed_gps.longitude[0] + raw->other.parsed_gps.longitude[1] / 60.0 + raw->other.parsed_gps.longitude[2] / 3600.0;
-			exif->gps_altitude = raw->other.parsed_gps.altitude;
-			exif->gps_latitude_ref = raw->other.parsed_gps.latref;
-			exif->gps_longitude_ref = raw->other.parsed_gps.longref;
-			exif->gps_altitude_ref = (char)raw->other.parsed_gps.altref;
-		}
-
-		// Store EXIF in image structure
-		output->exif = exif;
-	}
+	output->exif = extract_raw_exif(raw);
+	output->xmp = extract_raw_xmp(raw);
 #endif
 
 	// Cleanup LibRAW resources

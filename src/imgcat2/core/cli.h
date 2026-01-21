@@ -47,6 +47,7 @@ typedef struct {
 	/* Conversion/encoder options */
 	bool convert_mode; /**< true = convert to file instead of terminal rendering */
 	output_format_t output_format; /**< Target output format (FORMAT_JPEG, FORMAT_PNG) */
+	output_format_t iterm2_format; /**< Format for iTerm2 encoding: FORMAT_PNG or FORMAT_JPEG */
 	char *output_file; /**< Output file path, or NULL for stdout */
 	int jpeg_quality; /**< JPEG quality 0-100 (default: 90) */
 	int png_compression; /**< PNG compression 0-9 (default: 6) */

@@ -193,6 +193,15 @@ void output_xmp_text(const struct xmp_info_t *xmp)
 		return;
 	}
 
+	// Check if there's any XMP content before printing header
+	bool has_content =
+	    (xmp->creator[0] != '\0' || xmp->title[0] != '\0' || xmp->description[0] != '\0' || (xmp->has_keywords && xmp->keywords != NULL) || xmp->copyright[0] != '\0' || xmp->has_rating || xmp->label[0] != '\0' || xmp->create_date[0] != '\0' ||
+	     xmp->modify_date[0] != '\0' || xmp->city[0] != '\0' || xmp->country[0] != '\0' || xmp->credit[0] != '\0' || xmp->source[0] != '\0');
+
+	if (!has_content) {
+		return;
+	}
+
 	printf("\nXMP Metadata:\n");
 
 	// Dublin Core

@@ -37,11 +37,17 @@ imgcat2 supports multiple rendering modes depending on your terminal:
 
 ### Native Protocol Mode (iTerm2 / Ghostty / Kitty)
 When running in iTerm2, Ghostty, or Kitty, imgcat2 uses native image protocols for the highest quality:
-- **iTerm2**: Uses OSC 1337 inline images protocol
+- **iTerm2**: Uses OSC 1337 inline images protocol with PNG/JPEG recompression
+  - Decode → Scale → Encode pipeline for bandwidth optimization
+  - Default: JPEG encoding (smaller files, better performance)
+  - Optional: PNG encoding via `--iterm2-format png` (lossless, transparency support)
+  - Compression: PNG level 3 (speed), JPEG quality 90 (configurable via `--jpeg-quality`)
+  - Bandwidth savings displayed in non-silent mode
+  - Supports all image formats (WebP, HEIF, RAW, JXL, TIFF, etc.)
 - **Ghostty**: Uses Kitty graphics protocol
 - **Kitty**: Uses Kitty graphics protocol
 - Automatic detection based on `TERM_PROGRAM` environment variable
-- Falls back to ANSI rendering if protocol fails
+- Falls back to ANSI rendering if protocol fails or for animated images with `-a` flag
 
 ### ANSI Rendering Mode (Universal Fallback)
 For all other terminals, imgcat2 uses the **half-block rendering technique** with Unicode character `▄` (U+2584) to achieve double vertical resolution:
@@ -408,6 +414,9 @@ Options:
       --fps N               Animation FPS (1-15, default: 15)
   -a, --animate             Animate GIF frames
       --force-ansi          Force ANSI rendering (disable iTerm2 protocol)
+      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)
+                            png: lossless, transparency support
+                            jpeg: smaller files, no transparency
 
 Metadata Options:
       --info                Output image metadata instead of rendering

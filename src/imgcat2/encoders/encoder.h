@@ -123,4 +123,37 @@ const encoder_t *encoder_find_by_format(output_format_t format);
  */
 int encoder_encode(const image_t *img, output_format_t format, int quality, uint8_t **out_data, size_t *out_size);
 
+/**
+ * @brief Direct encoder function declarations
+ *
+ * These functions are implemented in encoder_jpeg.c and encoder_png.c.
+ * Available only if the corresponding library is enabled at compile-time.
+ */
+
+#ifdef HAVE_LIBJPEG
+/**
+ * @brief Encode image to JPEG format
+ *
+ * @param img Input image in RGBA8888 format
+ * @param quality JPEG quality (0-100, higher = better quality)
+ * @param out_data Output parameter for encoded data (caller must free)
+ * @param out_size Output parameter for encoded data size
+ * @return 0 on success, -1 on error
+ */
+extern int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#endif
+
+#ifdef HAVE_LIBPNG
+/**
+ * @brief Encode image to PNG format
+ *
+ * @param img Input image in RGBA8888 format
+ * @param quality PNG compression level (0-9, higher = better compression)
+ * @param out_data Output parameter for encoded data (caller must free)
+ * @param out_size Output parameter for encoded data size
+ * @return 0 on success, -1 on error
+ */
+extern int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#endif
+
 #endif /* IMGCAT2_ENCODER_H */
