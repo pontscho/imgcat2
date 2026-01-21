@@ -25,6 +25,10 @@
 #include "image.h"
 #include "pipeline.h"
 
+#ifdef HAVE_EXIF_READER
+#include "../metadata/exif_reader.h"
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #define PATH_MAX MAX_PATH
@@ -487,6 +491,27 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, ima
 		fprintf(stderr, "pipeline_decode: failed to decode image\n");
 		return -1;
 	}
+
+#ifdef HAVE_EXIF_READER
+	/* Apply EXIF orientation transformation
+	 * Skip for formats that handle orientation natively:
+	 * - TIFF: libtiff applies orientation during decode
+	 * - HEIF/AVIF: libheif applies orientation during decode
+	 */
+	if (mime != MIME_TIFF && mime != MIME_HEIF && mime != MIME_AVIF) {
+		for (int i = 0; i < *out_frame_count; i++) {
+			if (frames[i]->exif != NULL && frames[i]->exif->orientation > 1) {
+				if (!opts->silent) {
+					const char *descriptions[] = { "Normal", "Flip horizontal", "Rotate 180°", "Flip vertical", "Transpose", "Rotate 90° CW", "Transverse", "Rotate 270° CW" };
+					fprintf(stderr, "Applying EXIF orientation: %u (%s)\n", frames[i]->exif->orientation, descriptions[frames[i]->exif->orientation - 1]);
+				}
+				if (image_apply_orientation(frames[i], frames[i]->exif->orientation) < 0) {
+					fprintf(stderr, "Warning: Failed to apply orientation %u, displaying as-is\n", frames[i]->exif->orientation);
+				}
+			}
+		}
+	}
+#endif
 
 	*out_frames = frames;
 	return 0;

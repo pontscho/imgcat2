@@ -162,6 +162,22 @@ set_tests_properties(test_image_create_destroy PROPERTIES
 	TIMEOUT 10
 )
 
+# Image orientation tests
+add_executable(test_image_orientation
+	unit/main.c
+	unit/test_image_orientation.c
+)
+
+target_link_libraries(test_image_orientation
+	imgcat2_lib
+)
+
+add_test(NAME test_image_orientation COMMAND test_image_orientation)
+
+set_tests_properties(test_image_orientation PROPERTIES
+	TIMEOUT 10
+)
+
 # Encoder registry tests (task-022)
 add_executable(test_encoder
 	unit/main.c
@@ -483,6 +499,144 @@ target_link_libraries(test_tiff_exif_integration
 add_test(NAME test_tiff_exif_integration COMMAND test_tiff_exif_integration)
 
 set_tests_properties(test_tiff_exif_integration PROPERTIES
+	TIMEOUT 10
+)
+
+# Orientation integration tests
+add_executable(test_jpeg_orientation
+	integration/main.c
+	integration/test_jpeg_orientation.c
+)
+
+target_link_libraries(test_jpeg_orientation
+	imgcat2_lib
+)
+
+add_test(NAME test_jpeg_orientation COMMAND test_jpeg_orientation)
+
+set_tests_properties(test_jpeg_orientation PROPERTIES
+	TIMEOUT 10
+)
+
+add_executable(test_png_orientation
+	integration/main.c
+	integration/test_png_orientation.c
+)
+
+target_link_libraries(test_png_orientation
+	imgcat2_lib
+)
+
+add_test(NAME test_png_orientation COMMAND test_png_orientation)
+
+set_tests_properties(test_png_orientation PROPERTIES
+	TIMEOUT 10
+)
+
+# WebP orientation test
+if(ENABLE_WEBP)
+	add_executable(test_webp_orientation
+		integration/main.c
+		integration/test_webp_orientation.c
+	)
+
+	target_link_libraries(test_webp_orientation
+		imgcat2_lib
+	)
+
+	add_test(NAME test_webp_orientation COMMAND test_webp_orientation)
+
+	set_tests_properties(test_webp_orientation PROPERTIES
+		TIMEOUT 10
+	)
+endif()
+
+# HEIF orientation test
+if(ENABLE_HEIF)
+	add_executable(test_heif_orientation
+		integration/main.c
+		integration/test_heif_orientation.c
+	)
+
+	target_link_libraries(test_heif_orientation
+		imgcat2_lib
+	)
+
+	add_test(NAME test_heif_orientation COMMAND test_heif_orientation)
+
+	set_tests_properties(test_heif_orientation PROPERTIES
+		TIMEOUT 10
+	)
+endif()
+
+# AVIF orientation test
+if(ENABLE_HEIF)
+	add_executable(test_avif_orientation
+		integration/main.c
+		integration/test_avif_orientation.c
+	)
+
+	target_link_libraries(test_avif_orientation
+		imgcat2_lib
+	)
+
+	add_test(NAME test_avif_orientation COMMAND test_avif_orientation)
+
+	set_tests_properties(test_avif_orientation PROPERTIES
+		TIMEOUT 10
+	)
+endif()
+
+# JXL orientation test
+if(ENABLE_JXL)
+	add_executable(test_jxl_orientation
+		integration/main.c
+		integration/test_jxl_orientation.c
+	)
+
+	target_link_libraries(test_jxl_orientation
+		imgcat2_lib
+	)
+
+	add_test(NAME test_jxl_orientation COMMAND test_jxl_orientation)
+
+	set_tests_properties(test_jxl_orientation PROPERTIES
+		TIMEOUT 10
+	)
+endif()
+
+# RAW orientation test
+if(ENABLE_RAW)
+	add_executable(test_raw_orientation
+		integration/main.c
+		integration/test_raw_orientation.c
+	)
+
+	target_link_libraries(test_raw_orientation
+		imgcat2_lib
+		${RAW_CUSTOM_LIBS}
+	)
+
+	add_test(NAME test_raw_orientation COMMAND test_raw_orientation)
+
+	set_tests_properties(test_raw_orientation PROPERTIES
+		TIMEOUT 30
+	)
+endif()
+
+# TIFF orientation test
+add_executable(test_tiff_orientation
+	integration/main.c
+	integration/test_tiff_orientation.c
+)
+
+target_link_libraries(test_tiff_orientation
+	imgcat2_lib
+)
+
+add_test(NAME test_tiff_orientation COMMAND test_tiff_orientation)
+
+set_tests_properties(test_tiff_orientation PROPERTIES
 	TIMEOUT 10
 )
 

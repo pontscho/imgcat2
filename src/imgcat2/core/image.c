@@ -20,28 +20,18 @@
 
 bool image_calculate_size(uint32_t width, uint32_t height, size_t *out_size)
 {
+	size_t pixel_count = (size_t)width * (size_t)height;
+	size_t byte_count = pixel_count * 4;
+
 	if (out_size == NULL) {
 		return false;
-	}
-
-	/* Check individual dimension limits */
-	if (width == 0 || height == 0) {
+	} else if (width == 0 || height == 0) {
 		return false;
-	}
-	if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
+	} else if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
 		return false;
-	}
-
-	/* Check total pixel count with overflow protection */
-	size_t pixel_count = (size_t)width * (size_t)height;
-	if (pixel_count > IMAGE_MAX_PIXELS) {
+	} else if (pixel_count > IMAGE_MAX_PIXELS) {
 		return false;
-	}
-
-	/* Check byte count with overflow protection */
-	size_t byte_count = pixel_count * 4;
-	if (byte_count / 4 != pixel_count) {
-		/* Overflow occurred */
+	} else if (byte_count / 4 != pixel_count) {
 		return false;
 	}
 
@@ -254,4 +244,318 @@ image_t *convert_grayscale_to_rgba(const uint8_t *gray, uint32_t width, uint32_t
 	}
 
 	return img;
+}
+
+/**
+ * @brief Transform image by flipping horizontally
+ *
+ * Creates a new buffer with pixels flipped horizontally (mirror image).
+ * For each row, pixels are reversed: dest[y][x] = src[y][width-1-x]
+ *
+ * @param src Source pixel data (RGBA8888 format)
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @return New pixel buffer, or NULL on allocation failure
+ *
+ * @note Caller must free returned buffer with free()
+ */
+static uint8_t *transform_flip_horizontal(const uint8_t *src, uint32_t width, uint32_t height)
+{
+	if (src == NULL) {
+		fprintf(stderr, "transform_flip_horizontal: invalid source data\n");
+		return NULL;
+	}
+
+	/* Allocate new buffer for transformed pixels */
+	size_t buffer_size = (size_t)width * (size_t)height * 4;
+	uint8_t *dest = malloc(buffer_size);
+	if (dest == NULL) {
+		fprintf(stderr, "transform_flip_horizontal: failed to allocate buffer\n");
+		return NULL;
+	}
+
+	/* Flip horizontally: reverse pixel order in each row */
+	for (uint32_t y = 0; y < height; y++) {
+		for (uint32_t x = 0; x < width; x++) {
+			size_t src_offset = ((y * width) + (width - 1 - x)) * 4;
+			size_t dest_offset = ((y * width) + x) * 4;
+			memcpy(&dest[dest_offset], &src[src_offset], 4);
+		}
+	}
+
+	return dest;
+}
+
+/**
+ * @brief Transform image by flipping vertically
+ *
+ * Creates a new buffer with pixels flipped vertically (upside down).
+ * Rows are reversed: dest[y][x] = src[height-1-y][x]
+ *
+ * @param src Source pixel data (RGBA8888 format)
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @return New pixel buffer, or NULL on allocation failure
+ *
+ * @note Caller must free returned buffer with free()
+ */
+static uint8_t *transform_flip_vertical(const uint8_t *src, uint32_t width, uint32_t height)
+{
+	if (src == NULL) {
+		fprintf(stderr, "transform_flip_vertical: invalid source data\n");
+		return NULL;
+	}
+
+	/* Allocate new buffer for transformed pixels */
+	size_t buffer_size = (size_t)width * (size_t)height * 4;
+	uint8_t *dest = malloc(buffer_size);
+	if (dest == NULL) {
+		fprintf(stderr, "transform_flip_vertical: failed to allocate buffer\n");
+		return NULL;
+	}
+
+	/* Flip vertically: reverse row order */
+	for (uint32_t y = 0; y < height; y++) {
+		for (uint32_t x = 0; x < width; x++) {
+			size_t src_offset = (((height - 1 - y) * width) + x) * 4;
+			size_t dest_offset = ((y * width) + x) * 4;
+			memcpy(&dest[dest_offset], &src[src_offset], 4);
+		}
+	}
+
+	return dest;
+}
+
+/**
+ * @brief Transform image by rotating 90 degrees clockwise
+ *
+ * Creates a new buffer with image rotated 90° CW (transpose + flip horizontal).
+ * Algorithm: dest[x][height-1-y] = src[y][x]
+ * IMPORTANT: Output dimensions are swapped (width×height → height×width)
+ *
+ * @param src Source pixel data (RGBA8888 format)
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @return New pixel buffer, or NULL on allocation failure
+ *
+ * @note Caller must free returned buffer with free()
+ * @note Output buffer size is height × width × 4 (dimensions swapped)
+ */
+static uint8_t *transform_rotate_90cw(const uint8_t *src, uint32_t width, uint32_t height)
+{
+	if (src == NULL) {
+		fprintf(stderr, "transform_rotate_90cw: invalid source data\n");
+		return NULL;
+	}
+
+	/* Allocate new buffer with swapped dimensions */
+	size_t buffer_size = (size_t)height * (size_t)width * 4;
+	uint8_t *dest = malloc(buffer_size);
+	if (dest == NULL) {
+		fprintf(stderr, "transform_rotate_90cw: failed to allocate buffer\n");
+		return NULL;
+	}
+
+	/* Rotate 90° clockwise: dest[x][height-1-y] = src[y][x] */
+	for (uint32_t y = 0; y < height; y++) {
+		for (uint32_t x = 0; x < width; x++) {
+			size_t src_offset = ((y * width) + x) * 4;
+			size_t dest_offset = ((x * height) + (height - 1 - y)) * 4;
+			memcpy(&dest[dest_offset], &src[src_offset], 4);
+		}
+	}
+
+	return dest;
+}
+
+/**
+ * @brief Transform image by rotating 180 degrees
+ *
+ * Creates a new buffer with image rotated 180° (flip both horizontally and vertically).
+ * Algorithm: dest[y][x] = src[height-1-y][width-1-x]
+ *
+ * @param src Source pixel data (RGBA8888 format)
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @return New pixel buffer, or NULL on allocation failure
+ *
+ * @note Caller must free returned buffer with free()
+ */
+static uint8_t *transform_rotate_180(const uint8_t *src, uint32_t width, uint32_t height)
+{
+	if (src == NULL) {
+		fprintf(stderr, "transform_rotate_180: invalid source data\n");
+		return NULL;
+	}
+
+	/* Allocate new buffer for transformed pixels */
+	size_t buffer_size = (size_t)width * (size_t)height * 4;
+	uint8_t *dest = malloc(buffer_size);
+	if (dest == NULL) {
+		fprintf(stderr, "transform_rotate_180: failed to allocate buffer\n");
+		return NULL;
+	}
+
+	/* Rotate 180°: reverse both row and column */
+	for (uint32_t y = 0; y < height; y++) {
+		for (uint32_t x = 0; x < width; x++) {
+			size_t src_offset = (((height - 1 - y) * width) + (width - 1 - x)) * 4;
+			size_t dest_offset = ((y * width) + x) * 4;
+			memcpy(&dest[dest_offset], &src[src_offset], 4);
+		}
+	}
+
+	return dest;
+}
+
+/**
+ * @brief Transform image by rotating 270 degrees clockwise
+ *
+ * Creates a new buffer with image rotated 270° CW (transpose + flip vertical).
+ * Algorithm: dest[width-1-x][y] = src[y][x]
+ * IMPORTANT: Output dimensions are swapped (width×height → height×width)
+ *
+ * @param src Source pixel data (RGBA8888 format)
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @return New pixel buffer, or NULL on allocation failure
+ *
+ * @note Caller must free returned buffer with free()
+ * @note Output buffer size is height × width × 4 (dimensions swapped)
+ */
+static uint8_t *transform_rotate_270cw(const uint8_t *src, uint32_t width, uint32_t height)
+{
+	if (src == NULL) {
+		fprintf(stderr, "transform_rotate_270cw: invalid source data\n");
+		return NULL;
+	}
+
+	/* Allocate new buffer with swapped dimensions */
+	size_t buffer_size = (size_t)height * (size_t)width * 4;
+	uint8_t *dest = malloc(buffer_size);
+	if (dest == NULL) {
+		fprintf(stderr, "transform_rotate_270cw: failed to allocate buffer\n");
+		return NULL;
+	}
+
+	/* Rotate 270° clockwise: dest[width-1-x][y] = src[y][x] */
+	for (uint32_t y = 0; y < height; y++) {
+		for (uint32_t x = 0; x < width; x++) {
+			size_t src_offset = ((y * width) + x) * 4;
+			size_t dest_offset = (((width - 1 - x) * height) + y) * 4;
+			memcpy(&dest[dest_offset], &src[src_offset], 4);
+		}
+	}
+
+	return dest;
+}
+
+int image_apply_orientation(image_t *img, uint16_t orientation)
+{
+	/* Validate input parameters */
+	if (img == NULL) {
+		fprintf(stderr, "image_apply_orientation: NULL image pointer\n");
+		return -1;
+	}
+
+	if (img->pixels == NULL) {
+		fprintf(stderr, "image_apply_orientation: NULL pixel buffer\n");
+		return -1;
+	}
+
+	/* Validate orientation range */
+	if (orientation < 1 || orientation > 8) {
+		fprintf(stderr, "image_apply_orientation: invalid orientation %u (must be 1-8)\n", orientation);
+		return -1;
+	}
+
+	/* Orientation 1 = normal, no transformation needed */
+	if (orientation == 1) {
+		return 0;
+	}
+
+	/* Apply transformation based on orientation value */
+	uint8_t *new_pixels = NULL;
+	uint32_t new_width = img->width;
+	uint32_t new_height = img->height;
+	bool dimensions_swapped = false;
+
+	switch (orientation) {
+		case 2:
+			/* Flip horizontal */
+			new_pixels = transform_flip_horizontal(img->pixels, img->width, img->height);
+			break;
+
+		case 3:
+			/* Rotate 180° */
+			new_pixels = transform_rotate_180(img->pixels, img->width, img->height);
+			break;
+
+		case 4:
+			/* Flip vertical */
+			new_pixels = transform_flip_vertical(img->pixels, img->width, img->height);
+			break;
+
+		case 5:
+			{
+				/* Transpose = flip horizontal + rotate 270° CW */
+				uint8_t *temp = transform_flip_horizontal(img->pixels, img->width, img->height);
+				if (temp == NULL) {
+					fprintf(stderr, "image_apply_orientation: failed to flip horizontal for orientation 5\n");
+					return -1;
+				}
+				new_pixels = transform_rotate_270cw(temp, img->width, img->height);
+				free(temp);
+				dimensions_swapped = true;
+				break;
+			}
+
+		case 6:
+			/* Rotate 90° CW */
+			new_pixels = transform_rotate_90cw(img->pixels, img->width, img->height);
+			dimensions_swapped = true;
+			break;
+
+		case 7:
+			{
+				/* Transverse = flip horizontal + rotate 90° CW */
+				uint8_t *temp = transform_flip_horizontal(img->pixels, img->width, img->height);
+				if (temp == NULL) {
+					fprintf(stderr, "image_apply_orientation: failed to flip horizontal for orientation 7\n");
+					return -1;
+				}
+				new_pixels = transform_rotate_90cw(temp, img->width, img->height);
+				free(temp);
+				dimensions_swapped = true;
+				break;
+			}
+
+		case 8:
+			/* Rotate 270° CW */
+			new_pixels = transform_rotate_270cw(img->pixels, img->width, img->height);
+			dimensions_swapped = true;
+			break;
+
+		default: fprintf(stderr, "image_apply_orientation: unhandled orientation %u\n", orientation); return -1;
+	}
+
+	/* Check if transformation succeeded */
+	if (new_pixels == NULL) {
+		fprintf(stderr, "image_apply_orientation: transformation failed for orientation %u\n", orientation);
+		return -1;
+	}
+
+	/* Replace old pixel buffer with new one */
+	free(img->pixels);
+	img->pixels = new_pixels;
+
+	/* Update dimensions if swapped */
+	if (dimensions_swapped) {
+		new_width = img->height;
+		new_height = img->width;
+		img->width = new_width;
+		img->height = new_height;
+	}
+
+	return 0;
 }

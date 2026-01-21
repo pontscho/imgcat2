@@ -26,6 +26,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
 - **Animation Support** - Displays animated GIFs with smooth playback (native in iTerm2)
 - **High-Quality Scaling** - Uses advanced interpolation for photographic images
+- **Automatic EXIF Orientation** - Images from mobile devices display right-side-up based on camera orientation metadata
 - **Metadata Extraction** - Read EXIF and XMP metadata from JPEG files (camera, GPS, copyright, keywords)
 - **Pure C Implementation** - Fast, efficient, and lightweight (C11 standard)
 - **Static Linking** - Produces fully static binaries where possible
@@ -541,6 +542,30 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 ## Metadata Extraction
 
 imgcat2 can extract EXIF and XMP metadata from JPEG files, including camera settings, GPS coordinates, copyright information, and more.
+
+### Automatic Orientation Correction
+
+Images captured by digital cameras and smartphones often contain EXIF orientation metadata that indicates how the image should be rotated or flipped for proper display. imgcat2 automatically detects and applies these transformations so your images always appear right-side-up.
+
+**Supported transformations:**
+- Horizontal flip (orientation 2)
+- 180° rotation (orientation 3)
+- Vertical flip (orientation 4)
+- Transpose (orientation 5)
+- 90° clockwise rotation (orientation 6)
+- Transverse (orientation 7)
+- 270° clockwise rotation (orientation 8)
+
+**Supported formats:**
+- Automatic orientation correction works with JPEG, PNG, WebP, JPEG XL, and RAW formats
+- TIFF, HEIF, and AVIF formats handle orientation natively through their libraries (no additional processing needed)
+- Transformation is applied during decoding, before rendering or scaling
+- No user interaction required - orientation is automatically detected and applied
+
+When viewing images with orientation metadata, imgcat2 will display a message:
+```
+Applying EXIF orientation: 6 (Rotate 90° CW)
+```
 
 ### Text Output
 

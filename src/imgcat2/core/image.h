@@ -171,6 +171,32 @@ image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t tar
 image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t target_height);
 
 /**
+ * @brief Apply EXIF orientation transformation to image
+ *
+ * Transforms the image according to EXIF orientation tag (values 1-8).
+ * The image is modified in-place, with pixel buffer replaced and dimensions
+ * updated as needed. Orientation values correspond to:
+ *   1: Normal (no transformation)
+ *   2: Flip horizontal
+ *   3: Rotate 180°
+ *   4: Flip vertical
+ *   5: Transpose (flip horizontal + rotate 270° CW)
+ *   6: Rotate 90° clockwise
+ *   7: Transverse (flip horizontal + rotate 90° CW)
+ *   8: Rotate 270° clockwise
+ *
+ * @param img Image to transform (modified in-place)
+ * @param orientation EXIF orientation value (1-8)
+ * @return 0 on success, -1 on error
+ *
+ * @note Orientation value 1 returns immediately without transformation
+ * @note Dimensions are swapped for 90°/270° rotations (orientations 5,6,7,8)
+ * @note Invalid orientation values (not 1-8) return -1
+ * @note NULL img or NULL img->pixels return -1
+ */
+int image_apply_orientation(image_t *img, uint16_t orientation);
+
+/**
  * @brief Convert RGB pixel data to RGBA
  *
  * Converts RGB (3 bytes per pixel) to RGBA8888 (4 bytes per pixel) by
