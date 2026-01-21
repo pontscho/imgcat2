@@ -411,6 +411,7 @@ add_test(NAME test_png_exif_integration COMMAND test_png_exif_integration)
 
 set_tests_properties(test_png_exif_integration PROPERTIES
 	TIMEOUT 10
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
 # WebP EXIF integration tests
@@ -429,6 +430,7 @@ add_test(NAME test_webp_exif_integration COMMAND test_webp_exif_integration)
 
 set_tests_properties(test_webp_exif_integration PROPERTIES
 	TIMEOUT 10
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
 # HEIF EXIF integration tests
@@ -500,6 +502,7 @@ add_test(NAME test_tiff_exif_integration COMMAND test_tiff_exif_integration)
 
 set_tests_properties(test_tiff_exif_integration PROPERTIES
 	TIMEOUT 10
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
 # Orientation integration tests

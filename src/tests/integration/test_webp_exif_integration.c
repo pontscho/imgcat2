@@ -103,11 +103,11 @@ CTEST(webp_exif_integration, decode_with_exif)
 }
 
 /**
- * Test that WebP without EXIF doesn't crash
+ * Test that WebP decoder handles another WebP file with EXIF
  */
 CTEST(webp_exif_integration, decode_without_exif)
 {
-	/* Load a WebP without EXIF from file */
+	/* Load another WebP with EXIF from file */
 	size_t data_size = 0;
 	uint8_t *data = load_file("../src/tests/data/webp/example.webp", &data_size);
 	ASSERT_NOT_NULL(data);
@@ -126,14 +126,11 @@ CTEST(webp_exif_integration, decode_without_exif)
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 
-	/* No EXIF metadata should be present */
+	/* example.webp has EXIF metadata (Samsung Galaxy Nexus) */
 #ifdef HAVE_EXIF_READER
-	/* example.webp should not have EXIF metadata */
-	if (img->exif != NULL) {
-		/* If EXIF struct exists, it should be empty */
-		ASSERT_TRUE(strlen(img->exif->make) == 0);
-		ASSERT_TRUE(strlen(img->exif->model) == 0);
-	}
+	/* EXIF should be present and populated */
+	ASSERT_NOT_NULL(img->exif);
+	ASSERT_TRUE(strlen(img->exif->make) > 0);
 #else
 	ASSERT_NULL(img->exif);
 #endif

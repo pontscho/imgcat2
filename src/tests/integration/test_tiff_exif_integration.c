@@ -60,7 +60,7 @@ static uint8_t *read_file(const char *path, size_t *len)
 CTEST(tiff_exif_integration, decode_with_exif)
 {
 	size_t len = 0;
-	uint8_t *data = read_file("src/tests/data/tiff/Rudless.tiff", &len);
+	uint8_t *data = read_file("../src/tests/data/tiff/Rudless.tiff", &len);
 
 	ASSERT_NOT_NULL(data);
 	ASSERT_TRUE(len > 0);
@@ -103,7 +103,7 @@ CTEST(tiff_exif_integration, decode_with_exif)
 CTEST(tiff_exif_integration, decode_another_tiff)
 {
 	size_t len = 0;
-	uint8_t *data = read_file("src/tests/data/tiff/BSG1.tiff", &len);
+	uint8_t *data = read_file("../src/tests/data/tiff/BSG1.tiff", &len);
 
 	ASSERT_NOT_NULL(data);
 	ASSERT_TRUE(len > 0);
