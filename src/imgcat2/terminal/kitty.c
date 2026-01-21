@@ -102,29 +102,68 @@ int kitty_render(image_t **frames, int frame_count, const cli_options_t *opts)
 		return -1;
 	}
 
-	/* Start escape sequence */
-	if (opts->terminal.is_tmux) {
-		printf("\033Ptmux;\033\033_G");
+	/* Use chunked transmission in tmux to avoid DCS size limits (~1MB) */
+	if (opts->terminal.is_tmux && encoded_size > 4096) {
+		/* Chunked transmission: split into 4KB chunks */
+		const size_t chunk_size = 4096;
+		size_t offset = 0;
+		int chunk_num = 0;
+
+		while (offset < encoded_size) {
+			size_t remaining = encoded_size - offset;
+			size_t current_chunk = (remaining > chunk_size) ? chunk_size : remaining;
+			int more_chunks = (offset + current_chunk < encoded_size) ? 1 : 0;
+
+			/* Start escape sequence */
+			printf("\033Ptmux;\033\033_G");
+
+			/* First chunk: include metadata */
+			if (chunk_num == 0) {
+				printf("a=T,f=32,t=d,s=%u,v=%u,m=%d", img->width, img->height, more_chunks);
+			} else {
+				/* Subsequent chunks: only m flag */
+				printf("m=%d", more_chunks);
+			}
+
+			/* Add chunk data */
+			printf(";%.*s", (int)current_chunk, encoded + offset);
+
+			/* Terminate escape sequence */
+			printf("\033\\\033\\");
+			printf("\n");
+
+			offset += current_chunk;
+			chunk_num++;
+		}
+
+		fflush(stdout);
+
 	} else {
-		printf("\033_G");
+		/* Direct transmission (non-tmux or small images) */
+		/* Start escape sequence */
+		if (opts->terminal.is_tmux) {
+			printf("\033Ptmux;\033\033_G");
+		} else {
+			printf("\033_G");
+		}
+
+		/* a=T: transmit and display, f=32: RGBA format, t=d: direct transmission */
+		/* s=width, v=height: pixel dimensions (required for f=32) */
+		printf("a=T,f=32,t=d,s=%u,v=%u", img->width, img->height);
+
+		/* Add base64 RGBA data */
+		printf(";%s", encoded);
+
+		/* Terminate escape sequence */
+		if (opts->terminal.is_tmux) {
+			printf("\033\\\033\\");
+		} else {
+			printf("\033\\");
+		}
+
+		printf("\n");
+		fflush(stdout);
 	}
-
-	/* a=T: transmit and display, f=32: RGBA format, t=d: direct transmission */
-	/* s=width, v=height: pixel dimensions (required for f=32) */
-	printf("a=T,f=32,t=d,s=%u,v=%u", img->width, img->height);
-
-	/* Add base64 RGBA data */
-	printf(";%s", encoded);
-
-	/* Terminate escape sequence */
-	if (opts->terminal.is_tmux) {
-		printf("\033\\\033\\");
-	} else {
-		printf("\033\\");
-	}
-
-	printf("\n");
-	fflush(stdout);
 
 	/* Cleanup */
 	free(encoded);

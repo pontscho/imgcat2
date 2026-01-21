@@ -12,6 +12,7 @@
 #include <sys/ioctl.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,10 +34,31 @@ int terminal_get_size(int *rows, int *cols)
 	*rows = DEFAULT_TERM_ROWS;
 	*cols = DEFAULT_TERM_COLS;
 
-	/* Get terminal size with ioctl */
+	/* Get terminal size with ioctl - try multiple file descriptors for tmux compatibility */
 	struct winsize ws;
-	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
-		/* ioctl failed, use defaults */
+	int fd = -1;
+
+	/* Try STDOUT first (works in most cases) */
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1) {
+		fd = STDOUT_FILENO;
+	}
+	/* Try STDERR (works when stdout is redirected) */
+	else if (ioctl(STDERR_FILENO, TIOCGWINSZ, &ws) != -1) {
+		fd = STDERR_FILENO;
+	}
+	/* Try /dev/tty directly (works in tmux and screen) */
+	else {
+		int tty_fd = open("/dev/tty", O_RDONLY);
+		if (tty_fd != -1 && ioctl(tty_fd, TIOCGWINSZ, &ws) != -1) {
+			fd = tty_fd;
+		}
+		if (tty_fd != -1) {
+			close(tty_fd);
+		}
+	}
+
+	if (fd == -1) {
+		/* All ioctl attempts failed, use defaults */
 		fprintf(stderr, "Warning: Failed to get terminal size: %s (using defaults %dx%d)\n", strerror(errno), DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
 		return -1;
 	}
@@ -58,10 +80,31 @@ int terminal_get_size(int *rows, int *cols)
  */
 int terminal_get_pixels(int *width, int *height)
 {
-	/* Get terminal size with ioctl */
+	/* Get terminal size with ioctl - try multiple file descriptors for tmux compatibility */
 	struct winsize ws;
-	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
-		/* ioctl failed, use defaults */
+	int fd = -1;
+
+	/* Try STDOUT first (works in most cases) */
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1) {
+		fd = STDOUT_FILENO;
+	}
+	/* Try STDERR (works when stdout is redirected) */
+	else if (ioctl(STDERR_FILENO, TIOCGWINSZ, &ws) != -1) {
+		fd = STDERR_FILENO;
+	}
+	/* Try /dev/tty directly (works in tmux and screen) */
+	else {
+		int tty_fd = open("/dev/tty", O_RDONLY);
+		if (tty_fd != -1 && ioctl(tty_fd, TIOCGWINSZ, &ws) != -1) {
+			fd = tty_fd;
+		}
+		if (tty_fd != -1) {
+			close(tty_fd);
+		}
+	}
+
+	if (fd == -1) {
+		/* All ioctl attempts failed */
 		fprintf(stderr, "Warning: Failed to get terminal size: %s (using defaults %dx%d)\n", strerror(errno), DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
 		return -1;
 	}
@@ -72,7 +115,7 @@ int terminal_get_pixels(int *width, int *height)
 		return -1;
 	}
 
-	/* Success */
+	/* Success - return pixel dimensions */
 	*width = ws.ws_xpixel;
 	*height = ws.ws_ypixel;
 	return 0;
@@ -200,9 +243,14 @@ bool terminal_is_iterm2(void)
  */
 bool terminal_is_ghostty(void)
 {
-	/* Detection: TERM_PROGRAM environment variable */
+	/* Primary detection: TERM_PROGRAM environment variable */
 	const char *term_program = getenv("TERM_PROGRAM");
 	if (term_program != NULL && strcmp(term_program, "ghostty") == 0) {
+		return true;
+	}
+
+	/* Fallback detection for tmux: Ghostty-specific environment variables */
+	if (getenv("GHOSTTY_BIN_DIR") != NULL || getenv("GHOSTTY_RESOURCES_DIR") != NULL) {
 		return true;
 	}
 
