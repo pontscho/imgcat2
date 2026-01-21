@@ -145,13 +145,15 @@ int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	*out_size = 0;
 
 	/* Clamp compression to valid range [0, 9] */
-	if (quality < 0) {
-		// fprintf(stderr, "Warning: PNG compression %d < 0, clamping to 0\n", quality);
-		quality = 0;
+	/* Use volatile to prevent clobbering by longjmp */
+	volatile int png_compression = quality;
+	if (png_compression < 0) {
+		// fprintf(stderr, "Warning: PNG compression %d < 0, clamping to 0\n", png_compression);
+		png_compression = 0;
 	}
-	if (quality > 9) {
-		// fprintf(stderr, "Warning: PNG compression %d > 9, clamping to 9\n", quality);
-		quality = 9;
+	if (png_compression > 9) {
+		// fprintf(stderr, "Warning: PNG compression %d > 9, clamping to 9\n", png_compression);
+		png_compression = 9;
 	}
 
 	/* Initialize memory write state */
@@ -190,7 +192,7 @@ int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	png_set_write_fn(png_ptr, &write_state, png_memory_write_func, png_memory_flush_func);
 
 	/* Set compression level */
-	png_set_compression_level(png_ptr, quality);
+	png_set_compression_level(png_ptr, png_compression);
 
 	/* Set IHDR (image header) */
 	png_set_IHDR(

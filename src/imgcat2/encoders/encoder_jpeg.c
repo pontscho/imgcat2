@@ -75,13 +75,15 @@ int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	*out_size = 0;
 
 	/* Clamp quality to valid range [0, 100] */
-	if (quality < 0) {
-		// fprintf(stderr, "Warning: JPEG quality %d < 0, clamping to 0\n", quality);
-		quality = 0;
+	/* Use volatile to prevent clobbering by longjmp */
+	volatile int jpeg_quality = quality;
+	if (jpeg_quality < 0) {
+		// fprintf(stderr, "Warning: JPEG quality %d < 0, clamping to 0\n", jpeg_quality);
+		jpeg_quality = 0;
 	}
-	if (quality > 100) {
-		// fprintf(stderr, "Warning: JPEG quality %d > 100, clamping to 100\n", quality);
-		quality = 100;
+	if (jpeg_quality > 100) {
+		// fprintf(stderr, "Warning: JPEG quality %d > 100, clamping to 100\n", jpeg_quality);
+		jpeg_quality = 100;
 	}
 
 	/* Create JPEG compressor */
@@ -121,7 +123,7 @@ int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	jpeg_set_defaults(&cinfo);
 
 	/* Set quality */
-	jpeg_set_quality(&cinfo, quality, TRUE);
+	jpeg_set_quality(&cinfo, jpeg_quality, TRUE);
 
 	/* Start compression */
 	jpeg_start_compress(&cinfo, TRUE);

@@ -82,7 +82,7 @@ void print_usage(const char *program_name)
 void print_version(void)
 {
 	printf("imgcat2 version %s\n", VERSION_STRING);
-	printf("Terminal image viewer with ANSI true color support\n");
+	printf("Modern terminal image viewer with true color support\n");
 	printf("\n");
 	printf("Build information:\n");
 	printf("  Platform: ");
@@ -161,7 +161,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "output",        required_argument, 0, 'o' },
 		{ "frame",         required_argument, 0, 'n' },
 		{ "iterm2-format", required_argument, 0, 't' },
-		{ 0,		       0,		          0, 0   },
+		{ 0,		       0,		         0, 0   },
 	};
 
 	/* Parse options */
