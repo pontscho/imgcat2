@@ -20,6 +20,9 @@ typedef enum {
 	FORMAT_NONE = 0, /**< No format selected */
 	FORMAT_JPEG, /**< JPEG format */
 	FORMAT_PNG, /**< PNG format */
+	FORMAT_HEIF, /**< HEIF format */
+	FORMAT_WEBP, /**< WebP format */
+	FORMAT_JXL, /**< JXL format */
 } output_format_t;
 
 /**
@@ -51,6 +54,9 @@ typedef struct {
 	char *output_file; /**< Output file path, or NULL for stdout */
 	int jpeg_quality; /**< JPEG quality 0-100 (default: 90) */
 	int png_compression; /**< PNG compression 0-9 (default: 6) */
+	int heif_quality; /**< HEIF quality 0-100 (default: 80) */
+	int webp_quality; /**< WebP quality 0-100 (default: 80) */
+	int jxl_quality; /**< JXL quality 0-100 (default: 80) */
 	int frame_index; /**< Frame to convert for animated images (default: 0) */
 
 	/* internal options */

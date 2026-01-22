@@ -52,6 +52,9 @@ int main(int argc, char **argv)
 		.output_file = NULL,
 		.jpeg_quality = 90,
 		.png_compression = 6,
+		.heif_quality = 80,
+		.webp_quality = 80,
+		.jxl_quality = 80,
 		.frame_index = 0,
 
 		.terminal = {

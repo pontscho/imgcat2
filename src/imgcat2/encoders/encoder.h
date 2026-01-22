@@ -3,8 +3,8 @@
  * @brief Image encoder architecture and registry system
  *
  * Provides a unified encoder API with plugin-style architecture for
- * multiple image output formats. Supports JPEG and PNG encoding with
- * quality/compression control.
+ * multiple image output formats. Supports JPEG, PNG, HEIF, WebP, and JXL
+ * encoding with quality/compression control.
  */
 
 #ifndef IMGCAT2_ENCODER_H
@@ -23,7 +23,7 @@
  * @brief Encoder function pointer type
  *
  * @param img Input image in RGBA8888 format
- * @param quality Quality/compression parameter (format-specific: JPEG 0-100, PNG 0-9)
+ * @param quality Quality/compression parameter (format-specific)
  * @param out_data Output parameter for encoded data (caller must free)
  * @param out_size Output parameter for encoded data size in bytes
  * @return 0 on success, -1 on error
@@ -31,6 +31,9 @@
  * @note Caller must free *out_data with free() when done
  * @note For JPEG: quality 0-100 (higher = better quality, larger file)
  * @note For PNG: quality 0-9 (higher = better compression, smaller file, slower)
+ * @note For HEIF: quality 0-100 (higher = better quality, larger file)
+ * @note For WebP: quality 0-100 (100 = lossless, 0-99 = lossy)
+ * @note For JXL: quality 0-100 (>=95 = lossless, 0-94 = lossy)
  */
 typedef int (*encode_func_t)(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 
@@ -51,7 +54,7 @@ typedef struct {
  * @brief Global encoder registry
  *
  * Array of all registered encoders. Populated at compile-time based on
- * enabled libraries (HAVE_LIBJPEG, HAVE_LIBPNG).
+ * enabled libraries (HAVE_LIBJPEG, HAVE_LIBPNG, HAVE_HEIF, HAVE_WEBP, HAVE_JXL).
  */
 extern const encoder_t *g_encoder_registry;
 
@@ -64,7 +67,7 @@ extern size_t g_encoder_count;
  * @brief Initialize encoder registry
  *
  * Populates the global encoder registry with enabled encoders based on
- * compile-time flags (HAVE_LIBJPEG, HAVE_LIBPNG).
+ * compile-time flags (HAVE_LIBJPEG, HAVE_LIBPNG, HAVE_HEIF, HAVE_WEBP, HAVE_JXL).
  *
  * Must be called once at program startup before any encoding operations.
  *
@@ -103,8 +106,8 @@ const encoder_t *encoder_find_by_format(output_format_t format);
  * 5. Returns encoded data buffer
  *
  * @param img Input image in RGBA8888 format
- * @param format Output format (FORMAT_JPEG or FORMAT_PNG)
- * @param quality Quality/compression parameter (JPEG: 0-100, PNG: 0-9)
+ * @param format Output format (FORMAT_JPEG, FORMAT_PNG, FORMAT_HEIF, FORMAT_WEBP, FORMAT_JXL)
+ * @param quality Quality/compression parameter (format-specific, see encode_func_t)
  * @param out_data Output parameter for encoded data (caller must free)
  * @param out_size Output parameter for encoded data size in bytes
  * @return 0 on success, -1 on error
@@ -126,8 +129,9 @@ int encoder_encode(const image_t *img, output_format_t format, int quality, uint
 /**
  * @brief Direct encoder function declarations
  *
- * These functions are implemented in encoder_jpeg.c and encoder_png.c.
- * Available only if the corresponding library is enabled at compile-time.
+ * These functions are implemented in encoder_jpeg.c, encoder_png.c, encoder_heif.c,
+ * encoder_webp.c, and encoder_jxl.c. Available only if the corresponding library
+ * is enabled at compile-time.
  */
 
 #ifdef HAVE_LIBJPEG
@@ -154,6 +158,45 @@ extern int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size
  * @return 0 on success, -1 on error
  */
 extern int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#endif
+
+#ifdef HAVE_WEBP
+/**
+ * @brief Encode image to WebP format
+ *
+ * @param img Input image in RGBA8888 format
+ * @param quality WebP quality (0-100, higher = better quality, 100 = lossless)
+ * @param out_data Output parameter for encoded data (caller must free)
+ * @param out_size Output parameter for encoded data size
+ * @return 0 on success, -1 on error
+ */
+extern int encode_webp(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#endif
+
+#ifdef HAVE_HEIF
+/**
+ * @brief Encode image to HEIF format
+ *
+ * @param img Input image in RGBA8888 format
+ * @param quality HEIF quality (0-100, higher = better quality)
+ * @param out_data Output parameter for encoded data (caller must free)
+ * @param out_size Output parameter for encoded data size
+ * @return 0 on success, -1 on error
+ */
+extern int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#endif
+
+#ifdef HAVE_JXL
+/**
+ * @brief Encode image to JXL format
+ *
+ * @param img Input image in RGBA8888 format
+ * @param quality JXL quality (0-100, higher = better quality, >=95 = lossless)
+ * @param out_data Output parameter for encoded data (caller must free)
+ * @param out_size Output parameter for encoded data size
+ * @return 0 on success, -1 on error
+ */
+extern int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 #endif
 
 #endif /* IMGCAT2_ENCODER_H */

@@ -57,6 +57,9 @@ void print_usage(const char *program_name)
 	printf("Conversion Options:\n");
 	printf("  -j, --jpeg <quality>      Convert to JPEG format (0-100, default: 90)\n");
 	printf("  -p, --png <level>         Convert to PNG format (0-9, default: 6)\n");
+	printf("      --heif <quality>      Convert to HEIF (quality: 0-100, default: 80)\n");
+	printf("      --webp <quality>      Convert to WebP (quality: 0-100, default: 80, 100=lossless)\n");
+	printf("      --jxl <quality>       Convert to JXL (quality: 0-100, default: 80, >=95=lossless)\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
 	printf("      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)\n");
@@ -141,27 +144,30 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 
 	/* Long options definition */
 	static struct option long_options[] = {
-		{ "help",          no_argument,       0, 'h' },
-		{ "version",       no_argument,       0, 'b' },
-		{ "interpolation", required_argument, 0, 'i' },
-		{ "fit",           no_argument,       0, 'f' },
-		{ "resize",        no_argument,       0, 'r' },
-		{ "verbose",       no_argument,       0, 'v' },
-		{ "fps",           required_argument, 0, 'F' },
-		{ "animate",       no_argument,       0, 'a' },
-		{ "width",         required_argument, 0, 'w' },
-		{ "height",        required_argument, 0, 'H' },
-		{ "force-ansi",    no_argument,       0, 'A' },
-		{ "info",          no_argument,       0, 'I' },
-		{ "json",          no_argument,       0, 'J' },
-		{ "exif-detailed", no_argument,       0, 'E' },
-		{ "fonts",         no_argument,       0, 'L' },
-		{ "jpeg",          required_argument, 0, 'j' },
-		{ "png",           required_argument, 0, 'p' },
-		{ "output",        required_argument, 0, 'o' },
-		{ "frame",         required_argument, 0, 'n' },
-		{ "iterm2-format", required_argument, 0, 't' },
-		{ 0,		       0,		         0, 0   },
+		{ "help",          no_argument,       0, 'h'  },
+		{ "version",       no_argument,       0, 'b'  },
+		{ "interpolation", required_argument, 0, 'i'  },
+		{ "fit",           no_argument,       0, 'f'  },
+		{ "resize",        no_argument,       0, 'r'  },
+		{ "verbose",       no_argument,       0, 'v'  },
+		{ "fps",           required_argument, 0, 'F'  },
+		{ "animate",       no_argument,       0, 'a'  },
+		{ "width",         required_argument, 0, 'w'  },
+		{ "height",        required_argument, 0, 'H'  },
+		{ "force-ansi",    no_argument,       0, 'A'  },
+		{ "info",          no_argument,       0, 'I'  },
+		{ "json",          no_argument,       0, 'J'  },
+		{ "exif-detailed", no_argument,       0, 'E'  },
+		{ "fonts",         no_argument,       0, 'L'  },
+		{ "jpeg",          required_argument, 0, 'j'  },
+		{ "png",           required_argument, 0, 'p'  },
+		{ "heif",          required_argument, 0, 1000 },
+		{ "webp",          required_argument, 0, 1001 },
+		{ "jxl",           required_argument, 0, 1002 },
+		{ "output",        required_argument, 0, 'o'  },
+		{ "frame",         required_argument, 0, 'n'  },
+		{ "iterm2-format", required_argument, 0, 't'  },
+		{ 0,		       0,		         0, 0    },
 	};
 
 	/* Parse options */
@@ -204,6 +210,24 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 				opts->convert_mode = true;
 				opts->output_format = FORMAT_PNG;
 				opts->png_compression = atoi(optarg);
+				break;
+
+			case 1000: /* --heif */
+				opts->convert_mode = true;
+				opts->output_format = FORMAT_HEIF;
+				opts->heif_quality = atoi(optarg);
+				break;
+
+			case 1001: /* --webp */
+				opts->convert_mode = true;
+				opts->output_format = FORMAT_WEBP;
+				opts->webp_quality = atoi(optarg);
+				break;
+
+			case 1002: /* --jxl */
+				opts->convert_mode = true;
+				opts->output_format = FORMAT_JXL;
+				opts->jxl_quality = atoi(optarg);
 				break;
 
 			case 'o': opts->output_file = optarg; break;
@@ -352,6 +376,24 @@ int validate_options(cli_options_t *opts)
 	if (opts->png_compression > 9) {
 		fprintf(stderr, "Warning: PNG compression %d > 9, clamping to 9\n", opts->png_compression);
 		opts->png_compression = 9;
+	}
+
+	/* Validate HEIF quality range [0, 100] */
+	if (opts->heif_quality < 0 || opts->heif_quality > 100) {
+		fprintf(stderr, "Error: HEIF quality must be 0-100 (got %d)\n", opts->heif_quality);
+		return -1;
+	}
+
+	/* Validate WebP quality range [0, 100] */
+	if (opts->webp_quality < 0 || opts->webp_quality > 100) {
+		fprintf(stderr, "Error: WebP quality must be 0-100 (got %d)\n", opts->webp_quality);
+		return -1;
+	}
+
+	/* Validate JXL quality range [0, 100] */
+	if (opts->jxl_quality < 0 || opts->jxl_quality > 100) {
+		fprintf(stderr, "Error: JXL quality must be 0-100 (got %d)\n", opts->jxl_quality);
+		return -1;
 	}
 
 	return 0;

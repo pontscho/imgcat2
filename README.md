@@ -21,6 +21,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
 - **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL, APNG. Dual SVG decoders (resvg preferred, nanosvg fallback)
+- **Image Conversion** - Convert images to JPEG, PNG, HEIF, WebP, or JXL with quality control and lossless mode support
 - **Native Protocol Support** - Automatically uses iTerm2 inline images or Ghostty Kitty graphics protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
@@ -516,6 +517,49 @@ imgcat2 --png 9 image.jpg > output.png
 imgcat2 --png 5 --output output.png image.jpg
 ```
 
+### HEIF Conversion
+```bash
+# Convert to HEIF with default quality (80)
+imgcat2 --heif 80 image.png > output.heif
+
+# Convert with custom quality (0-100)
+imgcat2 --heif 95 image.jpg > output.heif
+
+# Save to file
+imgcat2 --heif 85 --output output.heif image.png
+```
+
+### WebP Conversion
+```bash
+# Convert to WebP with default quality (80)
+imgcat2 --webp 80 image.png > output.webp
+
+# Convert with custom quality (0-100)
+imgcat2 --webp 90 image.jpg > output.webp
+
+# Lossless WebP (quality 100)
+imgcat2 --webp 100 image.png > output.webp
+
+# Save to file
+imgcat2 --webp 85 --output output.webp image.jpg
+```
+
+### JXL Conversion
+```bash
+# Convert to JXL with default quality (80)
+imgcat2 --jxl 80 image.png > output.jxl
+
+# Convert with custom quality (0-100)
+imgcat2 --jxl 90 image.jpg > output.jxl
+
+# Lossless JXL (quality >= 95)
+imgcat2 --jxl 95 image.png > output.jxl
+imgcat2 --jxl 100 image.png > output.jxl
+
+# Save to file
+imgcat2 --jxl 85 --output output.jxl image.jpg
+```
+
 ### Animated Images
 ```bash
 # Convert first frame of animated GIF
@@ -530,12 +574,23 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
   - Higher quality = better image quality but larger file size
 - `--png <level>` - Convert to PNG format (compression: 0-9, default: 6)
   - Higher compression = smaller file size but slower encoding
+- `--heif <quality>` - Convert to HEIF format (quality: 0-100, default: 80)
+  - Higher quality = better image quality but larger file size
+- `--webp <quality>` - Convert to WebP format (quality: 0-100, default: 80)
+  - Quality 100 = lossless mode (preserves transparency)
+  - Quality 0-99 = lossy mode
+- `--jxl <quality>` - Convert to JXL format (quality: 0-100, default: 80)
+  - Quality >= 95 = lossless mode (preserves transparency)
+  - Quality 0-94 = lossy mode with distance-based quality
 - `--output <file>` or `-o <file>` - Output file path (stdout if not specified)
 - `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
 
 ### Conversion Notes
 - **JPEG** does not support transparency - alpha channel will be removed
 - **PNG** preserves transparency - ideal for images with alpha channel
+- **HEIF** supports transparency and offers better compression than JPEG
+- **WebP** preserves transparency in lossless mode (quality 100) and offers excellent compression
+- **JXL** preserves transparency in lossless mode (quality >= 95) and provides modern, high-efficiency compression with HDR support
 - Output to stdout by default (use `>` to redirect or `--output` flag)
 - Quality and compression affect both file size and processing time
 

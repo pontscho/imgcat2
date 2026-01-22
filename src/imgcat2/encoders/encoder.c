@@ -25,6 +25,18 @@ extern int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size
 extern int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 #endif
 
+#ifdef HAVE_WEBP
+extern int encode_webp(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#endif
+
+#ifdef HAVE_HEIF
+extern int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#endif
+
+#ifdef HAVE_JXL
+extern int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#endif
+
 /**
  * @brief Static encoder registry array
  *
@@ -33,11 +45,23 @@ extern int encode_png(const image_t *img, int quality, uint8_t **out_data, size_
  */
 static const encoder_t s_encoder_registry[] = {
 #ifdef HAVE_LIBJPEG
-	{ FORMAT_JPEG, "JPEG (libjpeg)", ".jpg", encode_jpeg },
+	{ FORMAT_JPEG, "JPEG (libjpeg)", ".jpg",  encode_jpeg },
 #endif
 
 #ifdef HAVE_LIBPNG
-	{ FORMAT_PNG,  "PNG (libpng)",   ".png", encode_png  },
+	{ FORMAT_PNG,  "PNG (libpng)",   ".png",  encode_png  },
+#endif
+
+#ifdef HAVE_HEIF
+	{ FORMAT_HEIF, "HEIF (libheif)", ".heif", encode_heif },
+#endif
+
+#ifdef HAVE_WEBP
+	{ FORMAT_WEBP, "WebP (libwebp)", ".webp", encode_webp },
+#endif
+
+#ifdef HAVE_JXL
+	{ FORMAT_JXL,  "JXL (libjxl)",   ".jxl",  encode_jxl  },
 #endif
 };
 
@@ -92,7 +116,7 @@ const encoder_t *encoder_find_by_format(output_format_t format)
 	}
 
 	/* No encoder found */
-	const char *format_name = (format == FORMAT_JPEG) ? "JPEG" : (format == FORMAT_PNG) ? "PNG" : "UNKNOWN";
+	const char *format_name = (format == FORMAT_JPEG) ? "JPEG" : (format == FORMAT_PNG) ? "PNG" : (format == FORMAT_HEIF) ? "HEIF" : (format == FORMAT_WEBP) ? "WebP" : (format == FORMAT_JXL) ? "JXL" : "UNKNOWN";
 	fprintf(stderr, "Error: No encoder found for format: %s\n", format_name);
 	return NULL;
 }

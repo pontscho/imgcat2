@@ -226,6 +226,60 @@ set_tests_properties(test_encoder_png PROPERTIES
 	TIMEOUT 10
 )
 
+# WebP encoder tests (task-018)
+if(WEBP_FOUND)
+	add_executable(test_encoder_webp
+		unit/main.c
+		unit/test_encoder_webp.c
+	)
+
+	target_link_libraries(test_encoder_webp
+		imgcat2_lib
+	)
+
+	add_test(NAME test_encoder_webp COMMAND test_encoder_webp)
+
+	set_tests_properties(test_encoder_webp PROPERTIES
+		TIMEOUT 10
+	)
+endif()
+
+# HEIF encoder tests (task-019)
+if(HEIF_FOUND)
+	add_executable(test_encoder_heif
+		unit/main.c
+		unit/test_encoder_heif.c
+	)
+
+	target_link_libraries(test_encoder_heif
+		imgcat2_lib
+	)
+
+	add_test(NAME test_encoder_heif COMMAND test_encoder_heif)
+
+	set_tests_properties(test_encoder_heif PROPERTIES
+		TIMEOUT 10
+	)
+endif()
+
+# JXL encoder tests (task-020)
+if(JXL_FOUND)
+	add_executable(test_encoder_jxl
+		unit/main.c
+		unit/test_encoder_jxl.c
+	)
+
+	target_link_libraries(test_encoder_jxl
+		imgcat2_lib
+	)
+
+	add_test(NAME test_encoder_jxl COMMAND test_encoder_jxl)
+
+	set_tests_properties(test_encoder_jxl PROPERTIES
+		TIMEOUT 10
+	)
+endif()
+
 # File render tests (task-025)
 add_executable(test_file_render
 	unit/main.c
