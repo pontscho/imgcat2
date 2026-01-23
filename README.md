@@ -67,7 +67,9 @@ This technique provides universal compatibility with any terminal supporting tru
 - **CMake** 3.15 or later
 - **C11-compatible compiler** (GCC, Clang, or MSVC)
 - **libpng** (PNG support)
-- **zlib** or **zlib-ng** (recommended for better performance)
+- **Compression library**: **zlib-ng** (recommended, better performance) or **zlib** (fallback)
+  - CMake automatically selects the best available compression library
+  - Priority order: zlib-ng > zlib
 - **libjpeg** or **libjpeg-turbo** (recommended for faster JPEG decoding)
 
 ### Optional Dependencies

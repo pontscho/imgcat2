@@ -116,36 +116,10 @@ endif()
 # pkg-config
 find_package(PkgConfig REQUIRED)
 
-# zlib-ng (preferred) or zlib
-pkg_check_modules(ZLIB_NG zlib-ng)
-if(NOT ZLIB_NG_FOUND)
-	# On macOS, find static library explicitly
-	if(APPLE)
-		find_library(ZLIB_LIBRARY NAMES z REQUIRED
-			HINTS /usr/local/opt/zlib/lib /usr/local/lib)
-		find_path(ZLIB_INCLUDE_DIR zlib.h
-			HINTS /usr/local/opt/zlib/include /usr/local/include)
-		if(ZLIB_LIBRARY AND ZLIB_INCLUDE_DIR)
-			set(ZLIB_LIBRARIES ${ZLIB_LIBRARY})
-			set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIR})
-			set(ZLIB_FOUND TRUE)
-		endif()
-
-	else()
-		# Try pkg-config first (better for finding static libraries)
-		pkg_check_modules(ZLIB zlib)
-		if(NOT ZLIB_FOUND)
-			# Fallback to CMake's FindZLIB
-			find_package(ZLIB REQUIRED)
-			set(ZLIB_LIBRARIES ${ZLIB_LIBRARIES})
-			set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS})
-		endif()
-	endif()
-
-else()
-	set(ZLIB_LIBRARIES ${ZLIB_NG_LIBRARIES})
-	set(ZLIB_INCLUDE_DIRS ${ZLIB_NG_INCLUDE_DIRS})
-endif()
+# Compression library (priority: zlib-ng > zlib)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(FindCompressionLib)
+# Variables ZLIB_LIBRARIES and ZLIB_INCLUDE_DIRS are set by the module
 
 # libjpeg-turbo (preferred) or libjpeg (REQUIRED)
 pkg_check_modules(JPEG libjpeg-turbo)
@@ -898,7 +872,8 @@ if(PNG_APNG_SUPPORTED_CHECK)
 else()
 	message(STATUS "    APNG support: NO (requires libpng >= 1.6.0 with --enable-apng)")
 endif()
-message(STATUS "  zlib: ${ZLIB_LIBRARIES}")
+message(STATUS "  Compression: ${COMPRESSION_LIB_TYPE}")
+message(STATUS "    Libraries: ${ZLIB_LIBRARIES}")
 message(STATUS "  libjpeg: ${JPEG_LIBRARIES}")
 message(STATUS "")
 message(STATUS "Optional Dependencies:")
