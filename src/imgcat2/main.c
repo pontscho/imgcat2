@@ -69,7 +69,8 @@ int main(int argc, char **argv)
 			.is_konsole = terminal_is_konsole(),
 			.is_tmux = terminal_is_tmux(),
 
-			.has_kitty = terminal_is_ghostty() || terminal_is_kitty() || terminal_is_wezterm() || terminal_is_konsole(),
+			/* Kitty graphics protocol: Ghostty, Kitty, and Konsole (WezTerm uses iTerm2 protocol) */
+			.has_kitty = terminal_is_ghostty() || terminal_is_kitty() || terminal_is_konsole(),
 		},
 	};
 
@@ -97,7 +98,7 @@ int main(int argc, char **argv)
 	}
 
 	if (!opts.silent) {
-		const char *terminal_type = opts.terminal.is_iterm2 ? "iTerm2" : opts.terminal.is_ghostty ? "Ghostty" : opts.terminal.is_kitty ? "Kitty" : opts.terminal.is_wezterm ? "WezTerm" : opts.terminal.is_konsole ? "Konsole" : "ANSI";
+		const char *terminal_type = opts.terminal.is_iterm2 ? "iTerm2" : opts.terminal.is_wezterm ? "WezTerm" : opts.terminal.is_ghostty ? "Ghostty" : opts.terminal.is_kitty ? "Kitty" : opts.terminal.is_konsole ? "Konsole" : "ANSI";
 
 		fprintf(stderr, "Terminal size: %dx%d (%dx%d) pixels, is %s\n", opts.terminal.width, opts.terminal.height, opts.terminal.cols, opts.terminal.rows, terminal_type);
 	}
@@ -134,7 +135,8 @@ int main(int argc, char **argv)
 
 	/* DECISION POINT: Kitty / ANSI rendering */
 
-	if (!opts.force_ansi && opts.terminal.is_iterm2) {
+	/* iTerm2 and WezTerm both support the iTerm2 inline image protocol (OSC 1337) */
+	if (!opts.force_ansi && (opts.terminal.is_iterm2 || opts.terminal.is_wezterm)) {
 		/* Check if format is supported by iTerm2 protocol */
 		if (iterm2_is_format_supported(buffer, buffer_size, &opts)) {
 			if (!opts.silent) {
@@ -226,7 +228,8 @@ int main(int argc, char **argv)
 	}
 
 	/* STEP 4.2: Render using Kitty or iTerm2 graphics protocol */
-	if (opts.terminal.is_iterm2 && !opts.force_ansi) {
+	/* Render using iTerm2 protocol for iTerm2 and WezTerm */
+	if ((opts.terminal.is_iterm2 || opts.terminal.is_wezterm) && !opts.force_ansi) {
 		if (iterm2_render(scaled_frames, frame_count, &opts, buffer_size) == 0) {
 			exit_code = EXIT_SUCCESS;
 			goto cleanup;
