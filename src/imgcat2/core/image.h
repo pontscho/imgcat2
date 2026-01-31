@@ -18,11 +18,11 @@
  * @{
  */
 
-/** Maximum width or height per axis (16384 pixels) */
-#define IMAGE_MAX_DIMENSION 16384
+/** Maximum width or height per axis (65536 pixels) */
+#define IMAGE_MAX_DIMENSION 65536
 
-/** Maximum total pixels (100 megapixels) */
-#define IMAGE_MAX_PIXELS 100000000UL
+/** Maximum total pixels (200 megapixels) */
+#define IMAGE_MAX_PIXELS 200000000UL
 
 /** Maximum file size for input (50MB) */
 #define IMAGE_MAX_FILE_SIZE 52428800UL
