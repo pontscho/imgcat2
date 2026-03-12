@@ -7,3 +7,6 @@
 [submodule "vendor/nanosvg"]
 	path = vendor/nanosvg
 	url = https://github.com/memononen/nanosvg.git
+[submodule "vendor/jpeg-quantsmooth"]
+	path = vendor/jpeg-quantsmooth
+	url = https://github.com/ilyakurdyukov/jpeg-quantsmooth
