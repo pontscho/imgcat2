@@ -17,6 +17,12 @@
 
 #include "decoder.h"
 
+#ifdef HAVE_JPEGQS
+#include "libjpegqs.h"
+
+static jpegqs_control_t s_jpegqs_opts = { .flags = JPEGQS_DIAGONALS | JPEGQS_JOINT_YUV | JPEGQS_UPSAMPLE_UV, .niter = 5, .threads = 0, .progprec = 0, .userdata = NULL, .progress = NULL };
+#endif
+
 /* EXIF/XMP metadata support */
 #ifdef HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
@@ -109,7 +115,11 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	cinfo.out_color_space = JCS_RGB;
 
 	// Start decompression
+#ifdef HAVE_JPEGQS
+	if (!jpegqs_start_decompress(&cinfo, &s_jpegqs_opts)) {
+#else
 	if (!jpeg_start_decompress(&cinfo)) {
+#endif
 		fprintf(stderr, "Error: Failed to start JPEG decompression\n");
 		jpeg_destroy_decompress(&cinfo);
 		return NULL;
@@ -174,9 +184,15 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	free(row_buffer);
 
 	// Finish decompression
+#ifdef HAVE_JPEGQS
+	if (!jpegqs_finish_decompress(&cinfo)) {
+		fprintf(stderr, "Warning: jpegqs_finish_decompress() returned false\n");
+	}
+#else
 	if (!jpeg_finish_decompress(&cinfo)) {
 		fprintf(stderr, "Warning: jpeg_finish_decompress() returned false\n");
 	}
+#endif
 
 	// Cleanup
 	jpeg_destroy_decompress(&cinfo);
