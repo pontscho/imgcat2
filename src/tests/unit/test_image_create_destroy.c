@@ -110,9 +110,9 @@ CTEST(image, create_overflow_protection)
 	image_t *img = image_create(UINT32_MAX, UINT32_MAX);
 	ASSERT_NULL(img);
 
-	/* Try dimensions that exceed IMAGE_MAX_PIXELS (100M) */
-	/* 10000 x 10001 = 100,010,000 pixels > 100M */
-	img = image_create(10000, 10001);
+	/* Try dimensions that exceed IMAGE_MAX_PIXELS (200M) */
+	/* 20000 x 10001 = 200,020,000 pixels > 200M */
+	img = image_create(20000, 10001);
 	ASSERT_NULL(img);
 }
 

@@ -155,14 +155,14 @@ CTEST(security, integer_overflow)
 	ASSERT_NULL(img3);
 
 	/* Very large dimensions that would exceed IMAGE_MAX_PIXELS */
-	/* IMAGE_MAX_PIXELS is 100,000,000 */
-	/* 10000 x 10001 = 100,010,000 > IMAGE_MAX_PIXELS */
-	image_t *img4 = image_create(10000, 10001);
+	/* IMAGE_MAX_PIXELS is 200,000,000 */
+	/* 20000 x 10001 = 200,020,000 > IMAGE_MAX_PIXELS */
+	image_t *img4 = image_create(20000, 10001);
 	ASSERT_NULL(img4);
 
 	/* At the boundary (should succeed) */
-	/* 10000 x 10000 = 100,000,000 = IMAGE_MAX_PIXELS */
-	image_t *img5 = image_create(10000, 10000);
+	/* 20000 x 10000 = 200,000,000 = IMAGE_MAX_PIXELS */
+	image_t *img5 = image_create(20000, 10000);
 	ASSERT_NOT_NULL(img5);
 	image_destroy(img5);
 }

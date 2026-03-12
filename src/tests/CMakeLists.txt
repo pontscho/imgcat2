@@ -435,12 +435,10 @@ set_tests_properties(test_exif_reader PROPERTIES
 add_executable(test_jpeg_exif_integration
 	integration/main.c
 	integration/test_jpeg_exif_integration.c
-	../imgcat2/decoders/decoder_jpeg.c
 )
 
 target_link_libraries(test_jpeg_exif_integration
 	imgcat2_lib
-	${JPEG_LIBRARIES}
 )
 
 add_test(NAME test_jpeg_exif_integration COMMAND test_jpeg_exif_integration)
