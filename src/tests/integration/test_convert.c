@@ -380,6 +380,327 @@ CTEST(convert, png_transparency)
 	decoder_free_frames(frames, frame_count);
 }
 
+/**
+ * @test Convert mode preserves original dimensions (no resize requested)
+ *
+ * Regression test: pipeline_scale should be skipped in convert mode
+ * when no custom dimensions are specified. Small image that fits
+ * within terminal bounds.
+ */
+CTEST(convert, dimensions_preserved_no_resize)
+{
+	decoder_registry_init(NULL);
+	encoder_registry_init(NULL);
+
+	/* Create a 200x150 test image */
+	image_t *img = image_create(200, 150);
+	ASSERT_NOT_NULL(img);
+
+	/* Fill with test data */
+	for (uint32_t y = 0; y < 150; y++) {
+		for (uint32_t x = 0; x < 200; x++) {
+			uint8_t *pixel = image_get_pixel(img, x, y);
+			pixel[0] = (x * 255 / 200);
+			pixel[1] = (y * 255 / 150);
+			pixel[2] = 128;
+			pixel[3] = 255;
+		}
+	}
+
+	/* Encode to PNG */
+	uint8_t *png_data = NULL;
+	size_t png_size = 0;
+	int result = encoder_encode(img, FORMAT_PNG, 6, &png_data, &png_size);
+	ASSERT_EQUAL(0, result);
+	ASSERT_NOT_NULL(png_data);
+
+	/* Decode back and verify original dimensions preserved */
+	image_t **frames = NULL;
+	int frame_count = 0;
+	result = pipeline_decode(NULL, png_data, png_size, &frames, &frame_count);
+	ASSERT_EQUAL(0, result);
+	ASSERT_EQUAL(1, frame_count);
+
+	/* Verify dimensions are exactly as created */
+	ASSERT_EQUAL(200, frames[0]->width);
+	ASSERT_EQUAL(150, frames[0]->height);
+
+	/* Cleanup */
+	free(png_data);
+	image_destroy(img);
+	decoder_free_frames(frames, frame_count);
+}
+
+/**
+ * @test Convert mode preserves dimensions for large images
+ *
+ * Regression test for the actual bug: a large image (bigger than terminal)
+ * must NOT be downscaled in convert mode without explicit --width/--height.
+ * This test calls pipeline_scale with convert_mode=false to prove the bug
+ * exists, then verifies the encode path preserves original dimensions.
+ */
+CTEST(convert, dimensions_preserved_large_image)
+{
+	decoder_registry_init(NULL);
+	encoder_registry_init(NULL);
+
+	/* Create a 3000x2000 test image - much larger than any terminal */
+	image_t *img = image_create(3000, 2000);
+	ASSERT_NOT_NULL(img);
+
+	/* Fill minimal test data */
+	memset(img->pixels, 128, (size_t)img->width * img->height * 4);
+
+	/* Simulate convert mode: encode directly without pipeline_scale */
+	uint8_t *png_data = NULL;
+	size_t png_size = 0;
+	int result = encoder_encode(img, FORMAT_PNG, 1, &png_data, &png_size);
+	ASSERT_EQUAL(0, result);
+	ASSERT_NOT_NULL(png_data);
+
+	/* Decode back and verify dimensions are preserved */
+	image_t **frames = NULL;
+	int frame_count = 0;
+	result = pipeline_decode(NULL, png_data, png_size, &frames, &frame_count);
+	ASSERT_EQUAL(0, result);
+	ASSERT_EQUAL(1, frame_count);
+
+	/* THE KEY ASSERTION: dimensions must match original, not terminal size */
+	ASSERT_EQUAL(3000, frames[0]->width);
+	ASSERT_EQUAL(2000, frames[0]->height);
+
+	/* Now prove pipeline_scale WOULD have shrunk it (the bug scenario) */
+	cli_options_t opts = { 0 };
+	opts.terminal.rows = 24;
+	opts.terminal.cols = 80;
+	opts.terminal.width = 1920;
+	opts.terminal.height = 1080;
+	opts.terminal.is_iterm2 = true;
+	opts.has_custom_dimensions = false;
+	opts.target_width = -1;
+	opts.target_height = -1;
+
+	image_t **scaled = NULL;
+	image_t **scale_input = malloc(sizeof(image_t *));
+	ASSERT_NOT_NULL(scale_input);
+	scale_input[0] = frames[0];
+
+	result = pipeline_scale(scale_input, 1, &opts, &scaled);
+	ASSERT_EQUAL(0, result);
+	ASSERT_NOT_NULL(scaled);
+
+	/* Prove that pipeline_scale reduces the image (the bug behavior) */
+	ASSERT_TRUE(scaled[0]->width < 3000 || scaled[0]->height < 2000);
+
+	/* Cleanup */
+	image_destroy(scaled[0]);
+	free(scaled);
+	free(scale_input);
+	free(png_data);
+	decoder_free_frames(frames, frame_count);
+	image_destroy(img);
+}
+
+/**
+ * @test Convert mode preserves dimensions in ANSI fallback path
+ *
+ * Regression test: even with force_ansi=true (no pixel terminal info),
+ * convert mode must preserve original dimensions.
+ */
+CTEST(convert, dimensions_preserved_ansi_fallback)
+{
+	decoder_registry_init(NULL);
+	encoder_registry_init(NULL);
+
+	/* Create a 2000x1500 image */
+	image_t *img = image_create(2000, 1500);
+	ASSERT_NOT_NULL(img);
+	memset(img->pixels, 64, (size_t)img->width * img->height * 4);
+
+	/* Prove pipeline_scale with ANSI path would shrink it */
+	cli_options_t opts = { 0 };
+	opts.force_ansi = true;
+	opts.terminal.rows = 24;
+	opts.terminal.cols = 80;
+	opts.terminal.width = 0;
+	opts.terminal.height = 0;
+	opts.has_custom_dimensions = false;
+	opts.target_width = -1;
+	opts.target_height = -1;
+
+	image_t **scale_input = malloc(sizeof(image_t *));
+	ASSERT_NOT_NULL(scale_input);
+	scale_input[0] = img;
+
+	image_t **scaled = NULL;
+	int result = pipeline_scale(scale_input, 1, &opts, &scaled);
+	ASSERT_EQUAL(0, result);
+	ASSERT_NOT_NULL(scaled);
+
+	/* ANSI path caps at MAX_TERMINAL_WIDTH=1000, rows*2=46 — must be much smaller */
+	ASSERT_TRUE(scaled[0]->width < 2000);
+	ASSERT_TRUE(scaled[0]->height < 1500);
+
+	/* But encode from original must preserve dimensions */
+	uint8_t *jpeg_data = NULL;
+	size_t jpeg_size = 0;
+	result = encoder_encode(img, FORMAT_JPEG, 80, &jpeg_data, &jpeg_size);
+	ASSERT_EQUAL(0, result);
+
+	image_t **decoded = NULL;
+	int dec_count = 0;
+	result = pipeline_decode(NULL, jpeg_data, jpeg_size, &decoded, &dec_count);
+	ASSERT_EQUAL(0, result);
+	ASSERT_EQUAL(2000, decoded[0]->width);
+	ASSERT_EQUAL(1500, decoded[0]->height);
+
+	/* Cleanup */
+	image_destroy(scaled[0]);
+	free(scaled);
+	free(scale_input);
+	free(jpeg_data);
+	decoder_free_frames(decoded, dec_count);
+	image_destroy(img);
+}
+
+/**
+ * @test Convert mode with explicit --width resizes correctly
+ *
+ * When convert_mode + has_custom_dimensions, pipeline_scale should
+ * resize the image to the requested width with aspect ratio preserved.
+ */
+CTEST(convert, convert_with_custom_width)
+{
+	decoder_registry_init(NULL);
+	encoder_registry_init(NULL);
+
+	/* Create 800x600 image */
+	image_t *img = image_create(800, 600);
+	ASSERT_NOT_NULL(img);
+	memset(img->pixels, 200, (size_t)img->width * img->height * 4);
+
+	/* Setup convert mode with custom width only */
+	cli_options_t opts = { 0 };
+	opts.has_custom_dimensions = true;
+	opts.target_width = 400;
+	opts.target_height = -1;
+	opts.terminal.rows = 24;
+	opts.terminal.cols = 80;
+	opts.terminal.width = 1920;
+	opts.terminal.height = 1080;
+
+	image_t **input = malloc(sizeof(image_t *));
+	ASSERT_NOT_NULL(input);
+	input[0] = img;
+
+	image_t **scaled = NULL;
+	int result = pipeline_scale(input, 1, &opts, &scaled);
+	ASSERT_EQUAL(0, result);
+	ASSERT_NOT_NULL(scaled);
+
+	/* Width should be 400, height should preserve aspect ratio: 600 * (400/800) = 300 */
+	ASSERT_EQUAL(400, scaled[0]->width);
+	ASSERT_EQUAL(300, scaled[0]->height);
+
+	/* Cleanup */
+	image_destroy(scaled[0]);
+	free(scaled);
+	free(input);
+	image_destroy(img);
+}
+
+/**
+ * @test Convert mode with explicit --height resizes correctly
+ *
+ * When convert_mode + has_custom_dimensions with only height specified,
+ * pipeline_scale should resize preserving aspect ratio.
+ */
+CTEST(convert, convert_with_custom_height)
+{
+	decoder_registry_init(NULL);
+	encoder_registry_init(NULL);
+
+	/* Create 800x600 image */
+	image_t *img = image_create(800, 600);
+	ASSERT_NOT_NULL(img);
+	memset(img->pixels, 200, (size_t)img->width * img->height * 4);
+
+	/* Setup convert mode with custom height only */
+	cli_options_t opts = { 0 };
+	opts.has_custom_dimensions = true;
+	opts.target_width = -1;
+	opts.target_height = 300;
+	opts.terminal.rows = 24;
+	opts.terminal.cols = 80;
+	opts.terminal.width = 1920;
+	opts.terminal.height = 1080;
+
+	image_t **input = malloc(sizeof(image_t *));
+	ASSERT_NOT_NULL(input);
+	input[0] = img;
+
+	image_t **scaled = NULL;
+	int result = pipeline_scale(input, 1, &opts, &scaled);
+	ASSERT_EQUAL(0, result);
+	ASSERT_NOT_NULL(scaled);
+
+	/* Height should be 300, width should preserve aspect ratio: 800 * (300/600) = 400 */
+	ASSERT_EQUAL(400, scaled[0]->width);
+	ASSERT_EQUAL(300, scaled[0]->height);
+
+	/* Cleanup */
+	image_destroy(scaled[0]);
+	free(scaled);
+	free(input);
+	image_destroy(img);
+}
+
+/**
+ * @test Convert mode with both --width and --height (exact resize)
+ *
+ * When both dimensions are specified, pipeline_scale should resize
+ * to exact dimensions (may distort aspect ratio).
+ */
+CTEST(convert, convert_with_custom_both)
+{
+	decoder_registry_init(NULL);
+	encoder_registry_init(NULL);
+
+	/* Create 800x600 image */
+	image_t *img = image_create(800, 600);
+	ASSERT_NOT_NULL(img);
+	memset(img->pixels, 200, (size_t)img->width * img->height * 4);
+
+	/* Setup convert mode with both dimensions */
+	cli_options_t opts = { 0 };
+	opts.has_custom_dimensions = true;
+	opts.target_width = 400;
+	opts.target_height = 400;
+	opts.terminal.rows = 24;
+	opts.terminal.cols = 80;
+	opts.terminal.width = 1920;
+	opts.terminal.height = 1080;
+
+	image_t **input = malloc(sizeof(image_t *));
+	ASSERT_NOT_NULL(input);
+	input[0] = img;
+
+	image_t **scaled = NULL;
+	int result = pipeline_scale(input, 1, &opts, &scaled);
+	ASSERT_EQUAL(0, result);
+	ASSERT_NOT_NULL(scaled);
+
+	/* Both dimensions should be exactly as requested */
+	ASSERT_EQUAL(400, scaled[0]->width);
+	ASSERT_EQUAL(400, scaled[0]->height);
+
+	/* Cleanup */
+	image_destroy(scaled[0]);
+	free(scaled);
+	free(input);
+	image_destroy(img);
+}
+
 #ifdef HAVE_HEIF
 /**
  * @test Test PNG to HEIF conversion

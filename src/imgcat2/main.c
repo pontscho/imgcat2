@@ -203,7 +203,36 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* STEP 3: Scale images to terminal dimensions */
+	/* STEP 3: Convert mode or terminal rendering */
+	if (opts.convert_mode) {
+		/* Convert mode: only scale if user explicitly requested dimensions */
+		if (opts.has_custom_dimensions) {
+			if (pipeline_scale(frames, frame_count, &opts, &scaled_frames) < 0) {
+				fprintf(stderr, "Error: Failed to scale images\n");
+				goto cleanup;
+			}
+
+			if (!opts.silent) {
+				fprintf(stderr, "Scaled to %ux%u pixels\n", scaled_frames[0]->width, scaled_frames[0]->height);
+			}
+		}
+
+		/* Use scaled frames if available, otherwise original frames */
+		image_t **render_frames = scaled_frames ? scaled_frames : frames;
+
+		/* Validate frame index */
+		if (opts.frame_index >= frame_count) {
+			fprintf(stderr, "Error: Frame index %d out of range (0-%d)\n", opts.frame_index, frame_count - 1);
+		} else if (file_render(render_frames, frame_count, &opts) < 0) {
+			fprintf(stderr, "Error: Failed to convert and save image\n");
+		} else {
+			exit_code = EXIT_SUCCESS;
+		}
+
+		goto cleanup;
+	}
+
+	/* STEP 3.1: Scale images to terminal dimensions (non-convert mode) */
 	if (pipeline_scale(frames, frame_count, &opts, &scaled_frames) < 0) {
 		fprintf(stderr, "Error: Failed to scale images\n");
 		goto cleanup;
@@ -211,20 +240,6 @@ int main(int argc, char **argv)
 
 	if (!opts.silent) {
 		fprintf(stderr, "Scaled to %ux%u pixels\n", scaled_frames[0]->width, scaled_frames[0]->height);
-	}
-
-	/* STEP 4.0: Terminal rendering or file conversion */
-	if (opts.convert_mode) {
-		/* Validate frame index */
-		if (opts.frame_index >= frame_count) {
-			fprintf(stderr, "Error: Frame index %d out of range (0-%d)\n", opts.frame_index, frame_count - 1);
-		} else if (file_render(scaled_frames, frame_count, &opts) < 0) {
-			fprintf(stderr, "Error: Failed to convert and save image\n");
-		} else {
-			exit_code = EXIT_SUCCESS;
-		}
-
-		goto cleanup;
 	}
 
 	/* STEP 4.2: Render using Kitty or iTerm2 graphics protocol */
