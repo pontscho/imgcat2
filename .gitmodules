@@ -10,3 +10,6 @@
 [submodule "vendor/jpeg-quantsmooth"]
 	path = vendor/jpeg-quantsmooth
 	url = https://github.com/ilyakurdyukov/jpeg-quantsmooth
+[submodule "vendor/zlib-ng"]
+	path = vendor/zlib-ng
+	url = https://github.com/zlib-ng/zlib-ng.git
