@@ -1,0 +1,12 @@
+# imgcat2 shim (see README.md): vendored OpenJPEG (openjp2) for libheif.
+# libheif reads OpenJPEG_FOUND for the summary and OPENJPEG_* in its plugin list.
+if(IMGCAT2_VENDORED_OPENJPEG_LIBRARIES)
+	set(OpenJPEG_FOUND TRUE)
+	set(OPENJPEG_FOUND TRUE)
+	set(OPENJPEG_MAJOR_VERSION 2)
+	set(OPENJPEG_LIBRARIES ${IMGCAT2_VENDORED_OPENJPEG_LIBRARIES})
+	set(OPENJPEG_INCLUDE_DIRS ${IMGCAT2_VENDORED_OPENJPEG_INCLUDE_DIRS})
+else()
+	set(OpenJPEG_FOUND FALSE)
+	set(OPENJPEG_FOUND FALSE)
+endif()

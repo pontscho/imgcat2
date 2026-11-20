@@ -34,3 +34,27 @@
 [submodule "vendor/libraw"]
 	path = vendor/libraw
 	url = https://github.com/LibRaw/LibRaw.git
+[submodule "vendor/libjxl"]
+	path = vendor/libjxl
+	url = https://github.com/libjxl/libjxl.git
+[submodule "vendor/brotli"]
+	path = vendor/brotli
+	url = https://github.com/google/brotli.git
+[submodule "vendor/highway"]
+	path = vendor/highway
+	url = https://github.com/google/highway.git
+[submodule "vendor/libde265"]
+	path = vendor/libde265
+	url = https://github.com/strukturag/libde265.git
+[submodule "vendor/libheif"]
+	path = vendor/libheif
+	url = https://github.com/strukturag/libheif.git
+[submodule "vendor/kvazaar"]
+	path = vendor/kvazaar
+	url = https://github.com/ultravideo/kvazaar.git
+[submodule "vendor/openjpeg"]
+	path = vendor/openjpeg
+	url = https://github.com/uclouvain/openjpeg.git
+[submodule "vendor/aom"]
+	path = vendor/aom
+	url = https://aomedia.googlesource.com/aom
