@@ -31,6 +31,7 @@ const char *get_mime_string(mime_type_t mime)
 		case MIME_PSD: return "image/vnd.adobe.photoshop";
 		case MIME_HDR: return "image/vnd.radiance";
 		case MIME_PNM: return "image/x-portable-anymap";
+		case MIME_YUV: return "application/octet-stream"; /* headerless raw frame, no registered image type */
 		default: return "application/octet-stream";
 	}
 }

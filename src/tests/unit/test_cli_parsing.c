@@ -389,6 +389,91 @@ CTEST(cli, parse_null_opts)
 }
 
 /**
+ * @test Test parsing of a valid --yuv specification
+ *
+ * Verifies that --yuv enables raw YUV input and stores resolved geometry.
+ */
+CTEST(cli, parse_yuv_valid)
+{
+	cli_options_t opts = {
+		.input_file = NULL,
+		.interpolation = "lanczos",
+		.fps = 15,
+	};
+
+	optind = 1;
+	char *argv[] = { "imgcat2", "--yuv", "NV12:97:61", "frame.yuv" };
+	ASSERT_EQUAL(0, parse_arguments(4, argv, &opts));
+	ASSERT_TRUE(opts.yuv_input);
+	ASSERT_EQUAL(YUV_FMT_NV12, opts.yuv.format);
+	ASSERT_EQUAL(97, opts.yuv.width);
+	ASSERT_EQUAL(61, opts.yuv.height);
+	ASSERT_EQUAL(97, opts.yuv.y_stride);
+	ASSERT_EQUAL(98, opts.yuv.uv_stride);
+	ASSERT_STR("frame.yuv", opts.input_file);
+
+	/* Explicit strides, stdin input */
+	cli_options_t opts2 = { .interpolation = "lanczos", .fps = 15 };
+	optind = 1;
+	char *argv2[] = { "imgcat2", "--yuv=yuv420p:97:61:128:64", "-" };
+	ASSERT_EQUAL(0, parse_arguments(3, argv2, &opts2));
+	ASSERT_TRUE(opts2.yuv_input);
+	ASSERT_EQUAL(YUV_FMT_I420, opts2.yuv.format);
+	ASSERT_EQUAL(128, opts2.yuv.y_stride);
+	ASSERT_EQUAL(64, opts2.yuv.uv_stride);
+	ASSERT_NULL(opts2.input_file);
+
+	/* Without --yuv the flag stays off */
+	cli_options_t opts3 = { .interpolation = "lanczos", .fps = 15 };
+	optind = 1;
+	char *argv3[] = { "imgcat2", "test.png" };
+	ASSERT_EQUAL(0, parse_arguments(2, argv3, &opts3));
+	ASSERT_FALSE(opts3.yuv_input);
+}
+
+/**
+ * @test Test rejection of invalid --yuv specifications
+ *
+ * Missing fields, bad format name, zero dimensions, too-small strides and
+ * garbage numbers must all make parse_arguments() fail.
+ */
+CTEST(cli, parse_yuv_invalid)
+{
+	static char *bad_specs[] = {
+		"i420", /* missing fields */
+		"i420:64", /* missing height */
+		"rgb565:64:64", /* bad format name */
+		"i420:0:64", /* zero width */
+		"i420:64:0", /* zero height */
+		"i420:64:64:32", /* y stride too small */
+		"nv12:64:64:64:32", /* uv stride too small (min 64) */
+		"yuyv:64:64:64", /* packed stride too small (min 128) */
+		"gray:64:64:64:64", /* uv stride not applicable */
+		"i420:6x4:64", /* garbage number */
+		"i420:64:-1", /* negative */
+		"i420:64:64:abc", /* garbage stride */
+		"i420:99999999999999999999999:64", /* overflow */
+		"i420:64:64:64:32:1", /* too many fields */
+	};
+
+	opterr = 0;
+	for (size_t i = 0; i < sizeof(bad_specs) / sizeof(bad_specs[0]); i++) {
+		cli_options_t opts = { .interpolation = "lanczos", .fps = 15 };
+		optind = 1;
+		char *argv[] = { "imgcat2", "--yuv", bad_specs[i], "frame.yuv" };
+		ASSERT_EQUAL(-1, parse_arguments(4, argv, &opts));
+		ASSERT_FALSE(opts.yuv_input);
+	}
+
+	/* Missing argument */
+	cli_options_t opts = { .interpolation = "lanczos", .fps = 15 };
+	optind = 1;
+	char *argv[] = { "imgcat2", "--yuv" };
+	ASSERT_NOT_EQUAL(0, parse_arguments(2, argv, &opts));
+	opterr = 1;
+}
+
+/**
  * @test Test combined short options
  *
  * Verifies that parse_arguments() can handle multiple short options.

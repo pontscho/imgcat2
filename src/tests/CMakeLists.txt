@@ -146,6 +146,22 @@ set_tests_properties(test_decoder_pnm PROPERTIES
 	TIMEOUT 10
 )
 
+# Raw YUV decoder tests
+add_executable(test_decoder_yuv
+	unit/main.c
+	unit/test_decoder_yuv.c
+)
+
+target_link_libraries(test_decoder_yuv
+	imgcat2_lib
+)
+
+add_test(NAME test_decoder_yuv COMMAND test_decoder_yuv)
+
+set_tests_properties(test_decoder_yuv PROPERTIES
+	TIMEOUT 10
+)
+
 # Image processing tests (task-066)
 add_executable(test_image_processing
 	unit/main.c

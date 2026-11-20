@@ -173,8 +173,8 @@ int main(int argc, char **argv)
 
 	/* STEP 2.5: Output metadata and exit if --info specified */
 	if (opts.info_mode) {
-		/* Re-detect MIME type for output */
-		mime_type_t mime = detect_mime_type(buffer, buffer_size);
+		/* Re-detect MIME type for output (forced MIME_YUV for --yuv) */
+		mime_type_t mime = pipeline_input_mime(&opts, buffer, buffer_size);
 
 		if (opts.json_output) {
 #ifdef HAVE_EXIF_READER

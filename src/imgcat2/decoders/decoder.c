@@ -232,22 +232,43 @@ image_t **decoder_decode(cli_options_t *opts, const uint8_t *data, size_t len, m
 	// Initialize output
 	*frame_count = 0;
 
-	// Find appropriate decoder
-	const decoder_t *decoder = decoder_find_by_mime(mime);
-	if (decoder == NULL) {
-		fprintf(stderr, "Error: No decoder available for format: %s\n", mime_type_name(mime));
-		return NULL;
-	}
+	image_t **frames = NULL;
 
-	if (opts != NULL && !opts->silent) {
-		fprintf(stderr, "Decoding %zu bytes with decoder: %s\n", len, decoder->name);
-	}
+	if (mime == MIME_YUV) {
+		// Raw YUV is headerless: it is not in the registry and needs the --yuv geometry
+		if (opts == NULL || !opts->yuv_input) {
+			fprintf(stderr, "Error: Raw YUV input requires --yuv format:width:height\n");
+			return NULL;
+		}
 
-	// Call decoder function
-	image_t **frames = decoder->decode(data, len, frame_count);
-	if (frames == NULL) {
-		fprintf(stderr, "Error: Decoder '%s' failed to decode image\n", decoder->name);
-		return NULL;
+		if (!opts->silent) {
+			fprintf(stderr, "Decoding %zu bytes with decoder: YUV raw (%s %ux%u)\n", len, yuv_format_name(opts->yuv.format), opts->yuv.width, opts->yuv.height);
+		}
+
+		frames = decode_yuv(data, len, &opts->yuv, frame_count);
+		if (frames == NULL) {
+			fprintf(stderr, "Error: Decoder 'YUV raw' failed to decode image\n");
+			return NULL;
+		}
+
+	} else {
+		// Find appropriate decoder
+		const decoder_t *decoder = decoder_find_by_mime(mime);
+		if (decoder == NULL) {
+			fprintf(stderr, "Error: No decoder available for format: %s\n", mime_type_name(mime));
+			return NULL;
+		}
+
+		if (opts != NULL && !opts->silent) {
+			fprintf(stderr, "Decoding %zu bytes with decoder: %s\n", len, decoder->name);
+		}
+
+		// Call decoder function
+		frames = decoder->decode(data, len, frame_count);
+		if (frames == NULL) {
+			fprintf(stderr, "Error: Decoder '%s' failed to decode image\n", decoder->name);
+			return NULL;
+		}
 	}
 
 	// Validate output

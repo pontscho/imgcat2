@@ -16,6 +16,7 @@
 #include "../core/cli.h"
 #include "../core/image.h"
 #include "magic.h"
+#include "yuv.h"
 
 /**
  * @typedef decode_func_t
@@ -110,7 +111,8 @@ const decoder_t *decoder_find_by_mime(mime_type_t mime);
  * @param opts CLI options structure (for logging verbosity)
  * @param data Raw image file data
  * @param len Length of data in bytes
- * @param mime Detected MIME type (from detect_mime_type())
+ * @param mime Detected MIME type (from detect_mime_type()), or MIME_YUV for raw
+ *             YUV input (requires opts->yuv_input; geometry taken from opts->yuv)
  * @param frame_count Output: number of frames decoded
  * @return Array of image_t* frames, or NULL on error
  *

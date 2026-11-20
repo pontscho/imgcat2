@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../decoders/magic.h"
 #include "cli.h"
 #include "image.h"
 
@@ -125,10 +126,24 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
 int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_size);
 
 /**
+ * @brief Determine the MIME type of the input buffer
+ *
+ * Returns MIME_YUV when raw YUV input was requested (opts->yuv_input), since
+ * headerless YUV cannot be detected; otherwise detects by magic bytes.
+ *
+ * @param opts CLI options structure (may be NULL)
+ * @param buffer Input data buffer
+ * @param size Input data size
+ *
+ * @return Detected or forced MIME type, MIME_UNKNOWN if not recognized
+ */
+mime_type_t pipeline_input_mime(const cli_options_t *opts, const uint8_t *buffer, size_t size);
+
+/**
  * @brief Decode image with MIME type detection
  *
- * Detects image format using magic bytes and decodes using appropriate
- * decoder from registry.
+ * Detects image format using magic bytes (or uses the forced raw YUV format
+ * from --yuv) and decodes using the appropriate decoder.
  *
  * @param opts CLI options structure (for logging verbosity)
  * @param buffer Input data buffer

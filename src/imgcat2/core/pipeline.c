@@ -469,6 +469,17 @@ int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_siz
 }
 
 /**
+ * @brief Determine the input MIME type (forced MIME_YUV for --yuv, magic bytes otherwise)
+ */
+mime_type_t pipeline_input_mime(const cli_options_t *opts, const uint8_t *buffer, size_t size)
+{
+	if (opts != NULL && opts->yuv_input) {
+		return MIME_YUV;
+	}
+	return detect_mime_type(buffer, size);
+}
+
+/**
  * @brief Decode image with MIME type detection
  */
 int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count)
@@ -478,11 +489,18 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, ima
 		return -1;
 	}
 
-	/* Detect MIME type */
-	mime_type_t mime = detect_mime_type(buffer, size);
+	/* Detect MIME type (raw YUV has no magic bytes: forced by --yuv) */
+	mime_type_t mime = pipeline_input_mime(opts, buffer, size);
 	if (mime == MIME_UNKNOWN) {
 		fprintf(stderr, "pipeline_decode: unknown image format\n");
 		return -1;
+	}
+
+	if (mime == MIME_YUV && !opts->silent) {
+		size_t frame_size = 0;
+		if (yuv_frame_size(&opts->yuv, &frame_size) && size > frame_size) {
+			fprintf(stderr, "Note: raw YUV input has %zu bytes beyond the first frame (%zu bytes); only the first frame is decoded\n", size - frame_size, frame_size);
+		}
 	}
 
 	/* Decode with registry */

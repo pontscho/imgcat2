@@ -355,6 +355,7 @@ const char *mime_type_name(mime_type_t mime)
 		case MIME_CUR: return "CUR";
 		case MIME_JXL: return "JXL";
 		case MIME_SVG: return "SVG";
+		case MIME_YUV: return "YUV";
 		case MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}

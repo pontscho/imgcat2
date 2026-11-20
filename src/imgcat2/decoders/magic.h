@@ -37,6 +37,7 @@ typedef enum {
 	MIME_JXL, /**< JXL: JPEG XL format */
 	MIME_SVG, /**< SVG: Scalable Vector Graphics */
 	MIME_AVIF, /**< AVIF: AV1 Image File Format */
+	MIME_YUV, /**< Raw YUV (headerless; only via --yuv, never returned by detect_mime_type) */
 } mime_type_t;
 
 /**

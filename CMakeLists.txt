@@ -744,6 +744,7 @@ set(IMGCAT2_SOURCES
 	src/imgcat2/decoders/decoder_qoi.c
 	src/imgcat2/decoders/decoder_ico.c
 	src/imgcat2/decoders/decoder_pnm.c
+	src/imgcat2/decoders/decoder_yuv.c
 	src/imgcat2/decoders/decoder_nanosvg.c
 
 	# Encoders module

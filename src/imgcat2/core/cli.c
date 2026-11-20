@@ -66,6 +66,16 @@ void print_usage(const char *program_name)
 	printf("                            png: lossless, transparency support\n");
 	printf("                            jpeg: smaller files, no transparency\n");
 	printf("\n");
+	printf("Input Options:\n");
+	printf("      --yuv FMT:W:H[:YSTRIDE][:UVSTRIDE]\n");
+	printf("                            Treat input as a raw 8-bit YUV frame (no format detection)\n");
+	printf("                            FMT: i420 (yuv420p), yv12, nv12, nv21, i422 (yuv422p),\n");
+	printf("                                 i444 (yuv444p), yuyv (yuy2), uyvy, gray (y8, y800)\n");
+	printf("                            YSTRIDE: bytes per luma/packed row (default: minimal)\n");
+	printf("                            UVSTRIDE: bytes per chroma row (default: minimal)\n");
+	printf("                            Planes are contiguous (Y, U, V; yv12: Y, V, U);\n");
+	printf("                            BT.601 limited range; only the first frame is used\n");
+	printf("\n");
 	printf("Arguments:\n");
 	printf("  FILE                      Input image file (omit or '-' for stdin)\n");
 	printf("\n");
@@ -76,6 +86,7 @@ void print_usage(const char *program_name)
 	printf("  %s --fps 10 anim.gif      Animate at 10 FPS\n", program_name);
 	printf("  %s --jpeg 90 img.png > out.jpg  Convert to JPEG (stdout)\n", program_name);
 	printf("  %s --png 6 --output out.png img.jpg  Convert to PNG file\n", program_name);
+	printf("  %s --yuv nv12:1920:1080 frame.yuv  Display a raw NV12 frame\n", program_name);
 	printf("\n");
 }
 
@@ -118,6 +129,7 @@ void print_version(void)
 	for (size_t i = 0; i < g_decoder_count; i++) {
 		printf("  - %s\n", g_decoder_registry[i].name);
 	}
+	printf("  - YUV raw (via --yuv)\n");
 }
 
 /**
@@ -167,6 +179,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "output",        required_argument, 0, 'o'  },
 		{ "frame",         required_argument, 0, 'n'  },
 		{ "iterm2-format", required_argument, 0, 't'  },
+		{ "yuv",           required_argument, 0, 1003 },
 		{ 0,		       0,		         0, 0    },
 	};
 
@@ -229,6 +242,18 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 				opts->output_format = FORMAT_JXL;
 				opts->jxl_quality = atoi(optarg);
 				break;
+
+			case 1003: /* --yuv */
+			{
+				char err[160];
+				if (yuv_parse_spec(optarg, &opts->yuv, err, sizeof(err)) < 0) {
+					fprintf(stderr, "Error: Invalid --yuv '%s': %s\n", optarg, err);
+					fprintf(stderr, "Usage: --yuv format:width:height[:y_stride][:uv_stride]\n");
+					return -1;
+				}
+				opts->yuv_input = true;
+				break;
+			}
 
 			case 'o': opts->output_file = optarg; break;
 
