@@ -103,6 +103,7 @@ add_test(NAME test_decoder_png COMMAND test_decoder_png)
 
 set_tests_properties(test_decoder_png PROPERTIES
 	TIMEOUT 10
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
 # JPEG decoder tests (task-062)

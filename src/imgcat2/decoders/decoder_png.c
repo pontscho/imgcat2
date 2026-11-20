@@ -733,14 +733,61 @@ cleanup_error:
 #endif /* PNG_APNG_SUPPORTED */
 
 /**
- * @brief Decode static PNG image using libpng simplified API
+ * @brief Error message buffer for the static PNG decode path
+ */
+typedef struct {
+	char message[64]; /**< Last libpng error message (truncated) */
+} png_static_error_ctx;
+
+/**
+ * @brief libpng error callback for the static decode path
  *
- * Uses the simplified libpng API (png_image) for easier decoding.
- * Automatically handles:
- * - Color type conversion (RGB, RGBA, indexed, grayscale)
+ * Records the message for the caller's diagnostic and unwinds to the
+ * setjmp point in decode_png_static(). Never returns.
+ *
+ * @param png_ptr PNG read structure
+ * @param message libpng error message
+ */
+static void png_static_error_fn(png_structp png_ptr, png_const_charp message)
+{
+	png_static_error_ctx *ctx = (png_static_error_ctx *)png_get_error_ptr(png_ptr);
+
+	if (ctx != NULL && message != NULL) {
+		snprintf(ctx->message, sizeof(ctx->message), "%s", message);
+	}
+
+	png_longjmp(png_ptr, 1);
+}
+
+/**
+ * @brief libpng warning callback for the static decode path
+ *
+ * Warnings are ignored, as the simplified png_image API did before.
+ *
+ * @param png_ptr PNG read structure (unused)
+ * @param message libpng warning message (unused)
+ */
+static void png_static_warning_fn(png_structp png_ptr, png_const_charp message)
+{
+	(void)png_ptr;
+	(void)message;
+}
+
+/**
+ * @brief Decode static PNG image using the libpng low-level API
+ *
+ * Rows are decoded straight into the image_t RGBA8888 pixel buffer, with no
+ * intermediate buffer or copy. The transform set replicates exactly what the
+ * simplified png_image API does for PNG_FORMAT_RGBA (png_image_read_direct in
+ * libpng's pngread.c), so the output is byte-identical to it:
+ * - Palette, low-bit gray and tRNS expanded to 8-bit RGB(A) (png_set_expand)
+ * - Grayscale converted to RGB
+ * - Opaque alpha (0xFF) added when there is no alpha channel or tRNS
+ * - Gamma: input defaults to sRGB (8-bit) or linear (16-bit) unless the file
+ *   says otherwise (gAMA/sRGB/cICP/iCCP), output is sRGB; libpng only does the
+ *   conversion when the two differ significantly
+ * - 16-bit samples scaled (rounded) to 8 bits
  * - Interlaced PNGs (Adam7)
- * - Transparency (tRNS chunk)
- * - Gamma correction
  *
  * @param data Raw PNG file data
  * @param len Length of data in bytes
@@ -760,66 +807,103 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	// Initialize output
 	*frame_count = 0;
 
-	// Initialize png_image structure
-	png_image image;
-	memset(&image, 0, sizeof(png_image));
-	image.version = PNG_IMAGE_VERSION;
+	// Setup memory reader
+	png_mem_reader reader;
+	reader.data = data;
+	reader.size = len;
+	reader.offset = 0;
 
-	// Begin reading from memory buffer
-	if (png_image_begin_read_from_memory(&image, data, len) == 0) {
-		fprintf(stderr, "Error: libpng failed to read PNG header: %s\n", image.message);
-		png_image_free(&image);
+	png_static_error_ctx error_ctx;
+	error_ctx.message[0] = '\0';
+
+	// Create PNG read structures (warnings silenced, errors recorded)
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, &error_ctx, png_static_error_fn, png_static_warning_fn);
+	if (png_ptr == NULL) {
+		fprintf(stderr, "Error: Failed to create PNG read struct\n");
 		return NULL;
 	}
 
-	// Force RGBA8888 output format (8 bits per channel, 4 channels)
-	image.format = PNG_FORMAT_RGBA;
-
-	// Calculate required buffer size
-	size_t buffer_size = PNG_IMAGE_SIZE(image);
-	if (buffer_size == 0) {
-		fprintf(stderr, "Error: libpng returned zero buffer size\n");
-		png_image_free(&image);
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL) {
+		fprintf(stderr, "Error: Failed to create PNG info struct\n");
+		png_destroy_read_struct(&png_ptr, NULL, NULL);
 		return NULL;
 	}
 
-	// Allocate temporary buffer for decoded pixels
-	uint8_t *buffer = (uint8_t *)malloc(buffer_size);
-	if (buffer == NULL) {
-		fprintf(stderr, "Error: Failed to allocate PNG decode buffer (%zu bytes)\n", buffer_size);
-		png_image_free(&image);
+	// Assigned after setjmp and used in the error path: must be volatile
+	image_t *volatile img = NULL;
+	png_bytep *volatile row_pointers = NULL;
+
+	// Set up error handling
+	if (setjmp(png_jmpbuf(png_ptr))) {
+		fprintf(stderr, "Error: libpng failed to decode PNG: %s\n", error_ctx.message);
+		free(row_pointers);
+		image_destroy(img);
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
 
-	// Finish reading and decode
-	// Parameters:
-	// - image: png_image structure
-	// - NULL: no background color
-	// - buffer: output buffer
-	// - 0: row stride (0 = automatic)
-	// - NULL: no colormap
-	if (png_image_finish_read(&image, NULL, buffer, 0, NULL) == 0) {
-		fprintf(stderr, "Error: libpng failed to decode PNG: %s\n", image.message);
-		free(buffer);
-		png_image_free(&image);
-		return NULL;
+	// Same leniency as the simplified API: benign errors are warnings
+	png_set_benign_errors(png_ptr, 1);
+
+	// Set custom read function
+	png_set_read_fn(png_ptr, &reader, png_read_func);
+
+	// Read PNG header and all chunks before IDAT
+	png_read_info(png_ptr, info_ptr);
+
+	uint32_t width = png_get_image_width(png_ptr, info_ptr);
+	uint32_t height = png_get_image_height(png_ptr, info_ptr);
+	int color_type = png_get_color_type(png_ptr, info_ptr);
+	int bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+	bool has_alpha = (color_type & PNG_COLOR_MASK_ALPHA) != 0 || png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS) != 0;
+
+	// Transforms to RGBA8888; order and arguments mirror png_image_read_direct()
+	png_set_expand(png_ptr);
+	if ((color_type & PNG_COLOR_MASK_COLOR) == 0) {
+		png_set_gray_to_rgb(png_ptr);
+	}
+	// Default input gamma when the file has none: linear for 16-bit, else sRGB
+	png_set_alpha_mode_fixed(png_ptr, PNG_ALPHA_PNG, bit_depth == 16 ? PNG_GAMMA_LINEAR : PNG_DEFAULT_sRGB);
+	if (bit_depth == 16) {
+		png_set_scale_16(png_ptr);
+	}
+	if (!has_alpha) {
+		png_set_add_alpha(png_ptr, 0xFF, PNG_FILLER_AFTER);
+	}
+	// Output gamma: sRGB
+	png_set_alpha_mode_fixed(png_ptr, PNG_ALPHA_PNG, PNG_DEFAULT_sRGB);
+	png_set_interlace_handling(png_ptr);
+	png_read_update_info(png_ptr, info_ptr);
+
+	if (png_get_rowbytes(png_ptr, info_ptr) != (size_t)width * 4) {
+		png_error(png_ptr, "unexpected row size after RGBA8888 transforms");
 	}
 
-	// Create image_t structure
-	image_t *img = image_create(image.width, image.height);
+	// Create image_t structure and decode straight into its pixel buffer
+	img = image_create(width, height);
 	if (img == NULL) {
 		fprintf(stderr, "Error: Failed to create image_t structure\n");
-		free(buffer);
-		png_image_free(&image);
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
 
-	// Copy pixel data to image_t
-	size_t pixel_count = (size_t)image.width * (size_t)image.height * 4;
-	memcpy(img->pixels, buffer, pixel_count);
+	row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
+	if (row_pointers == NULL) {
+		fprintf(stderr, "Error: Failed to allocate row pointers\n");
+		image_destroy(img);
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return NULL;
+	}
 
-	// Free temporary buffer
-	free(buffer);
+	for (uint32_t y = 0; y < height; y++) {
+		row_pointers[y] = img->pixels + (size_t)y * width * 4;
+	}
+
+	png_read_image(png_ptr, row_pointers);
+
+	free(row_pointers);
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 
 	// Parse EXIF/XMP metadata
 #ifdef HAVE_EXIF_READER
@@ -847,9 +931,6 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	img->xmp = xmp;
 #endif
 
-	// Cleanup png_image structure
-	png_image_free(&image);
-
 	// Allocate frames array (single frame for PNG)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
@@ -860,8 +941,6 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 
 	frames[0] = img;
 	*frame_count = 1;
-
-	// fprintf(stderr, "PNG decoded: %ux%u, %u-bit RGBA\n", image.width, image.height, PNG_IMAGE_SAMPLE_SIZE(image.format) * 8);
 
 	return frames;
 }
