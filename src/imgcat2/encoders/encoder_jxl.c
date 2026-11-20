@@ -85,7 +85,9 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	basic_info.ysize = img->height;
 	basic_info.bits_per_sample = 8;
 	basic_info.exponent_bits_per_sample = 0;
-	basic_info.uses_original_profile = JXL_FALSE;
+	/* Lossless requires the original (non-XYB) color space; libjxl rejects
+	 * JxlEncoderSetFrameLossless() otherwise */
+	basic_info.uses_original_profile = use_lossless ? JXL_TRUE : JXL_FALSE;
 	basic_info.num_color_channels = 3;
 	basic_info.num_extra_channels = 1; /* Alpha channel */
 	basic_info.alpha_bits = 8;
@@ -157,9 +159,9 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 		JxlEncoderStatus status = JxlEncoderProcessOutput(encoder, &next_out, &avail_out);
 
 		if (status == JXL_ENC_NEED_MORE_OUTPUT) {
-			/* Buffer is full, resize it */
-			size_t written = buffer_capacity - avail_out;
-			buffer_size += written;
+			/* Buffer is full, resize it (bytes written so far = next_out - buffer;
+			 * avail_out only covers the space handed out since the last resize) */
+			buffer_size = (size_t)(next_out - buffer);
 
 			size_t new_capacity = buffer_capacity * 2;
 			uint8_t *new_buffer = (uint8_t *)realloc(buffer, new_capacity);
@@ -176,8 +178,7 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 			buffer_capacity = new_capacity;
 		} else if (status == JXL_ENC_SUCCESS) {
 			/* Encoding complete */
-			size_t written = buffer_capacity - avail_out;
-			buffer_size += written;
+			buffer_size = (size_t)(next_out - buffer);
 			break;
 		} else {
 			/* Error occurred */

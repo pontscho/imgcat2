@@ -1262,4 +1262,109 @@ CTEST(convert, jxl_quality_levels)
 	free(jxl_q90);
 	image_destroy(img);
 }
+
+/**
+ * @test Test JXL lossless round-trip
+ *
+ * Verifies that quality >= 95 encodes losslessly: decoding the output
+ * yields exactly the original RGBA pixels (alpha included). The 256x256
+ * noise image compresses to well over 128 KB, exercising the encoder's
+ * output buffer growth (several reallocations).
+ */
+CTEST(convert, jxl_lossless_roundtrip)
+{
+	decoder_registry_init(NULL);
+	encoder_registry_init(NULL);
+
+	uint32_t sizes[] = { 32, 256 };
+	for (size_t s = 0; s < sizeof(sizes) / sizeof(sizes[0]); s++) {
+		/* Create test image (pseudo-random noise, varying alpha) */
+		image_t *img = image_create(sizes[s], sizes[s]);
+		ASSERT_NOT_NULL(img);
+
+		uint32_t seed = 12345;
+		for (uint32_t y = 0; y < sizes[s]; y++) {
+			for (uint32_t x = 0; x < sizes[s]; x++) {
+				uint8_t *pixel = image_get_pixel(img, x, y);
+				for (int c = 0; c < 4; c++) {
+					seed = seed * 1103515245u + 12345u;
+					pixel[c] = (uint8_t)(seed >> 16);
+				}
+			}
+		}
+
+		int qualities[] = { 95, 100 };
+		for (size_t q = 0; q < sizeof(qualities) / sizeof(qualities[0]); q++) {
+			uint8_t *jxl_data = NULL;
+			size_t jxl_size = 0;
+			int result = encoder_encode(img, FORMAT_JXL, qualities[q], &jxl_data, &jxl_size);
+			ASSERT_EQUAL(0, result);
+			ASSERT_NOT_NULL(jxl_data);
+			if (sizes[s] == 256) {
+				ASSERT_TRUE(jxl_size > 128 * 1024);
+			}
+
+			image_t **frames = NULL;
+			int frame_count = 0;
+			result = pipeline_decode(NULL, jxl_data, jxl_size, &frames, &frame_count);
+			ASSERT_EQUAL(0, result);
+			ASSERT_EQUAL(1, frame_count);
+			ASSERT_EQUAL(img->width, frames[0]->width);
+			ASSERT_EQUAL(img->height, frames[0]->height);
+			ASSERT_EQUAL(0, memcmp(img->pixels, frames[0]->pixels, (size_t)img->width * img->height * 4));
+
+			free(jxl_data);
+			decoder_free_frames(frames, frame_count);
+		}
+
+		image_destroy(img);
+	}
+}
+#endif
+
+#ifdef HAVE_WEBP
+/**
+ * @test Test WebP lossless round-trip
+ *
+ * Verifies that quality 100 encodes losslessly: decoding the output
+ * yields exactly the original RGBA pixels.
+ */
+CTEST(convert, webp_lossless_roundtrip)
+{
+	decoder_registry_init(NULL);
+	encoder_registry_init(NULL);
+
+	/* Create test image (32x32, noisy opaque pattern) */
+	image_t *img = image_create(32, 32);
+	ASSERT_NOT_NULL(img);
+
+	for (uint32_t y = 0; y < 32; y++) {
+		for (uint32_t x = 0; x < 32; x++) {
+			uint8_t *pixel = image_get_pixel(img, x, y);
+			pixel[0] = (uint8_t)((x * 37 + y * 11) & 0xFF);
+			pixel[1] = (uint8_t)((x * 5 + y * 71) & 0xFF);
+			pixel[2] = (uint8_t)((x * y * 13) & 0xFF);
+			pixel[3] = 255;
+		}
+	}
+
+	uint8_t *webp_data = NULL;
+	size_t webp_size = 0;
+	int result = encoder_encode(img, FORMAT_WEBP, 100, &webp_data, &webp_size);
+	ASSERT_EQUAL(0, result);
+	ASSERT_NOT_NULL(webp_data);
+
+	image_t **frames = NULL;
+	int frame_count = 0;
+	result = pipeline_decode(NULL, webp_data, webp_size, &frames, &frame_count);
+	ASSERT_EQUAL(0, result);
+	ASSERT_EQUAL(1, frame_count);
+	ASSERT_EQUAL(img->width, frames[0]->width);
+	ASSERT_EQUAL(img->height, frames[0]->height);
+	ASSERT_EQUAL(0, memcmp(img->pixels, frames[0]->pixels, (size_t)img->width * img->height * 4));
+
+	free(webp_data);
+	decoder_free_frames(frames, frame_count);
+	image_destroy(img);
+}
 #endif

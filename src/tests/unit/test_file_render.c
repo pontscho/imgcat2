@@ -356,3 +356,119 @@ CTEST(file_render, invalid_frame_index)
 	image_destroy(frame1);
 	image_destroy(frame2);
 }
+
+#if defined(HAVE_HEIF) || defined(HAVE_WEBP) || defined(HAVE_JXL)
+/* Helper: render one frame with opts to a file under $TMPDIR, return its size (0 on failure) */
+static size_t render_to_temp_file(image_t *img, cli_options_t *opts, const char *name)
+{
+	const char *tmpdir = getenv("TMPDIR");
+	char path[4096];
+	snprintf(path, sizeof(path), "%s/%s", (tmpdir != NULL && tmpdir[0] != '\0') ? tmpdir : "/tmp", name);
+
+	image_t *frames[] = { img };
+	opts->output_file = path;
+	opts->silent = true;
+	unlink(path);
+
+	size_t size = 0;
+	if (file_render(frames, 1, opts) != 0 || !file_exists_with_content(path, &size)) {
+		size = 0;
+	}
+	unlink(path);
+	opts->output_file = NULL;
+	return size;
+}
+#endif
+
+#ifdef HAVE_HEIF
+/**
+ * @test Test file_render() honors the HEIF quality option
+ *
+ * Verifies that opts->heif_quality reaches the encoder (higher quality,
+ * larger file) instead of a fixed quality.
+ */
+CTEST(file_render, heif_quality_option)
+{
+	encoder_registry_init(NULL);
+
+	image_t *img = create_test_image(64, 64);
+	ASSERT_NOT_NULL(img);
+
+	cli_options_t opts = { 0 };
+	opts.output_format = FORMAT_HEIF;
+
+	opts.heif_quality = 10;
+	size_t size_low = render_to_temp_file(img, &opts, "imgcat2_test_render_q10.heif");
+	opts.heif_quality = 90;
+	size_t size_high = render_to_temp_file(img, &opts, "imgcat2_test_render_q90.heif");
+
+	ASSERT_TRUE(size_low > 0);
+	ASSERT_TRUE(size_high > 0);
+	ASSERT_TRUE(size_low < size_high);
+
+	image_destroy(img);
+}
+#endif
+
+#ifdef HAVE_WEBP
+/**
+ * @test Test file_render() honors the WebP quality option
+ *
+ * Verifies that opts->webp_quality reaches the encoder (higher quality,
+ * larger file) instead of a fixed quality.
+ */
+CTEST(file_render, webp_quality_option)
+{
+	encoder_registry_init(NULL);
+
+	image_t *img = create_test_image(64, 64);
+	ASSERT_NOT_NULL(img);
+
+	cli_options_t opts = { 0 };
+	opts.output_format = FORMAT_WEBP;
+
+	opts.webp_quality = 10;
+	size_t size_low = render_to_temp_file(img, &opts, "imgcat2_test_render_q10.webp");
+	opts.webp_quality = 90;
+	size_t size_high = render_to_temp_file(img, &opts, "imgcat2_test_render_q90.webp");
+
+	ASSERT_TRUE(size_low > 0);
+	ASSERT_TRUE(size_high > 0);
+	ASSERT_TRUE(size_low < size_high);
+
+	image_destroy(img);
+}
+#endif
+
+#ifdef HAVE_JXL
+/**
+ * @test Test file_render() honors the JXL quality option
+ *
+ * Verifies that opts->jxl_quality reaches the encoder: higher lossy quality
+ * gives a larger file, and quality 100 (lossless) succeeds.
+ */
+CTEST(file_render, jxl_quality_option)
+{
+	encoder_registry_init(NULL);
+
+	image_t *img = create_test_image(64, 64);
+	ASSERT_NOT_NULL(img);
+
+	cli_options_t opts = { 0 };
+	opts.output_format = FORMAT_JXL;
+
+	opts.jxl_quality = 10;
+	size_t size_low = render_to_temp_file(img, &opts, "imgcat2_test_render_q10.jxl");
+	opts.jxl_quality = 90;
+	size_t size_high = render_to_temp_file(img, &opts, "imgcat2_test_render_q90.jxl");
+	opts.jxl_quality = 100;
+	size_t size_lossless = render_to_temp_file(img, &opts, "imgcat2_test_render_q100.jxl");
+
+	ASSERT_TRUE(size_low > 0);
+	ASSERT_TRUE(size_high > 0);
+	ASSERT_TRUE(size_low < size_high);
+	ASSERT_TRUE(size_lossless > 0);
+
+	image_destroy(img);
+}
+#endif

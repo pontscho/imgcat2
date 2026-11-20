@@ -146,6 +146,12 @@ int file_render(image_t **frames, int frame_count, const cli_options_t *opts)
 		quality = opts->jpeg_quality;
 	} else if (opts->output_format == FORMAT_PNG) {
 		quality = opts->png_compression;
+	} else if (opts->output_format == FORMAT_HEIF) {
+		quality = opts->heif_quality;
+	} else if (opts->output_format == FORMAT_WEBP) {
+		quality = opts->webp_quality;
+	} else if (opts->output_format == FORMAT_JXL) {
+		quality = opts->jxl_quality;
 	}
 
 	/* Encode image */
