@@ -70,22 +70,10 @@ CTEST(security, file_size_limit)
 	FILE *fp = fopen(temp_file, "wb");
 
 	if (fp != NULL) {
-		/* Write IMAGE_MAX_FILE_SIZE + 1 bytes */
-		/* We'll write in chunks to avoid excessive memory use in test */
-		const size_t chunk_size = 1024 * 1024; /* 1MB chunks */
-		uint8_t *chunk = calloc(1, chunk_size);
-
-		if (chunk != NULL) {
-			size_t written = 0;
-			size_t target = IMAGE_MAX_FILE_SIZE + 1;
-
-			while (written < target) {
-				size_t to_write = (target - written > chunk_size) ? chunk_size : (target - written);
-				fwrite(chunk, 1, to_write, fp);
-				written += to_write;
-			}
-
-			free(chunk);
+		/* Make the file IMAGE_MAX_FILE_SIZE + 1 bytes long without writing it
+		 * all: seek to the last byte and write one (sparse file) */
+		if (fseeko(fp, (off_t)IMAGE_MAX_FILE_SIZE, SEEK_SET) == 0) {
+			fputc(0, fp);
 		}
 
 		fclose(fp);

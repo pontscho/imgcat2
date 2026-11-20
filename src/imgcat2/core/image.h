@@ -24,8 +24,8 @@
 /** Maximum total pixels (200 megapixels) */
 #define IMAGE_MAX_PIXELS 200000000UL
 
-/** Maximum file size for input (50MB) */
-#define IMAGE_MAX_FILE_SIZE 52428800UL
+/** Maximum file size for input (1GiB; uncompressed 200MP RGBA fits) */
+#define IMAGE_MAX_FILE_SIZE 1073741824UL
 
 /** @} */
 

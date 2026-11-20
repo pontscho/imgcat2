@@ -97,11 +97,11 @@ CTEST(integration, stdin_size_limit)
 {
 	/* Verify that the size limit constant exists */
 	size_t max_size = IMAGE_MAX_FILE_SIZE;
-	ASSERT_EQUAL(52428800UL, max_size); /* 50MB */
+	ASSERT_EQUAL(1073741824UL, max_size); /* 1GiB */
 
 	/* Any stdin read should respect this limit */
 	ASSERT_TRUE(max_size > 0);
-	ASSERT_TRUE(max_size < 1000000000UL); /* Less than 1GB */
+	ASSERT_TRUE(max_size <= 1073741824UL); /* At most 1GiB */
 }
 
 /**
