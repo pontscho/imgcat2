@@ -498,96 +498,109 @@ set_tests_properties(test_png_exif_integration PROPERTIES
 	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
+# The *_exif_integration tests below compile an optional decoder directly, so they
+# only exist when that decoder is built (otherwise they fail to compile/link)
+
 # WebP EXIF integration tests
-add_executable(test_webp_exif_integration
-	integration/main.c
-	integration/test_webp_exif_integration.c
-	../imgcat2/decoders/decoder_webp.c
-)
+if(WEBP_FOUND)
+	add_executable(test_webp_exif_integration
+		integration/main.c
+		integration/test_webp_exif_integration.c
+		../imgcat2/decoders/decoder_webp.c
+	)
 
-target_link_libraries(test_webp_exif_integration
-	imgcat2_lib
-	${WEBP_LIBRARIES}
-)
+	target_link_libraries(test_webp_exif_integration
+		imgcat2_lib
+		${WEBP_LIBRARIES}
+	)
 
-add_test(NAME test_webp_exif_integration COMMAND test_webp_exif_integration)
+	add_test(NAME test_webp_exif_integration COMMAND test_webp_exif_integration)
 
-set_tests_properties(test_webp_exif_integration PROPERTIES
-	TIMEOUT 10
-	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+	set_tests_properties(test_webp_exif_integration PROPERTIES
+		TIMEOUT 10
+		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+	)
+endif()
 
 # HEIF EXIF integration tests
-add_executable(test_heif_exif_integration
-	integration/main.c
-	integration/test_heif_exif_integration.c
-	../imgcat2/decoders/decoder_heif.c
-)
+if(HEIF_FOUND)
+	add_executable(test_heif_exif_integration
+		integration/main.c
+		integration/test_heif_exif_integration.c
+		../imgcat2/decoders/decoder_heif.c
+	)
 
-target_link_libraries(test_heif_exif_integration
-	imgcat2_lib
-	${HEIF_CUSTOM_LIBS}
-)
+	target_link_libraries(test_heif_exif_integration
+		imgcat2_lib
+		${HEIF_CUSTOM_LIBS}
+	)
 
-add_test(NAME test_heif_exif_integration COMMAND test_heif_exif_integration)
+	add_test(NAME test_heif_exif_integration COMMAND test_heif_exif_integration)
 
-set_tests_properties(test_heif_exif_integration PROPERTIES
-	TIMEOUT 10
-)
+	set_tests_properties(test_heif_exif_integration PROPERTIES
+		TIMEOUT 10
+	)
+endif()
 
 # JXL EXIF integration tests
-add_executable(test_jxl_exif_integration
-	integration/main.c
-	integration/test_jxl_exif_integration.c
-	../imgcat2/decoders/decoder_jxl.c
-)
+if(JXL_FOUND)
+	add_executable(test_jxl_exif_integration
+		integration/main.c
+		integration/test_jxl_exif_integration.c
+		../imgcat2/decoders/decoder_jxl.c
+	)
 
-target_link_libraries(test_jxl_exif_integration
-	imgcat2_lib
-	${JXL_CUSTOM_LIBS}
-)
+	target_link_libraries(test_jxl_exif_integration
+		imgcat2_lib
+		${JXL_CUSTOM_LIBS}
+	)
 
-add_test(NAME test_jxl_exif_integration COMMAND test_jxl_exif_integration)
+	add_test(NAME test_jxl_exif_integration COMMAND test_jxl_exif_integration)
 
-set_tests_properties(test_jxl_exif_integration PROPERTIES
-	TIMEOUT 10
-)
+	set_tests_properties(test_jxl_exif_integration PROPERTIES
+		TIMEOUT 10
+	)
+endif()
 
 # RAW EXIF integration tests (task-022)
-add_executable(test_raw_exif_integration
-	integration/main.c
-	integration/test_raw_exif_integration.c
-	../imgcat2/decoders/decoder_raw.c
-)
+if(RAW_FOUND)
+	add_executable(test_raw_exif_integration
+		integration/main.c
+		integration/test_raw_exif_integration.c
+		../imgcat2/decoders/decoder_raw.c
+	)
 
-target_link_libraries(test_raw_exif_integration
-	imgcat2_lib
-	${RAW_CUSTOM_LIBS}
-)
+	target_link_libraries(test_raw_exif_integration
+		imgcat2_lib
+		${RAW_CUSTOM_LIBS}
+	)
 
-add_test(NAME test_raw_exif_integration COMMAND test_raw_exif_integration)
+	add_test(NAME test_raw_exif_integration COMMAND test_raw_exif_integration)
 
-set_tests_properties(test_raw_exif_integration PROPERTIES
-	TIMEOUT 30
-)
+	set_tests_properties(test_raw_exif_integration PROPERTIES
+		TIMEOUT 30
+	)
+endif()
 
 # TIFF EXIF integration test
-add_executable(test_tiff_exif_integration
-	integration/main.c
-	integration/test_tiff_exif_integration.c
-	../imgcat2/decoders/decoder_tiff.c
-)
+if(TIFF_FOUND)
+	add_executable(test_tiff_exif_integration
+		integration/main.c
+		integration/test_tiff_exif_integration.c
+		../imgcat2/decoders/decoder_tiff.c
+	)
 
-target_link_libraries(test_tiff_exif_integration
-	imgcat2_lib
-)
+	target_link_libraries(test_tiff_exif_integration
+		imgcat2_lib
+	)
 
-add_test(NAME test_tiff_exif_integration COMMAND test_tiff_exif_integration)
+	add_test(NAME test_tiff_exif_integration COMMAND test_tiff_exif_integration)
 
-set_tests_properties(test_tiff_exif_integration PROPERTIES
-	TIMEOUT 10
-	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+	set_tests_properties(test_tiff_exif_integration PROPERTIES
+		TIMEOUT 10
+		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+	)
+endif()
 
 # Orientation integration tests
 add_executable(test_jpeg_orientation
@@ -711,21 +724,23 @@ if(ENABLE_RAW)
 	)
 endif()
 
-# TIFF orientation test
-add_executable(test_tiff_orientation
-	integration/main.c
-	integration/test_tiff_orientation.c
-)
+# TIFF orientation test (decodes TIFF at runtime)
+if(TIFF_FOUND)
+	add_executable(test_tiff_orientation
+		integration/main.c
+		integration/test_tiff_orientation.c
+	)
 
-target_link_libraries(test_tiff_orientation
-	imgcat2_lib
-)
+	target_link_libraries(test_tiff_orientation
+		imgcat2_lib
+	)
 
-add_test(NAME test_tiff_orientation COMMAND test_tiff_orientation)
+	add_test(NAME test_tiff_orientation COMMAND test_tiff_orientation)
 
-set_tests_properties(test_tiff_orientation PROPERTIES
-	TIMEOUT 10
-)
+	set_tests_properties(test_tiff_orientation PROPERTIES
+		TIMEOUT 10
+	)
+endif()
 
 # Metadata output tests
 add_executable(test_metadata_output
