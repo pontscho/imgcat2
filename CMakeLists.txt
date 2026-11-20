@@ -37,6 +37,8 @@ option(USE_SYSTEM_WEBP "Use host libwebp instead of vendored libwebp" OFF)
 option(USE_SYSTEM_TIFF "Use host libtiff instead of vendored libtiff" OFF)
 option(USE_SYSTEM_LCMS2 "Use host lcms2 instead of vendored Little-CMS" OFF)
 option(USE_SYSTEM_RAW "Use host libraw instead of vendored LibRaw" OFF)
+option(USE_SYSTEM_HEIF "Use host libheif (+ codecs) instead of vendored libheif/libde265/kvazaar/aom/openjpeg" OFF)
+option(USE_SYSTEM_JXL "Use host libjxl (+ highway/brotli) instead of vendored libjxl" OFF)
 
 # Static linking preference
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
@@ -159,13 +161,23 @@ set(ZLIB_LIBRARY ZLIB::ZLIB CACHE STRING "zlib library (vendored zlib-ng target)
 set(COMPRESSION_LIB_TYPE "zlib-ng (vendored)")
 
 # Helper for vendored add_subdirectory() projects: their own tests/tools must never
-# register with our CTest or build by default
+# register with our CTest or build by default.
+# imgcat2_vendor_begin(NO_INSTALL) additionally skips the install rules of the
+# subproject (directory-scoped CMAKE_SKIP_INSTALL_RULES): upstream install(EXPORT)
+# sets would otherwise require every vendored dependency they link (zlib-ng, brotli,
+# kvazaar, ...) to be in an export set too. imgcat2's own install rules are unaffected.
 macro(imgcat2_vendor_begin)
 	set(_IMGCAT2_SAVED_BUILD_TESTING ${BUILD_TESTING})
 	set(BUILD_TESTING OFF)
+	# Macro arguments are not variables: copy ARGN before IN_LIST
+	set(_imgcat2_vendor_args ${ARGN})
+	if("NO_INSTALL" IN_LIST _imgcat2_vendor_args)
+		set(CMAKE_SKIP_INSTALL_RULES ON)
+	endif()
 endmacro()
 macro(imgcat2_vendor_end)
 	set(BUILD_TESTING ${_IMGCAT2_SAVED_BUILD_TESTING})
+	unset(CMAKE_SKIP_INSTALL_RULES)
 endmacro()
 
 # Host static link flags (pkg-config --static) of libraries that still come from the
@@ -181,7 +193,9 @@ function(imgcat2_strip_vendored_ldflags _var)
 			OR (TARGET png_static AND _f MATCHES "^-lpng(16)?$")
 			OR (TARGET vendor_giflib AND _f STREQUAL "-lgif")
 			OR (TARGET webp AND _f MATCHES "^-l(webp|webpdemux|webpmux|sharpyuv)$")
-			OR (TARGET vendor_lcms2 AND _f STREQUAL "-llcms2"))
+			OR (TARGET vendor_lcms2 AND _f STREQUAL "-llcms2")
+			OR (TARGET brotlicommon AND _f MATCHES "^-lbrotli(common|dec|enc)$")
+			OR (TARGET hwy AND _f STREQUAL "-lhwy"))
 			continue()
 		endif()
 		list(APPEND _out "${_f}")
@@ -576,15 +590,284 @@ elseif(ENABLE_WEBP)
 	endif()
 endif()
 
-# HEIF (optional)
-if(ENABLE_HEIF)
+# Little-CMS 2 (MIT): color management of the vendored LibRaw and libjxl (JPEGXL_ENABLE_SKCMS=OFF)
+if((ENABLE_RAW AND NOT USE_SYSTEM_RAW) OR (ENABLE_JXL AND NOT USE_SYSTEM_JXL))
+	if(USE_SYSTEM_LCMS2)
+		pkg_check_modules(LCMS2 REQUIRED lcms2)
+		find_library(LCMS2_STATIC_LIB NAMES liblcms2.a lcms2 REQUIRED)
+		add_library(vendor_lcms2_host INTERFACE)
+		target_include_directories(vendor_lcms2_host INTERFACE ${LCMS2_INCLUDE_DIRS})
+		target_link_libraries(vendor_lcms2_host INTERFACE ${LCMS2_STATIC_LIB} m)
+		set(LCMS2_TARGET vendor_lcms2_host)
+		set(LCMS2_LIB_TYPE "host")
+	else()
+		# Pattern B: hand-written static target from src/*.c
+		set(LCMS2_SRC_DIR "${CMAKE_SOURCE_DIR}/vendor/lcms2")
+		file(GLOB LCMS2_SOURCES "${LCMS2_SRC_DIR}/src/*.c")
+		add_library(vendor_lcms2 STATIC ${LCMS2_SOURCES})
+		target_include_directories(vendor_lcms2
+			PUBLIC ${LCMS2_SRC_DIR}/include
+			PRIVATE ${LCMS2_SRC_DIR}/src)
+		set_target_properties(vendor_lcms2 PROPERTIES
+			POSITION_INDEPENDENT_CODE ON
+			C_CLANG_TIDY "")
+		if(UNIX)
+			target_link_libraries(vendor_lcms2 PUBLIC m)
+		endif()
+		set(LCMS2_TARGET vendor_lcms2)
+		set(LCMS2_LIB_TYPE "vendored lcms2 2.20")
+	endif()
+endif()
+
+# Brotli (MIT): a single vendored copy shared by libheif (brotli-compressed items of the
+# ISO/IEC 23001-17 uncompressed codec) and libjxl. Static libraries only, no CLI/tests.
+if((ENABLE_HEIF AND NOT USE_SYSTEM_HEIF) OR (ENABLE_JXL AND NOT USE_SYSTEM_JXL))
+	set(BROTLI_BUILD_TOOLS OFF CACHE BOOL "brotli: no CLI tool")
+	set(BROTLI_BUILD_FOR_PACKAGE OFF CACHE BOOL "brotli: static libraries only")
+	set(BROTLI_DISABLE_TESTS ON CACHE BOOL "brotli: no tests")
+	imgcat2_vendor_begin(NO_INSTALL)
+	add_subdirectory(vendor/brotli EXCLUDE_FROM_ALL)
+	imgcat2_vendor_end()
+	set(IMGCAT2_VENDORED_BROTLI_LIBRARIES brotlidec brotlienc brotlicommon)
+	set(IMGCAT2_VENDORED_BROTLI_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/vendor/brotli/c/include")
+	set(BROTLI_LIB_TYPE "vendored brotli 1.2.1")
+endif()
+
+# HEIF / AVIF (optional)
+if(ENABLE_HEIF AND NOT USE_SYSTEM_HEIF)
+	# Vendored HEIF stack, everything static and built into libheif (no plugin loading):
+	#   libheif 1.23.7          container + codec glue                    LGPL-3.0
+	#   libde265 1.1.3          HEVC decoder                              LGPL-3.0
+	#   kvazaar 2.3.2           HEVC encoder (x265 is GPL: not used)      BSD-3-Clause
+	#   aom 3.15.3              AV1 decoder + encoder (AVIF)              BSD-2-Clause + AOM patent license
+	#   OpenJPEG 2.5.4          JPEG 2000 decoder + encoder (j2k in HEIF) BSD-2-Clause
+	#   libjpeg-turbo, zlib-ng, brotli, libsharpyuv: the shared vendored copies
+	# License: libheif and libde265 are LGPL-3.0. Static linking is allowed, but whoever
+	# distributes the imgcat2 binary must let recipients relink it against a modified
+	# libheif/libde265 (LGPL-3.0 section 4(d)), e.g. by offering imgcat2's source or
+	# object files. dav1d/rav1e/SVT-AV1/ffmpeg/x264/openh264/vvenc/vvdec/uvg266: not used.
+	enable_language(CXX)
+	find_package(Threads REQUIRED)
+	set(IMGCAT2_VENDORED_FIND_DIR "${CMAKE_SOURCE_DIR}/cmake/vendored-find")
+
+	# --- libde265 (HEVC decoding): upstream CMake, library only
+	set(ENABLE_SDL OFF CACHE BOOL "libde265: no SDL")
+	set(ENABLE_DECODER OFF CACHE BOOL "libde265: no dec265 tool")
+	set(ENABLE_ENCODER OFF CACHE BOOL "libde265: no experimental encoder")
+	set(ENABLE_SHERLOCK265 OFF CACHE BOOL "libde265: no sherlock265")
+	set(ENABLE_INTERNAL_DEVELOPMENT_TOOLS OFF CACHE BOOL "libde265: no dev tools")
+	imgcat2_vendor_begin(NO_INSTALL)
+	add_subdirectory(vendor/libde265 EXCLUDE_FROM_ALL)
+	imgcat2_vendor_end()
+	# Public headers staged into their own include dir: the libde265 source/binary roots
+	# also hold config.h and other generic names that must not leak into libheif
+	set(LIBDE265_STAGE_DIR "${CMAKE_BINARY_DIR}/_deps/libde265-include")
+	configure_file("${CMAKE_SOURCE_DIR}/vendor/libde265/libde265/de265.h"
+		"${LIBDE265_STAGE_DIR}/libde265/de265.h" COPYONLY)
+	configure_file("${CMAKE_BINARY_DIR}/vendor/libde265/libde265/de265-version.h"
+		"${LIBDE265_STAGE_DIR}/libde265/de265-version.h" COPYONLY)
+	set(IMGCAT2_VENDORED_LIBDE265_LIBRARIES de265)
+	set(IMGCAT2_VENDORED_LIBDE265_INCLUDE_DIRS "${LIBDE265_STAGE_DIR}")
+	set(IMGCAT2_VENDORED_LIBDE265_VERSION "1.1.3")
+
+	# --- kvazaar (HEVC encoding): pattern B, hand-written static target. Upstream's CMake
+	# runs "git submodule update" in its source dir, writes version.h/kvazaar.pc.temp into
+	# src/ and registers shell tests unconditionally, so it is not add_subdirectory()'d.
+	# Source list mirrors upstream: src/*.c minus the CLI, src/strategies/**/*.c, libmd5.
+	set(KVAZAAR_SRC_DIR "${CMAKE_SOURCE_DIR}/vendor/kvazaar")
+	set(KVAZAAR_GEN_DIR "${CMAKE_BINARY_DIR}/_deps/kvazaar-gen")
+	file(GLOB KVAZAAR_SOURCES "${KVAZAAR_SRC_DIR}/src/*.c")
+	list(REMOVE_ITEM KVAZAAR_SOURCES
+		"${KVAZAAR_SRC_DIR}/src/encmain.c"
+		"${KVAZAAR_SRC_DIR}/src/cli.c"
+		"${KVAZAAR_SRC_DIR}/src/yuv_io.c")
+	file(GLOB_RECURSE KVAZAAR_STRATEGY_SOURCES "${KVAZAAR_SRC_DIR}/src/strategies/*.c")
+	file(STRINGS "${KVAZAAR_SRC_DIR}/CMakeLists.txt" _kvz_version_line REGEX "^VERSION [0-9]+\\.[0-9]+\\.[0-9]+")
+	string(REGEX REPLACE "^VERSION ([0-9.]+).*$" "\\1" KVAZAAR_VERSION "${_kvz_version_line}")
+	function(imgcat2_kvazaar_version_header _in _out)
+		# Variables of upstream's version.h.in, scoped to this function
+		set(PROJECT_VERSION "${KVAZAAR_VERSION}")
+		set(KVZ_COMPILER_STRING "${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
+		string(TIMESTAMP CMAKE_BUILD_DATE %Y-%m-%d)
+		configure_file("${_in}" "${_out}" @ONLY)
+	endfunction()
+	imgcat2_kvazaar_version_header("${KVAZAAR_SRC_DIR}/src/version.h.in" "${KVAZAAR_GEN_DIR}/private/version.h")
+	configure_file("${KVAZAAR_SRC_DIR}/src/kvazaar.h" "${KVAZAAR_GEN_DIR}/include/kvazaar.h" COPYONLY)
+	add_library(vendor_kvazaar STATIC
+		${KVAZAAR_SOURCES}
+		${KVAZAAR_STRATEGY_SOURCES}
+		"${KVAZAAR_SRC_DIR}/src/extras/libmd5.c")
+	target_include_directories(vendor_kvazaar
+		PUBLIC "${KVAZAAR_GEN_DIR}/include"
+		PRIVATE "${KVAZAAR_GEN_DIR}/private" "${KVAZAAR_SRC_DIR}/src"
+			"${KVAZAAR_SRC_DIR}/src/extras" "${KVAZAAR_SRC_DIR}/src/strategies")
+	# KVZ_DLL_EXPORTS without PIC = "building the static library"; KVZ_STATIC_LIB for users
+	target_compile_definitions(vendor_kvazaar
+		PRIVATE CMAKE_BUILD KVZ_DLL_EXPORTS
+		INTERFACE KVZ_STATIC_LIB)
+	if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+		# Runtime-dispatched SIMD kernels, flags as upstream
+		file(GLOB _kvz_avx2_sources "${KVAZAAR_SRC_DIR}/src/strategies/avx2/*.c")
+		file(GLOB _kvz_sse41_sources "${KVAZAAR_SRC_DIR}/src/strategies/sse41/*.c")
+		set_property(SOURCE ${_kvz_avx2_sources} APPEND PROPERTY COMPILE_OPTIONS
+			-mavx2 -mbmi -mpopcnt -mlzcnt -mbmi2)
+		set_property(SOURCE ${_kvz_sse41_sources} APPEND PROPERTY COMPILE_OPTIONS -msse4.1)
+	endif()
+	target_link_libraries(vendor_kvazaar PUBLIC Threads::Threads)
+	if(UNIX)
+		target_link_libraries(vendor_kvazaar PUBLIC m)
+	endif()
+	set_target_properties(vendor_kvazaar PROPERTIES
+		POSITION_INDEPENDENT_CODE ON
+		C_CLANG_TIDY "")
+	set(IMGCAT2_VENDORED_KVAZAAR_LIBRARIES vendor_kvazaar)
+	set(IMGCAT2_VENDORED_KVAZAAR_INCLUDE_DIRS "${KVAZAAR_GEN_DIR}/include")
+
+	# --- aom (AV1 decoding + encoding): ExternalProject, like libjpeg-turbo. aom puts
+	# several hundred HAVE_*/CONFIG_* entries into the CMake cache (HAVE_AVX2, HAVE_SSE4_1,
+	# ...), which would collide with other subprojects' variables under add_subdirectory().
+	# Library only; runtime CPU detection; nasm for the x86 assembly; no libyuv/libwebm
+	# (only used by the aomenc/aomdec apps), no VMAF/butteraugli tuning, no in-tree highway.
+	include(ExternalProject)
+	set(AOM_PREFIX "${CMAKE_BINARY_DIR}/_deps/aom-install")
+	set(AOM_LIBRARY "${AOM_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}aom${CMAKE_STATIC_LIBRARY_SUFFIX}")
+	set(_aom_cache_args
+		-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}
+		-DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}
+		-DCMAKE_BUILD_TYPE:STRING=Release
+		-DCMAKE_INSTALL_PREFIX:PATH=${AOM_PREFIX}
+		-DCMAKE_INSTALL_LIBDIR:PATH=lib
+		-DCMAKE_INSTALL_INCLUDEDIR:PATH=include
+		-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+		-DBUILD_SHARED_LIBS:BOOL=OFF
+		-DENABLE_APPS:BOOL=OFF
+		-DENABLE_DOCS:BOOL=OFF
+		-DENABLE_EXAMPLES:BOOL=OFF
+		-DENABLE_TESTS:BOOL=OFF
+		-DENABLE_TESTDATA:BOOL=OFF
+		-DENABLE_TOOLS:BOOL=OFF
+		-DENABLE_NASM:BOOL=ON
+		-DCONFIG_AV1_DECODER:STRING=1
+		-DCONFIG_AV1_ENCODER:STRING=1
+		-DCONFIG_RUNTIME_CPU_DETECT:STRING=1
+		-DCONFIG_LIBYUV:STRING=0
+		-DCONFIG_WEBM_IO:STRING=0
+		-DCONFIG_TUNE_VMAF:STRING=0
+		-DCONFIG_TUNE_BUTTERAUGLI:STRING=0
+		-DCONFIG_HIGHWAY:STRING=0
+	)
+	if(APPLE)
+		list(APPEND _aom_cache_args
+			"-DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHITECTURES}"
+			"-DCMAKE_OSX_DEPLOYMENT_TARGET:STRING=${CMAKE_OSX_DEPLOYMENT_TARGET}"
+			"-DCMAKE_OSX_SYSROOT:PATH=${CMAKE_OSX_SYSROOT}")
+	endif()
+	ExternalProject_Add(aom-ext
+		SOURCE_DIR "${CMAKE_SOURCE_DIR}/vendor/aom"
+		BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/aom-build"
+		INSTALL_DIR "${AOM_PREFIX}"
+		CMAKE_CACHE_ARGS ${_aom_cache_args}
+		BUILD_BYPRODUCTS "${AOM_LIBRARY}"
+		UPDATE_COMMAND ""
+		EXCLUDE_FROM_ALL TRUE
+	)
+	# Headers are installed at build time; the directory must exist at generate time
+	file(MAKE_DIRECTORY "${AOM_PREFIX}/include")
+	add_library(AOM::aom STATIC IMPORTED GLOBAL)
+	set_target_properties(AOM::aom PROPERTIES
+		IMPORTED_LOCATION "${AOM_LIBRARY}"
+		INTERFACE_INCLUDE_DIRECTORIES "${AOM_PREFIX}/include"
+		INTERFACE_LINK_LIBRARIES "Threads::Threads;$<$<PLATFORM_ID:Linux>:m>")
+	add_dependencies(AOM::aom aom-ext)
+	set(IMGCAT2_VENDORED_AOM_LIBRARIES AOM::aom)
+	set(IMGCAT2_VENDORED_AOM_INCLUDE_DIRS "${AOM_PREFIX}/include")
+
+	# --- OpenJPEG (JPEG 2000 in HEIF, as the host libheif had): upstream CMake, openjp2 only
+	set(BUILD_CODEC OFF CACHE BOOL "openjpeg: no opj_* tools")
+	set(BUILD_STATIC_LIBS ON CACHE BOOL "openjpeg: static library")
+	set(BUILD_JPIP OFF CACHE BOOL "openjpeg: no JPIP")
+	set(BUILD_DOC OFF CACHE BOOL "openjpeg: no docs")
+	set(BUILD_LUTS_GENERATOR OFF CACHE BOOL "openjpeg: no LUT generator")
+	set(BUILD_UNIT_TESTS OFF CACHE BOOL "openjpeg: no unit tests")
+	imgcat2_vendor_begin(NO_INSTALL)
+	add_subdirectory(vendor/openjpeg EXCLUDE_FROM_ALL)
+	imgcat2_vendor_end()
+	# OpenJPEG declares these as CACHE entries; they would relocate every target created
+	# afterwards (imgcat2 included) into the openjpeg build dir
+	unset(EXECUTABLE_OUTPUT_PATH CACHE)
+	unset(LIBRARY_OUTPUT_PATH CACHE)
+	set(OPENJPEG_STAGE_DIR "${CMAKE_BINARY_DIR}/_deps/openjpeg-include")
+	configure_file("${CMAKE_SOURCE_DIR}/vendor/openjpeg/src/lib/openjp2/openjpeg.h"
+		"${OPENJPEG_STAGE_DIR}/openjpeg.h" COPYONLY)
+	configure_file("${CMAKE_BINARY_DIR}/vendor/openjpeg/src/lib/openjp2/opj_config.h"
+		"${OPENJPEG_STAGE_DIR}/opj_config.h" COPYONLY)
+	set(IMGCAT2_VENDORED_OPENJPEG_LIBRARIES openjp2)
+	set(IMGCAT2_VENDORED_OPENJPEG_INCLUDE_DIRS "${OPENJPEG_STAGE_DIR}")
+
+	# --- libsharpyuv (vendored libwebp) for sharp RGB->YCbCr conversion, and libjpeg
+	if(TARGET sharpyuv)
+		set(IMGCAT2_VENDORED_LIBSHARPYUV_LIBRARIES sharpyuv)
+		set(IMGCAT2_VENDORED_LIBSHARPYUV_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/vendor/libwebp")
+		set(WITH_LIBSHARPYUV ON CACHE BOOL "libheif: sharpyuv from vendored libwebp" FORCE)
+	else()
+		set(WITH_LIBSHARPYUV OFF CACHE BOOL "libheif: no sharpyuv (WebP disabled or host)" FORCE)
+	endif()
+	if(TARGET libjpeg-turbo-ext)
+		set(IMGCAT2_VENDORED_JPEG_LIBRARIES JPEG::JPEG)
+		set(IMGCAT2_VENDORED_JPEG_INCLUDE_DIRS "${JPEG_INCLUDE_DIRS}")
+	endif()
+
+	# --- libheif: static, codecs built in, no plugin loading / examples / tests / docs
+	set(ENABLE_PLUGIN_LOADING OFF CACHE BOOL "libheif: no dynamic codec plugins")
+	foreach(_codec LIBDE265 KVAZAAR AOM_DECODER AOM_ENCODER JPEG_DECODER JPEG_ENCODER
+			OpenJPEG_DECODER OpenJPEG_ENCODER)
+		set(WITH_${_codec} ON CACHE BOOL "libheif: built-in ${_codec}")
+		set(WITH_${_codec}_PLUGIN OFF CACHE BOOL "libheif: ${_codec} not as plugin")
+	endforeach()
+	foreach(_codec X265 X264 DAV1D SvtEnc RAV1E FFMPEG_DECODER OPENJPH_ENCODER UVG266
+			VVDEC VVENC OpenH264_DECODER)
+		set(WITH_${_codec} OFF CACHE BOOL "libheif: ${_codec} not used")
+	endforeach()
+	set(WITH_UNCOMPRESSED_CODEC ON CACHE BOOL "libheif: ISO/IEC 23001-17 (zlib-ng + brotli)")
+	set(WITH_WEBCODECS OFF CACHE BOOL "libheif: no web codecs")
+	set(WITH_LIBSHARPYUV_INTERNAL OFF CACHE BOOL "libheif: no third-party/ libsharpyuv")
+	set(WITH_EXAMPLES OFF CACHE BOOL "libheif: no examples")
+	set(WITH_EXAMPLE_HEIF_THUMB OFF CACHE BOOL "libheif: no heif-thumbnailer")
+	set(WITH_EXAMPLE_HEIF_VIEW OFF CACHE BOOL "libheif: no heif-view")
+	set(WITH_GDK_PIXBUF OFF CACHE BOOL "libheif: no gdk-pixbuf loader")
+	set(WITH_FUZZERS OFF CACHE BOOL "libheif: no fuzzers")
+	set(BUILD_DOCUMENTATION OFF CACHE BOOL "libheif: no doxygen docs")
+	set(BUILD_DEVELOPMENT_TOOLS OFF CACHE BOOL "libheif: no development tools")
+	set(ENABLE_EXPERIMENTAL_FEATURES OFF CACHE BOOL "libheif: stable API only")
+	list(PREPEND CMAKE_MODULE_PATH "${IMGCAT2_VENDORED_FIND_DIR}")
+	imgcat2_vendor_begin(NO_INSTALL)
+	add_subdirectory(vendor/libheif EXCLUDE_FROM_ALL)
+	imgcat2_vendor_end()
+	list(REMOVE_ITEM CMAKE_MODULE_PATH "${IMGCAT2_VENDORED_FIND_DIR}")
+
+	set(HEIF_FOUND TRUE)
+	set(HEIF_LIBRARIES heif)
+	set(HEIF_CUSTOM_LIBS heif)
+	set(HEIF_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/vendor/libheif/libheif/api" "${CMAKE_BINARY_DIR}/vendor/libheif")
+	set(HEIF_LIB_TYPE "vendored libheif 1.23.7")
+	set(HEIF_CODECS "libde265 (HEVC dec)" "kvazaar (HEVC enc)" "aom (AV1 dec+enc)"
+		"openjpeg (J2K dec+enc)" "libjpeg-turbo (JPEG dec+enc)" "uncompressed (zlib-ng+brotli)")
+	if(TARGET sharpyuv)
+		list(APPEND HEIF_CODECS "sharpyuv")
+	endif()
+	add_definitions(-DHAVE_HEIF)
+
+elseif(ENABLE_HEIF)
+	set(HEIF_LIB_TYPE "host")
 	pkg_check_modules(HEIF libheif)
 
 	if(HEIF_FOUND)
 		# Detect optional HEIF dependencies (codecs)
-		# These are optional - libheif can work without them
+		# These are optional - libheif can work without them.
+		# x265 (GPL) is not linked even if the host libheif was built with it: HEVC
+		# encoding goes through kvazaar (a host libheif.a that references x265 will
+		# fail to link; use the vendored stack, USE_SYSTEM_HEIF=OFF, in that case).
 		pkg_check_modules(DE265 libde265)
-		pkg_check_modules(X265 x265)
 		pkg_check_modules(KVAZAAR kvazaar)
 		pkg_check_modules(AOM aom)
 		pkg_check_modules(OPENJP2 libopenjp2)
@@ -612,22 +895,6 @@ if(ENABLE_HEIF)
 					set(DE265_FOUND FALSE)
 				endif()
 			endif()
-
-			if(X265_FOUND)
-				find_library(X265_STATIC NAMES libx265.a)
-				if(X265_STATIC)
-					find_library(NUMA_LIB NAMES numa)
-					if(NUMA_LIB)
-						list(APPEND HEIF_CUSTOM_LIBS ${X265_STATIC})
-						list(APPEND HEIF_CUSTOM_LIBS ${NUMA_LIB})
-					endif()
-
-				else()
-					message(STATUS "  libx265 found but no static library, skipping")
-					set(X265_FOUND FALSE)
-				endif()
-			endif()
-
 
 		if(KVAZAAR_FOUND)
 			find_library(KVAZAAR_STATIC NAMES libkvazaar.a)
@@ -674,8 +941,11 @@ if(ENABLE_HEIF)
 				endif()
 			endif()
 
-			# libheif may need brotli for compression
-			if(BROTLIDEC_LIB AND BROTLIENC_LIB AND BROTLICOMMON_LIB)
+			# libheif may need brotli for compression (the vendored brotli, when built for
+			# libjxl, is linked last via IMGCAT2_VENDORED_TRAILING_LIBS instead)
+			if(TARGET brotlicommon)
+				message(STATUS "libbrotli: vendored copy used for the host libheif")
+			elseif(BROTLIDEC_LIB AND BROTLIENC_LIB AND BROTLICOMMON_LIB)
 				list(APPEND HEIF_CUSTOM_LIBS ${BROTLIDEC_LIB} ${BROTLIENC_LIB} ${BROTLICOMMON_LIB})
 				message(STATUS "libbrotli found and added")
 			endif()
@@ -690,13 +960,6 @@ if(ENABLE_HEIF)
 				find_library(DE265_STATIC NAMES libde265.a)
 				if(DE265_STATIC)
 					list(APPEND HEIF_CUSTOM_LIBS ${DE265_STATIC})
-				endif()
-			endif()
-
-			if(X265_FOUND)
-				find_library(X265_STATIC NAMES libx265.a)
-				if(X265_STATIC)
-					list(APPEND HEIF_CUSTOM_LIBS ${X265_STATIC})
 				endif()
 			endif()
 
@@ -859,32 +1122,7 @@ if(ENABLE_RAW AND NOT USE_SYSTEM_RAW)
 	# LibRaw is C++ (only needed when the vendored copy is built)
 	enable_language(CXX)
 
-	# Little-CMS 2 (LibRaw color management). License: MIT.
-	if(USE_SYSTEM_LCMS2)
-		pkg_check_modules(LCMS2 REQUIRED lcms2)
-		find_library(LCMS2_STATIC_LIB NAMES liblcms2.a lcms2 REQUIRED)
-		add_library(vendor_lcms2_host INTERFACE)
-		target_include_directories(vendor_lcms2_host INTERFACE ${LCMS2_INCLUDE_DIRS})
-		target_link_libraries(vendor_lcms2_host INTERFACE ${LCMS2_STATIC_LIB} m)
-		set(LCMS2_TARGET vendor_lcms2_host)
-		set(LCMS2_LIB_TYPE "host")
-	else()
-		# Pattern B: hand-written static target from src/*.c
-		set(LCMS2_SRC_DIR "${CMAKE_SOURCE_DIR}/vendor/lcms2")
-		file(GLOB LCMS2_SOURCES "${LCMS2_SRC_DIR}/src/*.c")
-		add_library(vendor_lcms2 STATIC ${LCMS2_SOURCES})
-		target_include_directories(vendor_lcms2
-			PUBLIC ${LCMS2_SRC_DIR}/include
-			PRIVATE ${LCMS2_SRC_DIR}/src)
-		set_target_properties(vendor_lcms2 PROPERTIES
-			POSITION_INDEPENDENT_CODE ON
-			C_CLANG_TIDY "")
-		if(UNIX)
-			target_link_libraries(vendor_lcms2 PUBLIC m)
-		endif()
-		set(LCMS2_TARGET vendor_lcms2)
-		set(LCMS2_LIB_TYPE "vendored lcms2 2.20")
-	endif()
+	# Little-CMS 2 (LibRaw color management): ${LCMS2_TARGET}, see "Little-CMS 2" above
 
 	# LibRaw: pattern B (hand-written static target). Chosen over the LibRaw-cmake wrapper:
 	# one pinned submodule instead of two (LibRaw-cmake has no release tags), and the
@@ -988,9 +1226,93 @@ elseif(ENABLE_RAW)
 endif()
 
 # libjxl (optional)
-if(ENABLE_JXL)
+if(ENABLE_JXL AND NOT USE_SYSTEM_JXL)
+	# Vendored libjxl 0.13.0 (BSD-3-Clause) on top-level vendored dependencies only:
+	#   Highway 1.4.0 (vendor/highway, Apache-2.0 OR BSD-3-Clause), the shared vendored
+	#   brotli and lcms2 (JPEGXL_ENABLE_SKCMS=OFF: lcms2 is the CMS, no skcms). libjxl's own
+	#   third_party/ submodules (highway, brotli, lcms, skcms, libpng, zlib, libjpeg-turbo,
+	#   googletest, sjpeg) are NOT initialized; the JPEGXL_FORCE_SYSTEM_* switches plus the
+	#   cmake/vendored-find shims resolve them to the vendored targets.
+	enable_language(CXX)
+	set(IMGCAT2_VENDORED_FIND_DIR "${CMAKE_SOURCE_DIR}/cmake/vendored-find")
+
+	# --- Highway (SIMD dispatch), static library only
+	set(HWY_FORCE_STATIC_LIBS ON CACHE BOOL "highway: static library")
+	set(HWY_ENABLE_CONTRIB OFF CACHE BOOL "highway: no contrib")
+	set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "highway: no examples")
+	set(HWY_ENABLE_INSTALL OFF CACHE BOOL "highway: no install rules")
+	set(HWY_ENABLE_TESTS OFF CACHE BOOL "highway: no tests")
+	imgcat2_vendor_begin(NO_INSTALL)
+	add_subdirectory(vendor/highway EXCLUDE_FROM_ALL)
+	imgcat2_vendor_end()
+	file(STRINGS "${CMAKE_SOURCE_DIR}/vendor/highway/hwy/base.h" _hwy_version_lines
+		REGEX "^#define HWY_(MAJOR|MINOR|PATCH) +[0-9]+")
+	set(_hwy_version "")
+	foreach(_part MAJOR MINOR PATCH)
+		string(REGEX MATCH "HWY_${_part} +([0-9]+)" _m "${_hwy_version_lines}")
+		list(APPEND _hwy_version "${CMAKE_MATCH_1}")
+	endforeach()
+	string(JOIN "." IMGCAT2_VENDORED_HWY_VERSION ${_hwy_version})
+	set(IMGCAT2_VENDORED_HWY_LIBRARIES hwy)
+	set(IMGCAT2_VENDORED_HWY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/vendor/highway")
+
+	# --- lcms2 for jxl_cms: libjxl links a target literally named "lcms2"
+	if(NOT TARGET lcms2)
+		add_library(lcms2 ALIAS ${LCMS2_TARGET})
+	endif()
+	set(IMGCAT2_VENDORED_LCMS2_LIBRARIES ${LCMS2_TARGET})
+	if(TARGET vendor_lcms2)
+		set(IMGCAT2_VENDORED_LCMS2_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/vendor/lcms2/include")
+		set(IMGCAT2_VENDORED_LCMS2_VERSION "2.20")
+	else()
+		set(IMGCAT2_VENDORED_LCMS2_INCLUDE_DIRS "${LCMS2_INCLUDE_DIRS}")
+		set(IMGCAT2_VENDORED_LCMS2_VERSION "${LCMS2_VERSION}")
+	endif()
+
+	# --- libjxl: libraries only (jxl, jxl_cms; jxl_threads is built but unused)
+	set(JPEGXL_FORCE_SYSTEM_HWY ON CACHE BOOL "libjxl: top-level vendored highway")
+	set(JPEGXL_FORCE_SYSTEM_BROTLI ON CACHE BOOL "libjxl: top-level vendored brotli")
+	set(JPEGXL_FORCE_SYSTEM_LCMS2 ON CACHE BOOL "libjxl: top-level vendored lcms2")
+	set(JPEGXL_ENABLE_SKCMS OFF CACHE BOOL "libjxl: lcms2 instead of skcms")
+	set(JPEGXL_BUNDLE_LIBPNG OFF CACHE BOOL "libjxl: no bundled libpng")
+	foreach(_jxl_opt TOOLS DEVTOOLS EXAMPLES BENCHMARK FUZZERS DOXYGEN MANPAGES JNI SJPEG
+			OPENEXR VIEWERS PLUGINS TCMALLOC COVERAGE)
+		set(JPEGXL_ENABLE_${_jxl_opt} OFF CACHE BOOL "libjxl: no ${_jxl_opt}")
+	endforeach()
+	set(JPEGXL_ENABLE_TRANSCODE_JPEG ON CACHE BOOL "libjxl: JPEG reconstruction")
+	set(JPEGXL_ENABLE_BOXES ON CACHE BOOL "libjxl: box (Exif/XMP) decoding")
+	set(JPEGXL_STATIC OFF CACHE BOOL "libjxl: no static tool binaries")
+	set(JPEGXL_TEST_TOOLS OFF CACHE BOOL "libjxl: no tool tests")
+	# The extras/tools find_package() probes are off with the tools; keep any left-over
+	# probe away from host packages
+	foreach(_pkg GIF PNG OpenEXR benchmark GTest)
+		set(CMAKE_DISABLE_FIND_PACKAGE_${_pkg} TRUE)
+	endforeach()
+	list(PREPEND CMAKE_MODULE_PATH "${IMGCAT2_VENDORED_FIND_DIR}")
+	imgcat2_vendor_begin(NO_INSTALL)
+	add_subdirectory(vendor/libjxl EXCLUDE_FROM_ALL)
+	imgcat2_vendor_end()
+	list(REMOVE_ITEM CMAKE_MODULE_PATH "${IMGCAT2_VENDORED_FIND_DIR}")
+	foreach(_pkg GIF PNG OpenEXR benchmark GTest)
+		unset(CMAKE_DISABLE_FIND_PACKAGE_${_pkg})
+	endforeach()
+
+	set(JXL_FOUND TRUE)
+	set(JXL_LIBRARIES jxl jxl_cms)
+	set(JXL_CUSTOM_LIBS ${JXL_LIBRARIES})
+	set(JXL_INCLUDE_DIRS "${CMAKE_BINARY_DIR}/vendor/libjxl/lib/include")
+	set(JXL_VERSION "0.13.0")
+	set(JXL_LIB_TYPE "vendored libjxl ${JXL_VERSION}; highway ${IMGCAT2_VENDORED_HWY_VERSION}, ${BROTLI_LIB_TYPE}, lcms2: ${LCMS2_LIB_TYPE}")
+	add_definitions(-DHAVE_JXL)
+
+elseif(ENABLE_JXL)
+	set(JXL_LIB_TYPE "host")
 	pkg_check_modules(JXL libjxl)
 	if(JXL_FOUND)
+		if(UNIX AND NOT APPLE)
+			# Host -lhwy/-lbrotli*/-llcms2 next to vendored copies: see imgcat2_strip_vendored_ldflags
+			imgcat2_strip_vendored_ldflags(JXL_STATIC_LDFLAGS)
+		endif()
 		# On macOS, explicitly find static libraries
 		if(APPLE)
 			find_library(JXL_STATIC_LIB NAMES libjxl.a)
@@ -1120,6 +1442,11 @@ if(TARGET webp AND WEBP_FOUND)
 endif()
 if(TARGET vendor_lcms2)
 	list(APPEND IMGCAT2_VENDORED_TRAILING_LIBS "$<TARGET_FILE:vendor_lcms2>")
+endif()
+if(TARGET brotlicommon)
+	# Host libheif (USE_SYSTEM_HEIF) next to the brotli vendored for libjxl
+	list(APPEND IMGCAT2_VENDORED_TRAILING_LIBS
+		"$<TARGET_FILE:brotlienc>" "$<TARGET_FILE:brotlidec>" "$<TARGET_FILE:brotlicommon>")
 endif()
 list(APPEND IMGCAT2_VENDORED_TRAILING_LIBS "$<TARGET_FILE:ZLIB::ZLIB>")
 
@@ -1377,7 +1704,11 @@ if(RAW_FOUND)
 endif()
 
 if(JXL_FOUND)
-	if(APPLE)
+	if(NOT USE_SYSTEM_JXL)
+		# Vendored libjxl targets (carry highway/brotli/lcms2 as link dependencies)
+		target_link_libraries(imgcat2 PRIVATE ${JXL_LIBRARIES})
+		target_link_libraries(imgcat2_lib PUBLIC ${JXL_LIBRARIES})
+	elseif(APPLE)
 		# Use custom libs on macOS for static linking
 		target_link_libraries(imgcat2 PRIVATE ${JXL_CUSTOM_LIBS})
 		target_link_libraries(imgcat2_lib PUBLIC ${JXL_CUSTOM_LIBS})
@@ -1469,15 +1800,16 @@ if(WEBP_FOUND)
 	message(STATUS "  libwebp: ${WEBP_LIBRARIES} (${WEBP_LIB_TYPE})")
 endif()
 if(HEIF_FOUND)
-	if(UNIX AND NOT APPLE)
+	if(NOT USE_SYSTEM_HEIF)
+		message(STATUS "  libheif: ${HEIF_LIBRARIES} (${HEIF_LIB_TYPE})")
+		string(REPLACE ";" ", " HEIF_CODECS_STR "${HEIF_CODECS}")
+		message(STATUS "    codecs: ${HEIF_CODECS_STR}")
+	elseif(UNIX AND NOT APPLE)
 		message(STATUS "  libheif: ${HEIF_CUSTOM_LIBS}")
 		# Show detected codecs
 		set(HEIF_CODECS "")
 		if(DE265_FOUND)
 			list(APPEND HEIF_CODECS "de265")
-		endif()
-		if(X265_FOUND)
-			list(APPEND HEIF_CODECS "x265")
 		endif()
 		if(KVAZAAR_FOUND)
 			list(APPEND HEIF_CODECS "kvazaar")
@@ -1516,7 +1848,16 @@ if(RAW_FOUND)
 		message(STATUS "  libraw: ${RAW_LDFLAGS}")
 	endif()
 endif()
-if(NOT GIF_FOUND AND NOT WEBP_FOUND AND NOT HEIF_FOUND AND NOT TIFF_FOUND AND NOT RAW_FOUND)
+if(JXL_FOUND)
+	if(NOT USE_SYSTEM_JXL)
+		message(STATUS "  libjxl: ${JXL_LIBRARIES} (${JXL_LIB_TYPE})")
+	elseif(UNIX AND NOT APPLE)
+		message(STATUS "  libjxl: ${JXL_STATIC_LDFLAGS}")
+	else()
+		message(STATUS "  libjxl: ${JXL_CUSTOM_LIBS}")
+	endif()
+endif()
+if(NOT GIF_FOUND AND NOT WEBP_FOUND AND NOT HEIF_FOUND AND NOT TIFF_FOUND AND NOT RAW_FOUND AND NOT JXL_FOUND)
 	message(STATUS "  (none)")
 endif()
 message(STATUS "")
