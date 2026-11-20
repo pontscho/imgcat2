@@ -329,6 +329,32 @@ if(ENABLE_JPEGQS AND JPEG_FOUND)
 	target_include_directories(jpegqs INTERFACE ${JPEGQS_SRC_DIR})
 	set_target_properties(jpegqs PROPERTIES C_CLANG_TIDY "")
 
+	# OpenMP: quantsmooth.h parallelizes its per-row loops under _OPENMP
+	# (upstream Makefile builds with -fopenmp). Output is deterministic.
+	find_package(OpenMP COMPONENTS C)
+	if(OpenMP_C_FOUND)
+		if(UNIX AND NOT APPLE)
+			# Flag form so the gcc driver picks static libgomp under -static
+			separate_arguments(_jpegqs_omp_flags UNIX_COMMAND "${OpenMP_C_FLAGS}")
+			foreach(_t jpegqs jpegqs_base jpegqs_sse2 jpegqs_avx2 jpegqs_avx512 jpegqs_dispatch)
+				if(TARGET ${_t})
+					target_compile_options(${_t} PRIVATE ${_jpegqs_omp_flags})
+				endif()
+			endforeach()
+			target_link_options(jpegqs INTERFACE ${_jpegqs_omp_flags})
+		else()
+			foreach(_t jpegqs jpegqs_base jpegqs_sse2 jpegqs_avx2 jpegqs_avx512 jpegqs_dispatch)
+				if(TARGET ${_t})
+					target_link_libraries(${_t} PRIVATE OpenMP::OpenMP_C)
+				endif()
+			endforeach()
+			target_link_libraries(jpegqs PUBLIC OpenMP::OpenMP_C)
+		endif()
+		set(JPEGQS_OPENMP "OpenMP")
+	else()
+		set(JPEGQS_OPENMP "no OpenMP")
+	endif()
+
 	# Vendored libjpeg-turbo: jpeglib.h/jconfig.h only exist after its install step
 	if(TARGET libjpeg-turbo-ext)
 		foreach(_t jpegqs jpegqs_base jpegqs_sse2 jpegqs_avx2 jpegqs_avx512 jpegqs_dispatch)
@@ -340,7 +366,7 @@ if(ENABLE_JPEGQS AND JPEG_FOUND)
 
 	add_definitions(-DHAVE_JPEGQS)
 	set(JPEGQS_FOUND TRUE)
-	message(STATUS "jpeg-quantsmooth: enabled (quality=6, niter=5)")
+	message(STATUS "jpeg-quantsmooth: enabled (quality=6, niter=5, ${JPEGQS_OPENMP})")
 endif()
 
 # libpng (REQUIRED)

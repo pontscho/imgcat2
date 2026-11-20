@@ -20,7 +20,8 @@
 #ifdef HAVE_JPEGQS
 #include "libjpegqs.h"
 
-static jpegqs_control_t s_jpegqs_opts = { .flags = JPEGQS_DIAGONALS | JPEGQS_JOINT_YUV | JPEGQS_UPSAMPLE_UV, .niter = 5, .threads = 0, .progprec = 0, .userdata = NULL, .progress = NULL };
+/* threads = -1: keep the OpenMP default, so OMP_NUM_THREADS is honoured */
+static jpegqs_control_t s_jpegqs_opts = { .flags = JPEGQS_DIAGONALS | JPEGQS_JOINT_YUV | JPEGQS_UPSAMPLE_UV, .niter = 5, .threads = -1, .progprec = 0, .userdata = NULL, .progress = NULL };
 #endif
 
 /* EXIF/XMP metadata support */
