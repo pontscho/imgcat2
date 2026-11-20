@@ -101,6 +101,12 @@ extern const uint8_t MAGIC_HEIF_HEVX[4];
 /** HEIF MIF1 brand: 4 bytes */
 extern const uint8_t MAGIC_HEIF_MIF1[4];
 
+/** HEIF JPEG 2000 image brand (ISO/IEC 15444-16): 4 bytes */
+extern const uint8_t MAGIC_HEIF_J2KI[4];
+
+/** HEIF JPEG 2000 image sequence brand (ISO/IEC 15444-16): 4 bytes */
+extern const uint8_t MAGIC_HEIF_J2IS[4];
+
 /** AVIF brand: 4 bytes */
 extern const uint8_t MAGIC_AVIF_AVIF[4];
 

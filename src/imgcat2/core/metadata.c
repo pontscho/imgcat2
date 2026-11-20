@@ -26,6 +26,12 @@ const char *get_mime_string(mime_type_t mime)
 		case MIME_BMP: return "image/bmp";
 		case MIME_WEBP: return "image/webp";
 		case MIME_HEIF: return "image/heif";
+		case MIME_AVIF: return "image/avif";
+		case MIME_JXL: return "image/jxl";
+		case MIME_QOI: return "image/qoi";
+		case MIME_ICO: return "image/vnd.microsoft.icon";
+		case MIME_CUR: return "image/x-win-bitmap";
+		case MIME_SVG: return "image/svg+xml";
 		case MIME_TIFF: return "image/tiff";
 		case MIME_TGA: return "image/x-tga";
 		case MIME_PSD: return "image/vnd.adobe.photoshop";

@@ -250,3 +250,18 @@ CTEST(metadata_output, disabled)
 	ASSERT_TRUE(true);
 }
 #endif
+
+/**
+ * Test MIME strings: every detected image format maps to an image/ type
+ */
+CTEST(metadata_output, mime_strings)
+{
+	ASSERT_STR("image/heif", get_mime_string(MIME_HEIF));
+	ASSERT_STR("image/avif", get_mime_string(MIME_AVIF));
+	ASSERT_STR("image/jxl", get_mime_string(MIME_JXL));
+	ASSERT_STR("image/qoi", get_mime_string(MIME_QOI));
+	ASSERT_STR("image/vnd.microsoft.icon", get_mime_string(MIME_ICO));
+	ASSERT_STR("image/x-win-bitmap", get_mime_string(MIME_CUR));
+	ASSERT_STR("image/svg+xml", get_mime_string(MIME_SVG));
+	ASSERT_STR("application/octet-stream", get_mime_string(MIME_UNKNOWN));
+}

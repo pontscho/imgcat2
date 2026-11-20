@@ -49,6 +49,8 @@ const uint8_t MAGIC_HEIF_HEIX[4] = "heix";
 const uint8_t MAGIC_HEIF_HEVC[4] = "hevc";
 const uint8_t MAGIC_HEIF_HEVX[4] = "hevx";
 const uint8_t MAGIC_HEIF_MIF1[4] = "mif1";
+const uint8_t MAGIC_HEIF_J2KI[4] = "j2ki"; /* JPEG 2000 in HEIF: image */
+const uint8_t MAGIC_HEIF_J2IS[4] = "j2is"; /* JPEG 2000 in HEIF: image sequence */
 
 /* AVIF signatures */
 const uint8_t MAGIC_AVIF_AVIF[4] = "avif"; /* AVIF: AV1 Image File Format */
@@ -144,6 +146,43 @@ static bool is_tiff_based_raw(const uint8_t *data, size_t len)
 }
 
 /**
+ * @brief Check if an ISOBMFF ftyp box declares a JPEG 2000 HEIF brand
+ *
+ * JPEG 2000 in HEIF (ISO/IEC 15444-16) uses the 'j2ki' (image) and 'j2is'
+ * (image sequence) brands, either as major brand or among the compatible
+ * brands (e.g. major 'mif1' or a vendor brand).
+ *
+ * @param data Pointer to file data buffer (starts with the ftyp box)
+ * @param len Length of data buffer in bytes
+ * @return true if a JPEG 2000 HEIF brand is present, false otherwise
+ *
+ * @note Compatible brands start at offset 16 and are scanned only within
+ *       both the ftyp box size and the available data
+ */
+static bool is_heif_j2k_ftyp(const uint8_t *data, size_t len)
+{
+	if (len < 12 || memcmp(data + 4, MAGIC_HEIF_FTYP, 4) != 0) {
+		return false;
+	}
+
+	// Major brand at offset 8
+	if (memcmp(data + 8, MAGIC_HEIF_J2KI, 4) == 0 || memcmp(data + 8, MAGIC_HEIF_J2IS, 4) == 0) {
+		return true;
+	}
+
+	// Compatible brands follow major brand (4) and minor version (4)
+	size_t box_size = ((size_t)data[0] << 24) | ((size_t)data[1] << 16) | ((size_t)data[2] << 8) | (size_t)data[3];
+	size_t end = (box_size < len) ? box_size : len;
+	for (size_t off = 16; off + 4 <= end; off += 4) {
+		if (memcmp(data + off, MAGIC_HEIF_J2KI, 4) == 0 || memcmp(data + off, MAGIC_HEIF_J2IS, 4) == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * @brief Detect MIME type from binary data magic bytes
  *
  * Performs priority-based signature matching to identify image format.
@@ -216,6 +255,10 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 			if (memcmp(brand, MAGIC_HEIF_HEIC, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEIX, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEVC, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEVX, 4) == 0 || memcmp(brand, MAGIC_HEIF_MIF1, 4) == 0) {
 				return MIME_HEIF;
 			}
+		}
+		// JPEG 2000 in HEIF ('j2ki' / 'j2is' major or compatible brand)
+		if (is_heif_j2k_ftyp(data, len)) {
+			return MIME_HEIF;
 		}
 	}
 

@@ -424,6 +424,64 @@ CTEST(magic, detect_svg)
 }
 
 /**
+ * @test Test HEIF / AVIF ftyp brand detection
+ *
+ * Verifies that detect_mime_type() routes the HEVC HEIF brands to HEIF
+ * and the AV1 brands to AVIF.
+ */
+CTEST(magic, detect_heif_avif_brands)
+{
+	/* HEIC: major brand 'heic' */
+	const uint8_t heic[] = { 0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0x00, 0x00, 0x00, 0x00, 'm', 'i', 'f', '1', 'h', 'e', 'i', 'c' };
+	ASSERT_EQUAL(MIME_HEIF, detect_mime_type(heic, sizeof(heic)));
+
+	/* AVIF: major brand 'avif' (compatible 'mif1' must not make it HEIF) */
+	const uint8_t avif[] = { 0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p', 'a', 'v', 'i', 'f', 0x00, 0x00, 0x00, 0x00, 'm', 'i', 'f', '1', 'a', 'v', 'i', 'f' };
+	ASSERT_EQUAL(MIME_AVIF, detect_mime_type(avif, sizeof(avif)));
+
+	ASSERT_STR("HEIF", mime_type_name(MIME_HEIF));
+	ASSERT_STR("AVIF", mime_type_name(MIME_AVIF));
+}
+
+/**
+ * @test Test JPEG 2000 in HEIF detection
+ *
+ * Verifies that detect_mime_type() identifies HEIF files carrying JPEG 2000
+ * (ISO/IEC 15444-16 'j2ki' / 'j2is' brands) as HEIF, whether the brand is the
+ * major brand or only a compatible brand.
+ */
+CTEST(magic, detect_heif_j2k)
+{
+	/* Header of src/tests/data/heif/j2k_64x48.heif (vendored libheif + OpenJPEG):
+	 * major 'j2ki', compatible 'mif1' 'j2ki' 'miaf' */
+	const uint8_t j2ki_major[] = { 0x00, 0x00, 0x00, 0x1c, 'f', 't', 'y', 'p', 'j', '2', 'k', 'i', 0x00, 0x00, 0x00, 0x00, 'm', 'i', 'f', '1', 'j', '2', 'k', 'i', 'm', 'i', 'a', 'f', 0x00, 0x00, 0x00, 0xee };
+	ASSERT_EQUAL(MIME_HEIF, detect_mime_type(j2ki_major, sizeof(j2ki_major)));
+
+	/* Image sequence: major 'j2is' */
+	const uint8_t j2is_major[] = { 0x00, 0x00, 0x00, 0x14, 'f', 't', 'y', 'p', 'j', '2', 'i', 's', 0x00, 0x00, 0x00, 0x00, 'm', 's', 'f', '1' };
+	ASSERT_EQUAL(MIME_HEIF, detect_mime_type(j2is_major, sizeof(j2is_major)));
+
+	/* 'j2ki' only as a compatible brand behind a non-HEIF major brand */
+	const uint8_t j2ki_compat[] = { 0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p', 'm', 'i', 'a', 'f', 0x00, 0x00, 0x00, 0x00, 'm', 'i', 'a', 'f', 'j', '2', 'k', 'i' };
+	ASSERT_EQUAL(MIME_HEIF, detect_mime_type(j2ki_compat, sizeof(j2ki_compat)));
+
+	/* 'j2is' only as a compatible brand */
+	const uint8_t j2is_compat[] = { 0x00, 0x00, 0x00, 0x14, 'f', 't', 'y', 'p', 'm', 's', 'f', '1', 0x00, 0x00, 0x00, 0x00, 'j', '2', 'i', 's' };
+	ASSERT_EQUAL(MIME_HEIF, detect_mime_type(j2is_compat, sizeof(j2is_compat)));
+
+	/* 'j2ki' past the end of the ftyp box (box size 0x14) is not a brand */
+	const uint8_t j2ki_outside[] = { 0x00, 0x00, 0x00, 0x14, 'f', 't', 'y', 'p', 'm', 'i', 'a', 'f', 0x00, 0x00, 0x00, 0x00, 'm', 'i', 'a', 'f', 'j', '2', 'k', 'i' };
+	ASSERT_EQUAL(MIME_UNKNOWN, detect_mime_type(j2ki_outside, sizeof(j2ki_outside)));
+
+	/* Truncated buffer: compatible brand cut off by len, not read past it */
+	ASSERT_EQUAL(MIME_UNKNOWN, detect_mime_type(j2ki_compat, sizeof(j2ki_compat) - 1));
+
+	/* Plain JPEG 2000 codestream / JP2 box is not HEIF */
+	const uint8_t jp2[] = { 0x00, 0x00, 0x00, 0x0c, 'j', 'P', ' ', ' ', 0x0d, 0x0a, 0x87, 0x0a, 0x00, 0x00, 0x00, 0x14, 'f', 't', 'y', 'p', 'j', 'p', '2', ' ' };
+	ASSERT_NOT_EQUAL(MIME_HEIF, detect_mime_type(jp2, sizeof(jp2)));
+}
+
+/**
  * @test Test SVG false positive prevention
  *
  * Verifies that detect_mime_type() does NOT identify files as SVG
