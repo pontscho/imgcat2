@@ -13,3 +13,24 @@
 [submodule "vendor/zlib-ng"]
 	path = vendor/zlib-ng
 	url = https://github.com/zlib-ng/zlib-ng.git
+[submodule "vendor/libjpeg-turbo"]
+	path = vendor/libjpeg-turbo
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo.git
+[submodule "vendor/libpng"]
+	path = vendor/libpng
+	url = https://github.com/pnggroup/libpng.git
+[submodule "vendor/giflib"]
+	path = vendor/giflib
+	url = https://git.code.sf.net/p/giflib/code
+[submodule "vendor/libwebp"]
+	path = vendor/libwebp
+	url = https://chromium.googlesource.com/webm/libwebp
+[submodule "vendor/libtiff"]
+	path = vendor/libtiff
+	url = https://gitlab.com/libtiff/libtiff.git
+[submodule "vendor/lcms2"]
+	path = vendor/lcms2
+	url = https://github.com/mm2/Little-CMS.git
+[submodule "vendor/libraw"]
+	path = vendor/libraw
+	url = https://github.com/LibRaw/LibRaw.git
