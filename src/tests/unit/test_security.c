@@ -17,6 +17,7 @@
 #include "../../imgcat2/core/pipeline.h"
 #include "../../imgcat2/decoders/magic.h"
 #include "../ctest.h"
+#include "../test_tmpdir.h"
 
 /**
  * @test Test path validation with non-existent files
@@ -42,8 +43,10 @@ CTEST(security, path_traversal)
 	ASSERT_FALSE(result2);
 	ASSERT_NULL(data);
 
-	/* Non-existent file in /tmp */
-	bool result3 = read_file_secure("/tmp/nonexistent_imgcat_test.png", &data, &size);
+	/* Non-existent file in the test temp dir */
+	char missing_path[4096];
+	test_tmp_path(missing_path, sizeof(missing_path), "nonexistent_imgcat_test.png");
+	bool result3 = read_file_secure(missing_path, &data, &size);
 	ASSERT_FALSE(result3);
 	ASSERT_NULL(data);
 
@@ -62,7 +65,8 @@ CTEST(security, path_traversal)
 CTEST(security, file_size_limit)
 {
 	/* Create a temporary file that exceeds the size limit */
-	const char *temp_file = "/tmp/imgcat2_test_large_file.bin";
+	char temp_file[4096];
+	test_tmp_path(temp_file, sizeof(temp_file), "imgcat2_test_large_file.bin");
 	FILE *fp = fopen(temp_file, "wb");
 
 	if (fp != NULL) {
@@ -252,12 +256,15 @@ CTEST(security, read_file_null_params)
 	bool result1 = read_file_secure(NULL, &data, &size);
 	ASSERT_FALSE(result1);
 
+	char path[4096];
+	test_tmp_path(path, sizeof(path), "test.txt");
+
 	/* NULL out_data */
-	bool result2 = read_file_secure("/tmp/test.txt", NULL, &size);
+	bool result2 = read_file_secure(path, NULL, &size);
 	ASSERT_FALSE(result2);
 
 	/* NULL out_size */
-	bool result3 = read_file_secure("/tmp/test.txt", &data, NULL);
+	bool result3 = read_file_secure(path, &data, NULL);
 	ASSERT_FALSE(result3);
 }
 

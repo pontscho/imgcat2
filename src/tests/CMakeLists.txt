@@ -1,5 +1,12 @@
 # Test suite for imgcat2
 
+# Per-build temp dir: tests must never write to /tmp. Every test gets
+# TMPDIR=<this dir> (see the loop at the end of this file), and the same path
+# is compiled in as the fallback for running a test binary directly.
+set(IMGCAT2_TEST_TMPDIR "${CMAKE_BINARY_DIR}/test-tmp")
+file(MAKE_DIRECTORY "${IMGCAT2_TEST_TMPDIR}")
+add_compile_definitions(IMGCAT2_TEST_TMPDIR="${IMGCAT2_TEST_TMPDIR}")
+
 # Unit tests
 add_executable(test_terminal
 	unit/main.c
@@ -760,3 +767,11 @@ add_test(NAME test_metadata_output COMMAND test_metadata_output)
 set_tests_properties(test_metadata_output PROPERTIES
 	TIMEOUT 10
 )
+
+# Point every test's TMPDIR at the per-build temp dir (keep this last)
+get_property(IMGCAT2_ALL_TESTS DIRECTORY PROPERTY TESTS)
+foreach(test_name IN LISTS IMGCAT2_ALL_TESTS)
+	set_property(TEST ${test_name} APPEND PROPERTY
+		ENVIRONMENT "TMPDIR=${IMGCAT2_TEST_TMPDIR}"
+	)
+endforeach()

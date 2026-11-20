@@ -20,6 +20,7 @@
 #include "../../imgcat2/encoders/encoder.h"
 #include "../../imgcat2/terminal/file.h"
 #include "../ctest.h"
+#include "../test_tmpdir.h"
 
 /* Helper function to create test image */
 static image_t *create_test_image(int width, int height)
@@ -135,7 +136,8 @@ CTEST(file_render, file_output)
 	cli_options_t opts = { 0 };
 	opts.output_format = FORMAT_JPEG;
 	opts.jpeg_quality = 80;
-	opts.output_file = "/tmp/imgcat2_test_render.jpg";
+	char path[4096];
+	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_render.jpg");
 	opts.silent = true;
 
 	/* Remove file if exists */
@@ -186,7 +188,8 @@ CTEST(file_render, file_output_png)
 	cli_options_t opts = { 0 };
 	opts.output_format = FORMAT_PNG;
 	opts.png_compression = 6;
-	opts.output_file = "/tmp/imgcat2_test_render.png";
+	char path[4096];
+	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_render.png");
 	opts.silent = true;
 
 	/* Remove file if exists */
@@ -244,7 +247,8 @@ CTEST(file_render, animated_warning)
 	cli_options_t opts = { 0 };
 	opts.output_format = FORMAT_JPEG;
 	opts.jpeg_quality = 80;
-	opts.output_file = "/tmp/imgcat2_test_animated.jpg";
+	char path[4096];
+	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_animated.jpg");
 	opts.frame_index = 0; /* Convert first frame */
 	opts.silent = true;
 
@@ -301,7 +305,8 @@ CTEST(file_render, frame_index)
 	cli_options_t opts = { 0 };
 	opts.output_format = FORMAT_PNG;
 	opts.png_compression = 6;
-	opts.output_file = "/tmp/imgcat2_test_frame.png";
+	char path[4096];
+	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_frame.png");
 	opts.frame_index = 1; /* Convert second frame (green) */
 	opts.silent = true;
 
@@ -339,7 +344,8 @@ CTEST(file_render, invalid_frame_index)
 	cli_options_t opts = { 0 };
 	opts.output_format = FORMAT_JPEG;
 	opts.jpeg_quality = 80;
-	opts.output_file = "/tmp/imgcat2_test_invalid.jpg";
+	char path[4096];
+	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_invalid.jpg");
 	opts.frame_index = 5; /* Out of range (only 2 frames) */
 	opts.silent = true;
 
@@ -358,12 +364,11 @@ CTEST(file_render, invalid_frame_index)
 }
 
 #if defined(HAVE_HEIF) || defined(HAVE_WEBP) || defined(HAVE_JXL)
-/* Helper: render one frame with opts to a file under $TMPDIR, return its size (0 on failure) */
+/* Helper: render one frame with opts to a file under test_tmpdir(), return its size (0 on failure) */
 static size_t render_to_temp_file(image_t *img, cli_options_t *opts, const char *name)
 {
-	const char *tmpdir = getenv("TMPDIR");
 	char path[4096];
-	snprintf(path, sizeof(path), "%s/%s", (tmpdir != NULL && tmpdir[0] != '\0') ? tmpdir : "/tmp", name);
+	test_tmp_path(path, sizeof(path), name);
 
 	image_t *frames[] = { img };
 	opts->output_file = path;
