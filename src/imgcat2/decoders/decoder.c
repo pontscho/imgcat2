@@ -63,6 +63,9 @@ extern image_t **decode_qoi(const uint8_t *data, size_t len, int *frame_count);
 /* ICO/CUR decoder */
 extern image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count);
 
+/* Netpbm (PBM/PGM/PPM/PAM) decoder */
+extern image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count);
+
 /* STB fallback decoders */
 extern image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count);
 
@@ -148,12 +151,14 @@ static const decoder_t s_decoder_registry[] = {
 	{ MIME_ICO,  "ICO (custom)",         decode_ico          },
 	{ MIME_CUR,  "CUR (custom)",         decode_ico          },
 
+	/* Netpbm formats (P1-P7) */
+	{ MIME_PNM,  "PNM/PAM (native)",     decode_netpbm       },
+
 	/* STB-supported formats */
 	{ MIME_BMP,  "BMP (stb_image)",      decode_stb          },
 	{ MIME_TGA,  "TGA (stb_image)",      decode_stb          },
 	{ MIME_PSD,  "PSD (stb_image)",      decode_stb          },
 	{ MIME_HDR,  "HDR (stb_image)",      decode_stb          },
-	{ MIME_PNM,  "PNM (stb_image)",      decode_stb          },
 };
 
 /**

@@ -306,6 +306,32 @@ CTEST(magic, detect_pnm)
 	mime_type_t mime2 = detect_mime_type(pnm_p6, sizeof(pnm_p6));
 	ASSERT_EQUAL(MIME_PNM, mime2);
 
+	/* All Netpbm variants P1..P7, with each accepted whitespace separator */
+	const char separators[] = { ' ', '\t', '\n', '\r', '\v', '\f' };
+	for (char fmt = '1'; fmt <= '7'; fmt++) {
+		for (size_t i = 0; i < sizeof(separators); i++) {
+			uint8_t hdr[] = { 'P', (uint8_t)fmt, (uint8_t)separators[i], '1', ' ', '1', '\n', '1' };
+			ASSERT_EQUAL(MIME_PNM, detect_mime_type(hdr, sizeof(hdr)));
+		}
+	}
+
+	/* P8 / P0 are not Netpbm */
+	const uint8_t pnm_p8[] = { 'P', '8', '\n', '1', ' ', '1', '\n', '1' };
+	ASSERT_NOT_EQUAL(MIME_PNM, detect_mime_type(pnm_p8, sizeof(pnm_p8)));
+	const uint8_t pnm_p0[] = { 'P', '0', '\n', '1', ' ', '1', '\n', '1' };
+	ASSERT_NOT_EQUAL(MIME_PNM, detect_mime_type(pnm_p0, sizeof(pnm_p0)));
+
+	/* P6 not followed by whitespace is not Netpbm */
+	const uint8_t pnm_p6_nows[] = { 'P', '6', 'x', '1', ' ', '1', '\n', '1' };
+	ASSERT_NOT_EQUAL(MIME_PNM, detect_mime_type(pnm_p6_nows, sizeof(pnm_p6_nows)));
+
+	/* Regression: '\n' (0x0A, TGA RLE type) at offset 2 and ' ' (0x20 = 32,
+	 * valid TGA depth) at offset 16 must still be detected as PNM, not TGA */
+	const char p6_tga_like[] = "P6\n# comment xxx yyy\n2 2\n255\n";
+	ASSERT_EQUAL('\n', p6_tga_like[2]);
+	ASSERT_EQUAL(' ', p6_tga_like[16]);
+	ASSERT_EQUAL(MIME_PNM, detect_mime_type((const uint8_t *)p6_tga_like, sizeof(p6_tga_like) - 1));
+
 	/* Verify mime_type_name returns correct string */
 	const char *name = mime_type_name(MIME_PNM);
 	ASSERT_NOT_NULL(name);

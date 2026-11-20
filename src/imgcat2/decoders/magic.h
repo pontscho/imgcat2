@@ -162,10 +162,11 @@ extern const uint8_t MAGIC_SVG_BOM_XML[8];
  * 2. JPEG (3 byte signature)
  * 3. GIF (6 byte signature, GIF87a or GIF89a)
  * 4. BMP (2 byte signature "BM")
- * 5. TGA (header-based: byte[2] and byte[16])
- * 6. PSD (4 byte signature "8BPS")
- * 7. HDR (10 or 6 byte signature)
- * 8. PNM (2 byte signature "P5" or "P6")
+ * 5. PNM/PAM ("P1".."P7" followed by a whitespace byte; checked before
+ *    TGA because the TGA heuristic can match Netpbm headers)
+ * 6. TGA (header-based: byte[2] and byte[16])
+ * 7. PSD (4 byte signature "8BPS")
+ * 8. HDR (10 or 6 byte signature)
  *
  * @param data Pointer to file data buffer
  * @param len Length of data buffer in bytes

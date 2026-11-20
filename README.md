@@ -20,7 +20,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
-- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PNM, ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL, APNG. Dual SVG decoders (resvg preferred, nanosvg fallback)
+- **Multiple Image Formats** - PNG, JPEG, GIF (animated), BMP, TGA, HDR, PBM/PGM/PPM/PAM (Netpbm P1-P7, native), ICO, CUR, QOI, PSD (partial), and optionally WebP, HEIF, TIFF, RAW, JXL, APNG. Dual SVG decoders (resvg preferred, nanosvg fallback)
 - **Image Conversion** - Convert images to JPEG, PNG, HEIF, WebP, or JXL with quality control and lossless mode support
 - **Native Protocol Support** - Automatically uses iTerm2 inline images or Ghostty Kitty graphics protocol for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
@@ -715,7 +715,7 @@ Example output:
 - **JPEG/JPG** - JPEG images (no transparency)
 - **BMP** - Windows Bitmap (uncompressed)
 - **SVG** - Scalable Vector Graphics (nanosvg rasterization)
-- **PNM** - Portable Any Map (PBM, PGM, PPM)
+- **PNM/PAM** - Netpbm PBM, PGM, PPM and PAM (P1-P7, ASCII and binary, 8/16-bit, alpha in PAM), native decoder
 - **TGA** - Targa Image File
 - **HDR** - Radiance RGBE High Dynamic Range
 - **ICO** - Windows Icon format

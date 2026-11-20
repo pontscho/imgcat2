@@ -289,6 +289,17 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 		}
 	}
 
+	// Priority 4.8: PNM/PAM ("P1".."P7" followed by whitespace)
+	// Must run before the TGA heuristic: a Netpbm header such as
+	// "P6\n# comment..." has '\n' (0x0A) at offset 2 and may have a space
+	// (0x20) at offset 16, which the TGA check would accept.
+	if (len >= 3 && data[0] == 'P' && data[1] >= '1' && data[1] <= '7') {
+		uint8_t c = data[2];
+		if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f') {
+			return MIME_PNM;
+		}
+	}
+
 	// Priority 5: TGA (header-based detection)
 	// TGA format: byte[2] should be 0x02 (uncompressed true-color) or 0x03 (uncompressed grayscale)
 	// or 0x0A (RLE true-color) or 0x0B (RLE grayscale)
@@ -314,13 +325,6 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	}
 	if (len >= 6 && memcmp(data, MAGIC_HDR_RGBE, 6) == 0) {
 		return MIME_HDR;
-	}
-
-	// Priority 8: PNM (2 byte match "P5" or "P6")
-	if (len >= 2) {
-		if (memcmp(data, MAGIC_PNM_P5, 2) == 0 || memcmp(data, MAGIC_PNM_P6, 2) == 0) {
-			return MIME_PNM;
-		}
 	}
 
 	// No match found

@@ -19,5 +19,6 @@ extern image_t **decode_png(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count);
 extern image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count);
+extern image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count);
 
 #endif /* IMGCAT2_TESTS_DECODER_INTERNAL_H */

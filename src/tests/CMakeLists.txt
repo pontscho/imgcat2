@@ -130,6 +130,22 @@ set_tests_properties(test_decoder_stb PROPERTIES
 	TIMEOUT 10
 )
 
+# Native Netpbm (PBM/PGM/PPM/PAM) decoder tests
+add_executable(test_decoder_pnm
+	unit/main.c
+	unit/test_decoder_pnm.c
+)
+
+target_link_libraries(test_decoder_pnm
+	imgcat2_lib
+)
+
+add_test(NAME test_decoder_pnm COMMAND test_decoder_pnm)
+
+set_tests_properties(test_decoder_pnm PROPERTIES
+	TIMEOUT 10
+)
+
 # Image processing tests (task-066)
 add_executable(test_image_processing
 	unit/main.c

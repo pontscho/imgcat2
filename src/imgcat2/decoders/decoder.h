@@ -69,7 +69,8 @@ extern size_t g_decoder_count;
  * 1. PNG: decode_png (libpng) if HAVE_LIBPNG, else decode_stb
  * 2. JPEG: decode_jpeg (libjpeg-turbo) if HAVE_LIBJPEG, else decode_stb
  * 3. GIF: decode_gif (giflib) if HAVE_GIFLIB, else not supported
- * 4. BMP, TGA, PSD, HDR, PNM: decode_stb (stb_image always available)
+ * 4. BMP, TGA, PSD, HDR: decode_stb (stb_image always available)
+ * 5. PNM/PAM (P1-P7): decode_netpbm (native, always available)
  *
  * @param opts CLI options structure (currently unused, reserved for future use)
  *
