@@ -11,7 +11,7 @@ found **only** when the top-level declared the vendored provider through
 `IMGCAT2_VENDORED_<NAME>_LIBRARIES` / `IMGCAT2_VENDORED_<NAME>_INCLUDE_DIRS`;
 otherwise it reports "not found" (no host fallback), except `FindJPEG.cmake`,
 which defers to CMake's own module when libjpeg-turbo comes from the host
-(`USE_SYSTEM_JPEG=ON`).
+(`IMG2_USE_SYSTEM_JPEG=ON`).
 
 The variables each shim sets are the ones the consuming upstream CMake reads
 (libheif: `<X>_FOUND`, `<X>_LIBRARIES`, `<X>_INCLUDE_DIRS`; libjxl: the targets

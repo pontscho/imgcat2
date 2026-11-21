@@ -3,7 +3,7 @@
 # Per-build temp dir: tests must never write to /tmp. Every test gets
 # TMPDIR=<this dir> (see the loop at the end of this file), and the same path
 # is compiled in as the fallback for running a test binary directly.
-set(IMGCAT2_TEST_TMPDIR "${CMAKE_BINARY_DIR}/test-tmp")
+set(IMGCAT2_TEST_TMPDIR "${PROJECT_BINARY_DIR}/test-tmp")
 file(MAKE_DIRECTORY "${IMGCAT2_TEST_TMPDIR}")
 add_compile_definitions(IMGCAT2_TEST_TMPDIR="${IMGCAT2_TEST_TMPDIR}")
 
@@ -103,7 +103,7 @@ add_test(NAME test_decoder_png COMMAND test_decoder_png)
 
 set_tests_properties(test_decoder_png PROPERTIES
 	TIMEOUT 10
-	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
 )
 
 # JPEG decoder tests (task-062)
@@ -503,7 +503,7 @@ add_test(NAME test_png_exif_integration COMMAND test_png_exif_integration)
 
 set_tests_properties(test_png_exif_integration PROPERTIES
 	TIMEOUT 10
-	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+	WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
 )
 
 # The *_exif_integration tests below compile an optional decoder directly, so they
@@ -526,7 +526,7 @@ if(WEBP_FOUND)
 
 	set_tests_properties(test_webp_exif_integration PROPERTIES
 		TIMEOUT 10
-		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+		WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
 	)
 endif()
 
@@ -606,7 +606,7 @@ if(TIFF_FOUND)
 
 	set_tests_properties(test_tiff_exif_integration PROPERTIES
 		TIMEOUT 10
-		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+		WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
 	)
 endif()
 
@@ -642,7 +642,7 @@ set_tests_properties(test_png_orientation PROPERTIES
 )
 
 # WebP orientation test
-if(ENABLE_WEBP)
+if(IMG2_ENABLE_WEBP)
 	add_executable(test_webp_orientation
 		integration/main.c
 		integration/test_webp_orientation.c
@@ -660,7 +660,7 @@ if(ENABLE_WEBP)
 endif()
 
 # HEIF orientation test
-if(ENABLE_HEIF)
+if(IMG2_ENABLE_HEIF)
 	add_executable(test_heif_orientation
 		integration/main.c
 		integration/test_heif_orientation.c
@@ -678,7 +678,7 @@ if(ENABLE_HEIF)
 endif()
 
 # AVIF orientation test
-if(ENABLE_HEIF)
+if(IMG2_ENABLE_HEIF)
 	add_executable(test_avif_orientation
 		integration/main.c
 		integration/test_avif_orientation.c
@@ -696,7 +696,7 @@ if(ENABLE_HEIF)
 endif()
 
 # JXL orientation test
-if(ENABLE_JXL)
+if(IMG2_ENABLE_JXL)
 	add_executable(test_jxl_orientation
 		integration/main.c
 		integration/test_jxl_orientation.c
@@ -714,7 +714,7 @@ if(ENABLE_JXL)
 endif()
 
 # RAW orientation test
-if(ENABLE_RAW)
+if(IMG2_ENABLE_RAW)
 	add_executable(test_raw_orientation
 		integration/main.c
 		integration/test_raw_orientation.c

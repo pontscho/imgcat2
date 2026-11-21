@@ -271,7 +271,7 @@ cmake ..
 make
 
 # To disable resvg (use nanosvg only)
-cmake .. -DENABLE_RESVG=OFF
+cmake .. -DIMG2_ENABLE_RESVG=OFF
 make
 
 # Verify which SVG decoder is active
@@ -832,7 +832,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 **Solutions:**
 - Check enabled formats: `imgcat2 --version`
-- Rebuild with format support: `cmake -DENABLE_WEBP=ON ..`
+- Rebuild with format support: `cmake -DIMG2_ENABLE_WEBP=ON ..`
 - Convert image: `convert input.webp png:- | imgcat2`
 
 ### Build fails with missing dependencies
