@@ -12,8 +12,8 @@
 
 #include <stdbool.h>
 
-#include "../libimg2/decoders/yuv.h"
-#include "../libimg2/encoders/encoder.h"
+#include <img2/encode.h>
+#include <img2/yuv.h>
 
 /**
  * @struct cli_options_t
@@ -119,5 +119,12 @@ void print_version(void);
  * @return 0 if valid, -1 if invalid (error printed to stderr)
  */
 int validate_options(cli_options_t *opts);
+
+/**
+ * @brief Print the font cache (--fonts)
+ *
+ * Lists every cached font grouped by family, via img2_font_foreach().
+ */
+void print_font_list(void);
 
 #endif /* IMGCAT2_CLI_H */

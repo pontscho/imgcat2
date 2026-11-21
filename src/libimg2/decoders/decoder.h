@@ -14,16 +14,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include <img2/decode.h>
+
 #include "../core/image.h"
 #include "magic.h"
 #include "yuv.h"
 
-typedef struct img2_decode_opts {
-	img2_mime_t force_mime;          /* IMG2_MIME_UNKNOWN = detect */
-	const img2_yuv_params_t *yuv;         /* required for IMG2_MIME_YUV */
-	int max_frames;                  /* <= 0: no extra limit */
-	int jpeg_deblock;                /* -1 default (jpegqs if built), 0 off, 1 on */
-} img2_decode_opts_t;
+/* Public (<img2/decode.h>): img2_decode_opts_t, img2_decoder_info_t, img2_decode, img2_can_decode,
+ * img2_is_animated, img2_decoder_count, img2_decoder_info. */
 
 /**
  * @typedef img2_decode_fn
@@ -37,14 +35,7 @@ typedef img2_status_t (*img2_decode_fn)(const uint8_t *data, size_t len, const i
 /** @brief Cheap "is this animated" probe */
 typedef bool (*img2_probe_fn)(const uint8_t *data, size_t len);
 
-typedef struct img2_decoder_info { img2_mime_t mime; const char *name; } img2_decoder_info_t;   /* public in S7 */
 typedef struct img2_decoder_entry { img2_decoder_info_t info; img2_decode_fn decode; img2_probe_fn is_animated; } img2_decoder_entry_t;
-
-/** @brief Number of rows in the const decoder table */
-size_t img2_decoder_count(void);
-
-/** @brief Row @p index of the decoder table, NULL if out of range */
-const img2_decoder_info_t *img2_decoder_info(size_t index);
 
 /**
  * @brief Find decoder by MIME type (silent: a miss is a normal answer)
@@ -52,12 +43,6 @@ const img2_decoder_info_t *img2_decoder_info(size_t index);
  * @return First matching row (priority: native libs > STB fallbacks), or NULL
  */
 const img2_decoder_entry_t *img2_decoder_find(img2_mime_t mime);
-
-/** @brief true if a decoder for @p mime is built (IMG2_MIME_YUV -> true) */
-bool img2_can_decode(img2_mime_t mime);
-
-/** @brief Detect, find, probe; false for NULL/0/len > IMG2_MAX_FILE_SIZE or formats without a probe */
-bool img2_is_animated(const uint8_t *data, size_t len);
 
 /**
  * @brief Log the decoder table at IMG2_LOG_INFO (the table itself is const)

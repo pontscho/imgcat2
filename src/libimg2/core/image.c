@@ -210,7 +210,7 @@ static img2_status_t scale_impl(const char *tag, const img2_image_t *src, uint32
 	/* Resize using stb_image_resize2 (SRGB colorspace for natural results) */
 	int ok;
 	if (filter == IMG2_FILTER_DEFAULT) {
-		ok = stbir_resize_uint8_srgb(src->pixels, src->width, src->height, 0, dst->pixels, w, h, 0, STBIR_RGBA) != NULL;
+		ok = stbir_resize_uint8_srgb(src->pixels, src->width, src->height, (int)src->stride, dst->pixels, w, h, (int)dst->stride, STBIR_RGBA) != NULL;
 	} else {
 		static const stbir_filter map[] = {
 			[IMG2_FILTER_POINT] = STBIR_FILTER_POINT_SAMPLE, [IMG2_FILTER_BOX] = STBIR_FILTER_BOX,
@@ -233,11 +233,9 @@ static img2_status_t scale_impl(const char *tag, const img2_image_t *src, uint32
 	return IMG2_OK;
 }
 
-img2_status_t img2_image_scale_fit(const img2_image_t *src, uint32_t target_width, uint32_t target_height, img2_image_t **out)
+/* Legacy fit path (pre-checks + img2_fit_size + scale_impl), shared by img2_image_scale_fit and img2_scale_fit */
+static img2_status_t scale_fit_impl(const img2_image_t *src, uint32_t target_width, uint32_t target_height, img2_filter_t filter, img2_image_t **out)
 {
-	if (out == NULL) {
-		return IMG2_E_ARG;
-	}
 	*out = NULL;
 
 	if (src == NULL || src->pixels == NULL) {
@@ -255,7 +253,15 @@ img2_status_t img2_image_scale_fit(const img2_image_t *src, uint32_t target_widt
 		return st;
 	}
 
-	return scale_impl("image_scale_fit", src, new_width, new_height, IMG2_FILTER_DEFAULT, out);
+	return scale_impl("image_scale_fit", src, new_width, new_height, filter, out);
+}
+
+img2_status_t img2_image_scale_fit(const img2_image_t *src, uint32_t target_width, uint32_t target_height, img2_image_t **out)
+{
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	return scale_fit_impl(src, target_width, target_height, IMG2_FILTER_DEFAULT, out);
 }
 
 img2_status_t img2_image_scale_resize(const img2_image_t *src, uint32_t target_width, uint32_t target_height, img2_image_t **out)
@@ -264,6 +270,110 @@ img2_status_t img2_image_scale_resize(const img2_image_t *src, uint32_t target_w
 		return IMG2_E_ARG;
 	}
 	return scale_impl("image_scale_resize", src, target_width, target_height, IMG2_FILTER_DEFAULT, out);
+}
+
+img2_status_t img2_image_validate(const img2_image_t *img)
+{
+	if (img == NULL || img->pixels == NULL) {
+		return IMG2_E_ARG;
+	}
+	if (img->width == 0 || img->height == 0 || img->width > IMG2_MAX_DIMENSION || img->height > IMG2_MAX_DIMENSION) {
+		return IMG2_E_ARG;
+	}
+	size_t byte_count;
+	if (!img2_image_calc_size(img->width, img->height, &byte_count)) {
+		return IMG2_E_ARG;
+	}
+	size_t row = (size_t)img->width * 4;
+	if ((size_t)img->stride < row) {
+		return IMG2_E_ARG;
+	}
+	if ((size_t)img->stride > SIZE_MAX / img->height) {
+		return IMG2_E_ARG;
+	}
+	/* 1.0: decoders, encoders and stbir assume packed rows, and a padded buffer cannot be bounds-checked */
+	if ((size_t)img->stride != row) {
+		return IMG2_E_ARG;
+	}
+	return IMG2_OK;
+}
+
+img2_status_t img2_frames_validate(const img2_frames_t *f)
+{
+	if (f == NULL || f->count < 0 || (f->count > 0 && f->frames == NULL)) {
+		return IMG2_E_ARG;
+	}
+	for (int i = 0; i < f->count; i++) {
+		if (img2_image_validate(f->frames[i]) != IMG2_OK) {
+			return IMG2_E_ARG;
+		}
+	}
+	return IMG2_OK;
+}
+
+img2_status_t img2_image_create(uint32_t width, uint32_t height, img2_image_t **out)
+{
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	*out = NULL;
+	if (width == 0 || height == 0) {
+		return IMG2_E_ARG;
+	}
+	size_t byte_count;
+	if (!img2_image_calc_size(width, height, &byte_count)) {
+		return IMG2_E_LIMIT; /* checked here, so img2_image_alloc's ERROR line is not emitted for parameter errors */
+	}
+	*out = img2_image_alloc(width, height);
+	return *out != NULL ? IMG2_OK : IMG2_E_NOMEM;
+}
+
+/* [SM2] public prologue of img2_scale / img2_scale_fit; the legacy ERROR line only for NULL source/pixels */
+static img2_status_t scale_prologue(const char *tag, const img2_image_t *src, img2_filter_t filter)
+{
+	if (src == NULL || src->pixels == NULL) {
+		img2_log(IMG2_LOG_ERROR, "%s: invalid source image", tag);
+		return IMG2_E_ARG;
+	}
+	if (img2_image_validate(src) != IMG2_OK) {
+		img2_log(IMG2_LOG_DEBUG, "%s: source image rejected (dimensions or stride)", tag);
+		return IMG2_E_ARG;
+	}
+	if ((unsigned)filter > (unsigned)IMG2_FILTER_MITCHELL) {
+		img2_log(IMG2_LOG_DEBUG, "%s: invalid filter %d", tag, (int)filter);
+		return IMG2_E_ARG;
+	}
+	if (filter != IMG2_FILTER_DEFAULT) {
+		img2_log(IMG2_LOG_DEBUG, "%s: filter %d not supported yet", tag, (int)filter);
+		return IMG2_E_UNSUPPORTED; /* wired in S10 */
+	}
+	return IMG2_OK;
+}
+
+img2_status_t img2_scale(const img2_image_t *src, uint32_t width, uint32_t height, img2_filter_t filter, img2_image_t **out)
+{
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	*out = NULL;
+	img2_status_t st = scale_prologue("image_scale_resize", src, filter);
+	if (st != IMG2_OK) {
+		return st;
+	}
+	return scale_impl("image_scale_resize", src, width, height, filter, out);
+}
+
+img2_status_t img2_scale_fit(const img2_image_t *src, uint32_t max_w, uint32_t max_h, img2_filter_t filter, img2_image_t **out)
+{
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	*out = NULL;
+	img2_status_t st = scale_prologue("image_scale_fit", src, filter);
+	if (st != IMG2_OK) {
+		return st;
+	}
+	return scale_fit_impl(src, max_w, max_h, filter, out);
 }
 
 img2_status_t img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height, img2_image_t **out)

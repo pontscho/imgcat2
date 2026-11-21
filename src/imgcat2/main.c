@@ -10,17 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <img2/img2.h>
+
 #include "cli.h"
-#include "../libimg2/core/image.h"
-#include "../libimg2/core/log.h"
 #include "metadata.h"
 #include "pipeline.h"
-#include "../libimg2/decoders/decoder.h"
-#include "../libimg2/decoders/magic.h"
-#include "../libimg2/encoders/encoder.h"
 #include "terminal/file.h"
 #include "terminal/terminal.h"
-#include "../libimg2/text/font_manager.h"
 
 /**
  * @brief Main program entry point
@@ -95,7 +91,7 @@ int main(int argc, char **argv)
 		/* Handle --fonts option: list available fonts and exit */
 	} else if (opts.list_fonts) {
 		img2_init();
-		img2_font_manager_list_fonts();
+		print_font_list();
 		img2_shutdown();
 		return EXIT_SUCCESS;
 	}
@@ -123,8 +119,7 @@ int main(int argc, char **argv)
 	/* Pipeline variables */
 	uint8_t *buffer = NULL;
 	size_t buffer_size = 0;
-	img2_image_t **frames = NULL;
-	int frame_count = 0;
+	img2_frames_t frames = { NULL, 0, 0 };
 	img2_image_t **scaled_frames = NULL;
 
 	/* STEP 1: Read input (file or stdin) */
@@ -166,13 +161,13 @@ int main(int argc, char **argv)
 	}
 
 	/* STEP 2: Decode image with MIME detection */
-	if (pipeline_decode(&opts, buffer, buffer_size, &frames, &frame_count) < 0) {
+	if (pipeline_decode(&opts, buffer, buffer_size, &frames.frames, &frames.count) < 0) {
 		fprintf(stderr, "Error: Failed to decode image\n");
 		goto cleanup;
 	}
 
 	if (!opts.silent) {
-		fprintf(stderr, "Decoded %d frame(s)\n", frame_count);
+		fprintf(stderr, "Decoded %d frame(s)\n", frames.count);
 	}
 
 	/* STEP 2.5: Output metadata and exit if --info specified */
@@ -181,24 +176,24 @@ int main(int argc, char **argv)
 		img2_mime_t mime = pipeline_input_mime(&opts, buffer, buffer_size);
 
 		if (opts.json_output) {
-#ifdef IMG2_HAVE_EXIF_READER
+#if IMG2_HAS_EXIF
 			/* Build complete JSON with EXIF/XMP data */
 			const char *type = img2_mime_name(mime);
 			const char *mime_str = img2_mime_string(mime);
-			printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d", type, mime_str, frames[0]->width, frames[0]->height, frame_count);
-			output_exif_json(frames[0]->exif, false);
-			output_xmp_json(frames[0]->xmp, false);
+			printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d", type, mime_str, frames.frames[0]->width, frames.frames[0]->height, frames.count);
+			output_exif_json(frames.frames[0]->exif, false);
+			output_xmp_json(frames.frames[0]->xmp, false);
 			printf("}\n");
 
 #else
-			output_metadata_json(mime, frames[0]->width, frames[0]->height, frame_count);
+			output_metadata_json(mime, frames.frames[0]->width, frames.frames[0]->height, frames.count);
 #endif
 
 		} else {
-			output_metadata_text(mime, frames[0]->width, frames[0]->height, frame_count);
-#ifdef IMG2_HAVE_EXIF_READER
-			output_exif_text(frames[0]->exif);
-			output_xmp_text(frames[0]->xmp);
+			output_metadata_text(mime, frames.frames[0]->width, frames.frames[0]->height, frames.count);
+#if IMG2_HAS_EXIF
+			output_exif_text(frames.frames[0]->exif);
+			output_xmp_text(frames.frames[0]->xmp);
 #endif
 		}
 
@@ -211,7 +206,7 @@ int main(int argc, char **argv)
 	if (opts.convert_mode) {
 		/* Convert mode: only scale if user explicitly requested dimensions */
 		if (opts.has_custom_dimensions) {
-			if (pipeline_scale(frames, frame_count, &opts, &scaled_frames) < 0) {
+			if (pipeline_scale(frames.frames,frames.count, &opts, &scaled_frames) < 0) {
 				fprintf(stderr, "Error: Failed to scale images\n");
 				goto cleanup;
 			}
@@ -222,12 +217,12 @@ int main(int argc, char **argv)
 		}
 
 		/* Use scaled frames if available, otherwise original frames */
-		img2_image_t **render_frames = scaled_frames ? scaled_frames : frames;
+		img2_image_t **render_frames = scaled_frames ? scaled_frames : frames.frames;
 
 		/* Validate frame index */
-		if (opts.frame_index >= frame_count) {
-			fprintf(stderr, "Error: Frame index %d out of range (0-%d)\n", opts.frame_index, frame_count - 1);
-		} else if (file_render(render_frames, frame_count, &opts) < 0) {
+		if (opts.frame_index >= frames.count) {
+			fprintf(stderr, "Error: Frame index %d out of range (0-%d)\n", opts.frame_index, frames.count - 1);
+		} else if (file_render(render_frames, frames.count, &opts) < 0) {
 			fprintf(stderr, "Error: Failed to convert and save image\n");
 		} else {
 			exit_code = EXIT_SUCCESS;
@@ -237,7 +232,7 @@ int main(int argc, char **argv)
 	}
 
 	/* STEP 3.1: Scale images to terminal dimensions (non-convert mode) */
-	if (pipeline_scale(frames, frame_count, &opts, &scaled_frames) < 0) {
+	if (pipeline_scale(frames.frames,frames.count, &opts, &scaled_frames) < 0) {
 		fprintf(stderr, "Error: Failed to scale images\n");
 		goto cleanup;
 	}
@@ -249,20 +244,20 @@ int main(int argc, char **argv)
 	/* STEP 4.2: Render using Kitty or iTerm2 graphics protocol */
 	/* Render using iTerm2 protocol for iTerm2 and WezTerm */
 	if ((opts.terminal.is_iterm2 || opts.terminal.is_wezterm) && !opts.force_ansi) {
-		if (iterm2_render(scaled_frames, frame_count, &opts, buffer_size) == 0) {
+		if (iterm2_render(scaled_frames, frames.count, &opts, buffer_size) == 0) {
 			exit_code = EXIT_SUCCESS;
 			goto cleanup;
 		}
 
 	} else if (opts.terminal.has_kitty && !opts.force_ansi) {
-		if (kitty_render(scaled_frames, frame_count, &opts) == 0) {
+		if (kitty_render(scaled_frames, frames.count, &opts) == 0) {
 			exit_code = EXIT_SUCCESS;
 			goto cleanup;
 		}
 	}
 
 	/* STEP 4.3: Render to terminal */
-	if (pipeline_render(scaled_frames, frame_count, &opts) < 0) {
+	if (pipeline_render(scaled_frames, frames.count, &opts) < 0) {
 		fprintf(stderr, "Error: Failed to render output\n");
 		goto cleanup;
 	}
@@ -276,21 +271,16 @@ cleanup:
 		free(buffer);
 	}
 
-	/* Free decoded frames */
-	if (frames != NULL) {
-		for (int i = 0; i < frame_count; i++) {
-			img2_image_destroy(frames[i]);
-		}
-		free(frames);
-	}
-
-	/* Free scaled frames */
+	/* Free scaled frames (the CLI owns the array, the library the images) */
 	if (scaled_frames != NULL) {
-		for (int i = 0; i < frame_count; i++) {
+		for (int i = 0; i < frames.count; i++) {
 			img2_image_destroy(scaled_frames[i]);
 		}
 		free(scaled_frames);
 	}
+
+	/* Free decoded frames */
+	img2_frames_free(&frames);
 
 	img2_shutdown();
 	return exit_code;

@@ -14,9 +14,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../libimg2/decoders/magic.h"
+#include <img2/image.h>
+#include <img2/mime.h>
+
 #include "cli.h"
-#include "../libimg2/core/image.h"
 
 /**
  * @brief Read file with path traversal protection and size limits
@@ -24,7 +25,7 @@
  * Securely reads a file into memory with:
  * - Path traversal protection (realpath/GetFullPathName)
  * - ".." component validation
- * - File size validation (≤ IMG2_MAX_FILE_SIZE from image.h)
+ * - File size validation (≤ IMG2_MAX_FILE_SIZE from <img2/image.h>)
  * - Safe memory allocation
  *
  * @param path File path to read

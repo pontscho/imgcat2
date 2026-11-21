@@ -10,11 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <img2/img2.h>
+
 #include "../base64.h"
 #include "../cli.h"
-#include "../../libimg2/decoders/decoder.h"
-#include "../../libimg2/decoders/magic.h"
-#include "../../libimg2/encoders/encoder.h"
 #include "iterm2.h"
 
 bool iterm2_is_format_supported(const uint8_t *data, size_t size, cli_options_t *opts)
@@ -24,48 +23,13 @@ bool iterm2_is_format_supported(const uint8_t *data, size_t size, cli_options_t 
 		return false;
 	}
 
-	/* Detect MIME type using magic bytes */
-	img2_mime_t mime = img2_detect_mime(data, size);
-
 	/*
 	 * iTerm2 will use decode → scale → encode pipeline for all formats.
 	 * However, animated formats with -a flag should fall back to ANSI
-	 * rendering (following Kitty pattern).
+	 * rendering (following Kitty pattern). The probe runs first, then opts->animate.
 	 */
-	switch (mime) {
-#ifdef IMG2_HAVE_WEBP
-		case IMG2_MIME_WEBP:
-			if (img2_webp_is_animated(data, size) && opts->animate) {
-				goto force_ansi;
-			}
-			break;
-#endif
-
-#ifdef IMG2_HAVE_HEIF
-		case IMG2_MIME_AVIF:
-		case IMG2_MIME_HEIF:
-			if (img2_heif_is_animated(data, size) && opts->animate) {
-				goto force_ansi;
-			}
-			break;
-#endif
-
-#ifdef PNG_APNG_SUPPORTED
-		case IMG2_MIME_PNG:
-			if (img2_png_is_animated(data, size) && opts->animate) {
-				goto force_ansi;
-			}
-			break;
-#endif
-
-#ifdef IMG2_HAVE_GIFLIB
-		case IMG2_MIME_GIF:
-			if (img2_gif_is_animated(data, size) && opts->animate) {
-				goto force_ansi;
-			}
-			break;
-#endif
-		default: break;
+	if (img2_is_animated(data, size) && opts->animate) {
+		goto force_ansi;
 	}
 
 	return true;
@@ -99,10 +63,12 @@ int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *o
 	size_t encoded_size = 0;
 	const char *format_name;
 
+	img2_frames_t one = { .frames = &img, .count = 1 };
+
 	if (opts->iterm2_format == IMG2_FORMAT_PNG) {
-		/* PNG encoding with compression level 3 for speed */
-		int compression = 3;
-		if (img2_encode_png(img, compression, &encoded_data, &encoded_size) != IMG2_OK) {
+		/* PNG encoding with compression level 3 for speed (quality 30 -> level 3) */
+		img2_encode_opts_t eo = { .quality = 30 };
+		if (img2_encode(&one, IMG2_FORMAT_PNG, &eo, &encoded_data, &encoded_size) != IMG2_OK) {
 			fprintf(stderr, "Error: Failed to encode PNG for iTerm2\n");
 			return -1;
 		}
@@ -110,7 +76,8 @@ int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *o
 
 	} else {
 		/* JPEG encoding with configured quality */
-		if (img2_encode_jpeg(img, opts->jpeg_quality, &encoded_data, &encoded_size) != IMG2_OK) {
+		img2_encode_opts_t eo = { .quality = opts->jpeg_quality };
+		if (img2_encode(&one, IMG2_FORMAT_JPEG, &eo, &encoded_data, &encoded_size) != IMG2_OK) {
 			fprintf(stderr, "Error: Failed to encode JPEG for iTerm2\n");
 			return -1;
 		}
@@ -128,7 +95,7 @@ int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *o
 	char *b64_encoded = base64_encode(encoded_data, encoded_size, &b64_size);
 	if (b64_encoded == NULL) {
 		fprintf(stderr, "Error: Failed to base64 encode image data\n");
-		free(encoded_data);
+		img2_free(encoded_data);
 		return -1;
 	}
 
@@ -167,7 +134,7 @@ int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *o
 	fflush(stdout);
 
 	/* Cleanup */
-	free(encoded_data);
+	img2_free(encoded_data);
 	free(b64_encoded);
 	if (encoded_filename != NULL) {
 		free(encoded_filename);

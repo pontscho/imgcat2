@@ -12,10 +12,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "../libimg2/decoders/magic.h"
+#include <img2/mime.h>
 
 /* Forward declarations for EXIF/XMP structures */
-#ifdef IMG2_HAVE_EXIF_READER
+#if IMG2_HAS_EXIF
 struct img2_exif;
 struct img2_xmp;
 #endif
@@ -50,7 +50,7 @@ void output_metadata_text(img2_mime_t mime, uint32_t width, uint32_t height, int
  */
 void output_metadata_json(img2_mime_t mime, uint32_t width, uint32_t height, int frame_count);
 
-#ifdef IMG2_HAVE_EXIF_READER
+#if IMG2_HAS_EXIF
 /**
  * @brief Output EXIF metadata in human-readable format
  *

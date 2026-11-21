@@ -18,7 +18,8 @@
 #include <unistd.h>
 #endif
 
-#include "../../libimg2/encoders/encoder.h"
+#include <img2/img2.h>
+
 #include "file.h"
 
 /**
@@ -145,7 +146,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	if (opts->output_format == IMG2_FORMAT_JPEG) {
 		quality = opts->jpeg_quality;
 	} else if (opts->output_format == IMG2_FORMAT_PNG) {
-		quality = opts->png_compression;
+		quality = opts->png_compression * 10; /* img2_encode: zlib level = quality / 10 */
 	} else if (opts->output_format == IMG2_FORMAT_HEIF) {
 		quality = opts->heif_quality;
 	} else if (opts->output_format == IMG2_FORMAT_WEBP) {
@@ -158,7 +159,9 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	uint8_t *encoded_data = NULL;
 	size_t encoded_size = 0;
 
-	if (img2_encoder_dispatch(img, opts->output_format, quality, &encoded_data, &encoded_size) != IMG2_OK) {
+	img2_frames_t one = { .frames = &img, .count = 1 };
+	img2_encode_opts_t eo = { .quality = quality };
+	if (img2_encode(&one, opts->output_format, &eo, &encoded_data, &encoded_size) != IMG2_OK) {
 		fprintf(stderr, "Error: Failed to encode image\n");
 		return -1;
 	}
@@ -167,7 +170,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	if (encoded_data == NULL || encoded_size == 0) {
 		fprintf(stderr, "Error: Encoder produced no output\n");
 		if (encoded_data != NULL) {
-			free(encoded_data);
+			img2_free(encoded_data);
 		}
 		return -1;
 	}
@@ -180,7 +183,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		char canonical_path[PATH_MAX];
 		if (!validate_path_safe(opts->output_file, canonical_path)) {
 			fprintf(stderr, "Error: Invalid output file path: %s\n", opts->output_file);
-			free(encoded_data);
+			img2_free(encoded_data);
 			return -1;
 		}
 
@@ -188,7 +191,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		FILE *fp = fopen(canonical_path, "wb");
 		if (fp == NULL) {
 			fprintf(stderr, "Error: Cannot open file '%s' for writing: %s\n", canonical_path, strerror(errno));
-			free(encoded_data);
+			img2_free(encoded_data);
 			return -1;
 		}
 
@@ -197,14 +200,14 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		if (bytes_written != encoded_size) {
 			fprintf(stderr, "Error: Failed to write %zu bytes to file (wrote %zu): %s\n", encoded_size, bytes_written, strerror(errno));
 			fclose(fp);
-			free(encoded_data);
+			img2_free(encoded_data);
 			return -1;
 		}
 
 		/* Close file */
 		if (fclose(fp) != 0) {
 			fprintf(stderr, "Error: Failed to close file: %s\n", strerror(errno));
-			free(encoded_data);
+			img2_free(encoded_data);
 			return -1;
 		}
 
@@ -216,13 +219,13 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		ssize_t bytes_written = write(STDOUT_FILENO, encoded_data, encoded_size);
 		if (bytes_written < 0 || (size_t)bytes_written != encoded_size) {
 			fprintf(stderr, "Error: Failed to write %zu bytes to stdout (wrote %zd): %s\n", encoded_size, bytes_written, strerror(errno));
-			free(encoded_data);
+			img2_free(encoded_data);
 			return -1;
 		}
 	}
 
 	/* Free encoded data */
-	free(encoded_data);
+	img2_free(encoded_data);
 
 	return result;
 }

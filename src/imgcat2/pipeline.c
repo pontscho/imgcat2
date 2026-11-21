@@ -16,18 +16,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <img2/img2.h>
+
 #include "ansi/ansi.h"
 #include "ansi/escape.h"
-#include "../libimg2/decoders/decoder.h"
-#include "../libimg2/decoders/magic.h"
 #include "terminal/terminal.h"
 #include "cli.h"
-#include "../libimg2/core/image.h"
 #include "pipeline.h"
-
-#ifdef IMG2_HAVE_EXIF_READER
-#include "../libimg2/metadata/exif_reader.h"
-#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -503,40 +498,41 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, img
 		}
 	}
 
-	/* Decode with registry */
-	img2_decode_opts_t dopts = { .force_mime = IMG2_MIME_UNKNOWN, .yuv = (opts != NULL && opts->yuv_input) ? &opts->yuv : NULL, .max_frames = 0, .jpeg_deblock = -1 };
-	img2_frames_t fr = { 0 };
-	if (img2_decoder_dispatch(&dopts, buffer, size, mime, &fr) != IMG2_OK || fr.count <= 0) {
+	/* Decode through the public API (the MIME type is forced: detected above, or YUV for --yuv) */
+	img2_decode_opts_t dopts = IMG2_DECODE_OPTS_INIT;
+	dopts.force_mime = mime;
+	dopts.yuv = (opts != NULL && opts->yuv_input) ? &opts->yuv : NULL;
+	img2_frames_t fr = { NULL, 0, 0 };
+	if (img2_decode(buffer, size, &dopts, &fr) != IMG2_OK || fr.count <= 0) {
 		img2_frames_free(&fr);
 		*out_frame_count = 0;
 		fprintf(stderr, "pipeline_decode: failed to decode image\n");
 		return -1;
 	}
-	img2_image_t **frames = fr.frames;
-	*out_frame_count = fr.count;
 
-#ifdef IMG2_HAVE_EXIF_READER
+#if IMG2_HAS_EXIF
 	/* Apply EXIF orientation transformation
 	 * Skip for formats that handle orientation natively:
 	 * - TIFF: libtiff applies orientation during decode
 	 * - HEIF/AVIF: libheif applies orientation during decode
 	 */
 	if (mime != IMG2_MIME_TIFF && mime != IMG2_MIME_HEIF && mime != IMG2_MIME_AVIF) {
-		for (int i = 0; i < *out_frame_count; i++) {
-			if (frames[i]->exif != NULL && frames[i]->exif->orientation > 1) {
+		for (int i = 0; i < fr.count; i++) {
+			if (fr.frames[i]->exif != NULL && fr.frames[i]->exif->orientation > 1) {
 				if (!opts->silent) {
 					const char *descriptions[] = { "Normal", "Flip horizontal", "Rotate 180°", "Flip vertical", "Transpose", "Rotate 90° CW", "Transverse", "Rotate 270° CW" };
-					fprintf(stderr, "Applying EXIF orientation: %u (%s)\n", frames[i]->exif->orientation, descriptions[frames[i]->exif->orientation - 1]);
+					fprintf(stderr, "Applying EXIF orientation: %u (%s)\n", fr.frames[i]->exif->orientation, descriptions[fr.frames[i]->exif->orientation - 1]);
 				}
-				if (img2_image_orient(frames[i], frames[i]->exif->orientation) < 0) {
-					fprintf(stderr, "Warning: Failed to apply orientation %u, displaying as-is\n", frames[i]->exif->orientation);
+				if (img2_apply_orientation(&fr.frames[i]) < 0) {
+					fprintf(stderr, "Warning: Failed to apply orientation %u, displaying as-is\n", fr.frames[i]->exif->orientation);
 				}
 			}
 		}
 	}
 #endif
 
-	*out_frames = frames;
+	*out_frames = fr.frames;
+	*out_frame_count = fr.count;
 	return 0;
 }
 
@@ -637,11 +633,11 @@ int pipeline_scale(img2_image_t **frames, int frame_count, const cli_options_t *
 
 		if (opts->fit_mode) {
 			/* Fit mode: maintain aspect ratio */
-			st = img2_image_scale_fit(frames[i], target.width, target.height, &scaled_frame);
+			st = img2_scale_fit(frames[i], target.width, target.height, IMG2_FILTER_DEFAULT, &scaled_frame);
 
 		} else {
 			/* Resize mode: exact dimensions */
-			st = img2_image_scale_resize(frames[i], target.width, target.height, &scaled_frame);
+			st = img2_scale(frames[i], target.width, target.height, IMG2_FILTER_DEFAULT, &scaled_frame);
 		}
 
 		if (st != IMG2_OK) {

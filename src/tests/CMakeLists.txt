@@ -43,6 +43,16 @@ if(TARGET test_threads)
 	target_compile_definitions(test_threads PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
 endif()
 
+# [L4] Public API test: links img2 only (no img2_testing, no internal include dirs); includes only <img2/img2.h>
+add_executable(test_public_api unit/main.c unit/test_public_api.c)
+target_link_libraries(test_public_api PRIVATE img2)
+target_compile_definitions(test_public_api PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
+img2_apply_project_settings(test_public_api)
+img2_static_executable(test_public_api)
+add_test(NAME test_public_api COMMAND test_public_api)
+set_tests_properties(test_public_api PROPERTIES TIMEOUT 10 LABELS "unit;lib"
+	ENVIRONMENT "TMPDIR=${PROJECT_BINARY_DIR}/test-tmp")
+
 # ============================================================================
 # INTEGRATION TESTS
 # ============================================================================
@@ -87,6 +97,12 @@ img2_add_test(test_tiff_orientation KIND integration SOURCES integration/test_ti
 add_test(NAME img2_layering_lib COMMAND ${CMAKE_COMMAND} -DMODE=lib -DROOT=${PROJECT_SOURCE_DIR}
 	-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_layering.cmake)
 set_tests_properties(img2_layering_lib PROPERTIES LABELS guard)
+add_test(NAME img2_layering_cli COMMAND ${CMAKE_COMMAND} -DMODE=cli -DROOT=${PROJECT_SOURCE_DIR}
+	-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_layering.cmake)
+set_tests_properties(img2_layering_cli PROPERTIES LABELS guard)
+add_test(NAME img2_public_headers COMMAND ${CMAKE_COMMAND} -DROOT=${PROJECT_SOURCE_DIR}
+	-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_public_headers.cmake)
+set_tests_properties(img2_public_headers PROPERTIES LABELS guard)
 if(CMAKE_NM AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	# prefix + no-terminate (forbidden references, also in the -UNDEBUG img2_assertcheck objects)
 	# + [SM3] mutable-state allow-list

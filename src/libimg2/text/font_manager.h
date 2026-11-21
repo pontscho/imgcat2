@@ -13,30 +13,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <img2/font.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**
- * @brief Font weight enumeration
- */
-typedef enum {
-	IMG2_FONT_WEIGHT_NORMAL = 400,
-	IMG2_FONT_WEIGHT_BOLD = 700
-} img2_font_weight_t;
-
-/**
- * @brief Font style enumeration
- */
-typedef enum {
-	IMG2_FONT_STYLE_NORMAL = 0,
-	IMG2_FONT_STYLE_ITALIC = 1
-} img2_font_style_t;
-
-/**
- * @brief Opaque font handle
- */
-typedef struct img2_font img2_font_t;
+/* Public (<img2/font.h>): weight/style enums, img2_font_t, img2_font_load, img2_font_load_fallback,
+ * img2_font_get_data, img2_font_get_family, img2_font_info_t, img2_font_foreach. Internal below. */
 
 /**
  * @brief Initialize font manager (optional: every entry point initialises lazily)
@@ -83,34 +67,6 @@ img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_
  * @brief The embedded DejaVu Sans Mono fallback handle (interned; NULL on OOM)
  */
 img2_font_t *img2_font_find_fallback(void);
-
-/**
- * @brief Get TTF font data from a font handle
- *
- * Returns pointer to the raw TTF data for use with stb_truetype.
- * The data remains valid until img2_font_manager_cleanup() is called.
- *
- * @param font Font handle
- * @param size_out Output: size of font data in bytes
- * @return Pointer to TTF data or NULL on error
- */
-const uint8_t *img2_font_get_data(const img2_font_t *font, size_t *size_out);
-
-/**
- * @brief Get font family name
- *
- * @param font Font handle
- * @return Font family name or NULL on error
- */
-const char *img2_font_get_family(const img2_font_t *font);
-
-/**
- * @brief List all available fonts
- *
- * Prints all available fonts (both system and embedded) to stdout.
- * Each font is printed on a separate line with family name, weight, and style.
- */
-void img2_font_manager_list_fonts(void);
 
 /**
  * @brief Opaque parsed font face (wraps stb_truetype inside font_manager.c)

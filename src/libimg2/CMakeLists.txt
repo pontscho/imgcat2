@@ -18,7 +18,7 @@ add_custom_target(embed_fonts DEPENDS "${IMG2_GENERATED_DIR}/embedded_fonts.c" "
 add_library(img2 STATIC)
 add_library(img2::img2 ALIAS img2)
 target_sources(img2 PRIVATE
-	core/image.c core/log.c core/status.c core/init.c
+	core/image.c core/log.c core/status.c core/init.c core/api.c
 	decoders/decoder.c decoders/magic.c decoders/decoder_stb.c decoders/decoder_png.c decoders/decoder_jpeg.c
 	decoders/decoder_qoi.c decoders/decoder_ico.c decoders/decoder_pnm.c decoders/decoder_yuv.c decoders/decoder_nanosvg.c
 	encoders/encoder.c encoders/encoder_jpeg.c encoders/encoder_png.c
@@ -48,6 +48,28 @@ if(IMG2_HAVE_RESVG)
 	target_sources(img2 PRIVATE decoders/decoder_resvg.c)
 endif()
 add_dependencies(img2 embed_fonts)
+
+# Public headers (include/img2) + generated img2_config.h (informative IMG2_HAS_* and the version)
+foreach(_pair JPEG:LIBJPEG JPEGQS:JPEGQS PNG:LIBPNG GIF:GIFLIB WEBP:WEBP HEIF:HEIF TIFF:TIFF RAW:RAW JXL:JXL
+		RESVG:RESVG EXIF:EXIF_READER)
+	string(REPLACE ":" ";" _pair "${_pair}")
+	list(GET _pair 0 _has)
+	list(GET _pair 1 _have)
+	if(IMG2_HAVE_${_have})
+		set(IMG2_HAS_${_has} 1)
+	else()
+		set(IMG2_HAS_${_has} 0)
+	endif()
+endforeach()
+if(IMG2_HAVE_LIBPNG AND PNG_APNG_SUPPORTED_CHECK)
+	set(IMG2_HAS_APNG 1)
+else()
+	set(IMG2_HAS_APNG 0)
+endif()
+configure_file("${PROJECT_SOURCE_DIR}/cmake/img2_config.h.in" "${PROJECT_BINARY_DIR}/include/img2/img2_config.h")
+target_include_directories(img2 PUBLIC
+	"$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>" "$<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>"
+	"$<INSTALL_INTERFACE:include>")
 
 # [SL1] secure_getenv for the font manager's ~ expansion (only IMG2_HAVE_SECURE_GETENV is passed:
 # font_manager.c defines _GNU_SOURCE itself)
@@ -122,6 +144,24 @@ add_dependencies(img2_assertcheck_build img2_assertcheck)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
 	target_compile_options(img2 PRIVATE -Wformat=2 -Wformat-security -Werror=format-security)
 endif()
+
+# Public header self-containment: one generated TU per public header (included twice), compiled strictly
+# with ONLY include/ and the generated include dir ([Q8]); links nothing.
+set(_img2_public_headers common log image mime yuv decode encode metadata font img2 img2_config)
+set(_img2_hc_srcs "")
+foreach(_h IN LISTS _img2_public_headers)
+	set(_hc "${CMAKE_CURRENT_BINARY_DIR}/header_check/hc_${_h}.c")
+	file(GENERATE OUTPUT "${_hc}" CONTENT
+		"#include <img2/${_h}.h>\n#include <img2/${_h}.h>\nint img2_hc_${_h}(void);\nint img2_hc_${_h}(void) { return 0; }\n")
+	list(APPEND _img2_hc_srcs "${_hc}")
+endforeach()
+add_library(img2_header_check OBJECT ${_img2_hc_srcs})
+set_target_properties(img2_header_check PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(img2_header_check PRIVATE -std=c11 -Wall -Wextra -Werror -pedantic)
+endif()
+target_include_directories(img2_header_check PRIVATE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_BINARY_DIR}/include")
+add_dependencies(img2_header_check img2)
 
 # White-box tests and the (transitional) CLI see the internal headers and feature macros.
 # Never installed or exported.

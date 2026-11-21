@@ -11,12 +11,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../libimg2/decoders/decoder.h"
+#include <img2/img2.h>
+
 #include "terminal/terminal.h"
 #include "cli.h"
 
-/** Project version from CMake */
-#define VERSION_STRING "1.0.0"
+/** Project version from CMake (IMGCAT2_VERSION_STRING compile definition) */
+#ifndef IMGCAT2_VERSION_STRING
+#define IMGCAT2_VERSION_STRING "1.0.0"
+#endif
 
 /** Resize factors (must match pipeline.c) */
 #define RESIZE_FACTOR_X 1
@@ -95,7 +98,7 @@ void print_usage(const char *program_name)
  */
 void print_version(void)
 {
-	printf("imgcat2 version %s\n", VERSION_STRING);
+	printf("imgcat2 version %s\n", IMGCAT2_VERSION_STRING);
 	printf("Modern terminal image viewer with true color support\n");
 	printf("\n");
 	printf("Build information:\n");
@@ -127,6 +130,119 @@ void print_version(void)
 		printf("  - %s\n", img2_decoder_info(i)->name);
 	}
 	printf("  - YUV raw (via --yuv)\n");
+}
+
+/** Snapshot of the font cache collected by print_font_list() */
+typedef struct {
+	img2_font_info_t *items;
+	size_t count;
+	size_t cap;
+} font_list_t;
+
+static int collect_font(const img2_font_info_t *info, void *user)
+{
+	font_list_t *list = user;
+	if (list->count == list->cap) {
+		size_t cap = list->cap ? list->cap * 2 : 64;
+		img2_font_info_t *items = realloc(list->items, cap * sizeof(*items));
+		if (items == NULL) {
+			return 1;
+		}
+		list->items = items;
+		list->cap = cap;
+	}
+	list->items[list->count++] = *info;
+	return 0;
+}
+
+static const char *font_weight_to_string(img2_font_weight_t weight)
+{
+	switch (weight) {
+		case IMG2_FONT_WEIGHT_NORMAL: return "regular";
+		case IMG2_FONT_WEIGHT_BOLD: return "bold";
+		default: return "unknown";
+	}
+}
+
+static const char *font_style_to_string(img2_font_style_t style)
+{
+	switch (style) {
+		case IMG2_FONT_STYLE_NORMAL: return "normal";
+		case IMG2_FONT_STYLE_ITALIC: return "italic";
+		default: return "unknown";
+	}
+}
+
+/**
+ * @brief Print the font cache grouped by family (P11 format)
+ */
+void print_font_list(void)
+{
+	font_list_t list = { NULL, 0, 0 };
+	img2_font_foreach(collect_font, &list);
+
+	/* Count fonts; build the family list by prepending first occurrences */
+	int total_count = 0;
+	int embedded_count = 0;
+
+	typedef struct family_list_t {
+		const char *family;
+		struct family_list_t *next;
+	} family_list_t;
+
+	family_list_t *families = NULL;
+
+	for (size_t i = 0; i < list.count; i++) {
+		const img2_font_info_t *entry = &list.items[i];
+		bool found = false;
+		for (family_list_t *fam = families; fam != NULL; fam = fam->next) {
+			if (strcmp(fam->family, entry->family) == 0) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			family_list_t *new_fam = (family_list_t *)malloc(sizeof(family_list_t));
+			if (new_fam != NULL) {
+				new_fam->family = entry->family;
+				new_fam->next = families;
+				families = new_fam;
+			}
+		}
+
+		total_count++;
+		if (entry->embedded) {
+			embedded_count++;
+		}
+	}
+
+	printf("Available fonts (%d total, %d embedded):\n\n", total_count, embedded_count);
+
+	/* Print fonts grouped by family */
+	for (family_list_t *fam = families; fam != NULL; fam = fam->next) {
+		printf("%s: ", fam->family);
+
+		bool first = true;
+		for (size_t i = 0; i < list.count; i++) {
+			const img2_font_info_t *entry = &list.items[i];
+			if (strcmp(entry->family, fam->family) == 0) {
+				if (!first) {
+					printf(", ");
+				}
+				printf("%s/%s", font_weight_to_string(entry->weight), font_style_to_string(entry->style));
+				first = false;
+			}
+		}
+		printf("\n");
+	}
+
+	while (families != NULL) {
+		family_list_t *next = families->next;
+		free(families);
+		families = next;
+	}
+	free(list.items);
 }
 
 /**

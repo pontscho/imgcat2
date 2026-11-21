@@ -9,8 +9,9 @@
 #ifndef IMGCAT2_FILE_H
 #define IMGCAT2_FILE_H
 
+#include <img2/image.h>
+
 #include "../cli.h"
-#include "../../libimg2/core/image.h"
 
 /**
  * @brief Render image to file or stdout
@@ -34,7 +35,7 @@
  *
  * @note For animated images, prints warning and uses frame at opts->frame_index
  * @note Validates output_file path for security (path traversal protection)
- * @note Calls img2_encoder_dispatch() to perform actual encoding
+ * @note Calls img2_encode() to perform actual encoding
  *
  * @example
  * // Convert to JPEG and write to stdout

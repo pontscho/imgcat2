@@ -14,20 +14,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <img2/encode.h>
+
 #include "../core/image.h"
 
-/**
- * @enum img2_format_t
- * @brief Supported output image formats
- */
-typedef enum {
-	IMG2_FORMAT_NONE = 0, /**< No format selected */
-	IMG2_FORMAT_JPEG, /**< JPEG format */
-	IMG2_FORMAT_PNG, /**< PNG format */
-	IMG2_FORMAT_HEIF, /**< HEIF format */
-	IMG2_FORMAT_WEBP, /**< WebP format */
-	IMG2_FORMAT_JXL, /**< JXL format */
-} img2_format_t;
+/* Public (<img2/encode.h>): img2_format_t, img2_encode_opts_t, img2_encoder_info_t, img2_encode,
+ * img2_can_encode, img2_encoder_count, img2_encoder_info. */
 
 /**
  * @typedef img2_encode_fn
@@ -48,20 +40,10 @@ typedef enum {
  */
 typedef img2_status_t (*img2_encode_fn)(const img2_image_t *img, int native_quality, uint8_t **out_data, size_t *out_size);
 
-typedef struct img2_encoder_info { img2_format_t format; const char *name; const char *extension; } img2_encoder_info_t;
 typedef struct img2_encoder_entry { img2_encoder_info_t info; img2_encode_fn encode; int default_quality; } img2_encoder_entry_t;
-
-/** @brief Number of rows in the const encoder table */
-size_t img2_encoder_count(void);
-
-/** @brief Row @p index of the encoder table, NULL if out of range */
-const img2_encoder_info_t *img2_encoder_info(size_t index);
 
 /** @brief Find encoder by output format (silent: a miss is a normal answer) */
 const img2_encoder_entry_t *img2_encoder_find(img2_format_t format);
-
-/** @brief true if an encoder for @p format is built */
-bool img2_can_encode(img2_format_t format);
 
 /** @brief Log the legacy "no encoder" ERROR lines for @p format ([R2]/[P9]) */
 void img2_encoder_log_missing(img2_format_t format);

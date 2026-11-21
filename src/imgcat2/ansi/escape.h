@@ -13,7 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../libimg2/core/image.h"
+#include <img2/image.h>
 
 /**
  * @brief Maximum line buffer size (51200 bytes)

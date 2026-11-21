@@ -737,124 +737,68 @@ const char *img2_font_get_family(const img2_font_t *font)
 	return font ? font->family : NULL;
 }
 
-/**
- * @brief Helper to get weight name
- */
-static const char *weight_to_string(img2_font_weight_t weight)
+img2_status_t img2_font_load(const char *family, img2_font_weight_t weight, img2_font_style_t style, img2_font_t **out)
 {
-	switch (weight) {
-		case IMG2_FONT_WEIGHT_NORMAL: return "regular";
-		case IMG2_FONT_WEIGHT_BOLD: return "bold";
-		default: return "unknown";
+	if (out == NULL) {
+		return IMG2_E_ARG;
 	}
+	*out = NULL;
+	if (family == NULL) {
+		return IMG2_E_ARG;
+	}
+	*out = img2_font_find(family, weight, style);
+	return *out != NULL ? IMG2_OK : IMG2_E_NOT_FOUND;
 }
 
-/**
- * @brief Helper to get style name
- */
-static const char *style_to_string(img2_font_style_t style)
+img2_status_t img2_font_load_fallback(img2_font_t **out)
 {
-	switch (style) {
-		case IMG2_FONT_STYLE_NORMAL: return "normal";
-		case IMG2_FONT_STYLE_ITALIC: return "italic";
-		default: return "unknown";
+	if (out == NULL) {
+		return IMG2_E_ARG;
 	}
+	*out = img2_font_find_fallback();
+	return *out != NULL ? IMG2_OK : IMG2_E_NOT_FOUND;
 }
 
-/**
- * @brief List all available fonts (caller holds s_font_lock)
- */
-static void img2_font_manager_list_fonts_locked(void)
+img2_status_t img2_font_foreach(img2_font_visit_fn fn, void *user)
 {
-	if (!g_initialized) {
-		img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
-		return;
+	if (fn == NULL) {
+		return IMG2_E_ARG;
 	}
 
-	/* Count unique font families */
-	int total_count = 0;
-	int embedded_count = 0;
-
-	/* Create a sorted list of unique family names */
-	typedef struct family_list_t {
-		char *family;
-		struct family_list_t *next;
-	} family_list_t;
-
-	family_list_t *families = NULL;
-
-	/* First pass: collect unique families */
-	font_cache_entry_t *entry = g_font_cache;
-	while (entry != NULL) {
-		/* Check if family already in list */
-		bool found = false;
-		family_list_t *fam = families;
-		while (fam != NULL) {
-			if (strcmp(fam->family, entry->family) == 0) {
-				found = true;
-				break;
-			}
-			fam = fam->next;
-		}
-
-		if (!found) {
-			/* Add new family */
-			family_list_t *new_fam = (family_list_t *)malloc(sizeof(family_list_t));
-			if (new_fam != NULL) {
-				new_fam->family = entry->family;
-				new_fam->next = families;
-				families = new_fam;
-			}
-		}
-
-		total_count++;
-		if (strcmp(entry->path, "[embedded]") == 0) {
-			embedded_count++;
-		}
-		entry = entry->next;
-	}
-
-	printf("Available fonts (%d total, %d embedded):\n\n", total_count, embedded_count);
-
-	/* Second pass: print fonts grouped by family */
-	family_list_t *fam = families;
-	while (fam != NULL) {
-		printf("%s: ", fam->family);
-
-		/* Find all variants of this family */
-		bool first = true;
-		entry = g_font_cache;
-		while (entry != NULL) {
-			if (strcmp(entry->family, fam->family) == 0) {
-				if (!first) {
-					printf(", ");
-				}
-				printf("%s/%s", weight_to_string(entry->weight), style_to_string(entry->style));
-				first = false;
-			}
-			entry = entry->next;
-		}
-		printf("\n");
-
-		fam = fam->next;
-	}
-
-	/* Free family list */
-	while (families != NULL) {
-		family_list_t *next = families->next;
-		free(families);
-		families = next;
-	}
-}
-
-void img2_font_manager_list_fonts(void)
-{
+	/* Snapshot the cache under the lock; the visitor runs unlocked (strings live until img2_shutdown()) */
 	pthread_mutex_lock(&s_font_lock);
 	if (!g_initialized) {
 		img2_font_manager_init_locked();
 	}
-	img2_font_manager_list_fonts_locked();
+	size_t count = 0;
+	for (const font_cache_entry_t *entry = g_font_cache; entry != NULL; entry = entry->next) {
+		count++;
+	}
+	img2_font_info_t *infos = NULL;
+	if (count > 0) {
+		infos = malloc(count * sizeof(*infos));
+		if (infos == NULL) {
+			pthread_mutex_unlock(&s_font_lock);
+			return IMG2_E_NOMEM;
+		}
+	}
+	size_t i = 0;
+	for (const font_cache_entry_t *entry = g_font_cache; entry != NULL; entry = entry->next, i++) {
+		infos[i].family = entry->family;
+		infos[i].path = entry->path;
+		infos[i].weight = entry->weight;
+		infos[i].style = entry->style;
+		infos[i].embedded = (entry->path != NULL && strcmp(entry->path, "[embedded]") == 0);
+	}
 	pthread_mutex_unlock(&s_font_lock);
+
+	for (i = 0; i < count; i++) {
+		if (fn(&infos[i], user) != 0) {
+			break;
+		}
+	}
+	free(infos);
+	return IMG2_OK;
 }
 
 /* Face over a handle's data (caller holds s_font_lock) */

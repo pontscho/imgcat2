@@ -6,11 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "metadata.h"
+#include <img2/img2.h>
 
-#ifdef IMG2_HAVE_EXIF_READER
-#include "../libimg2/metadata/exif_reader.h"
-#endif
+#include "metadata.h"
 
 /**
  * @brief Output metadata in human-readable text format
@@ -40,7 +38,7 @@ void output_metadata_json(img2_mime_t mime, uint32_t width, uint32_t height, int
 	printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d}\n", type, mime_str, width, height, frame_count);
 }
 
-#ifdef IMG2_HAVE_EXIF_READER
+#if IMG2_HAS_EXIF
 /**
  * @brief Output EXIF metadata in human-readable format
  */
@@ -596,4 +594,4 @@ void output_xmp_json(const struct img2_xmp *xmp, bool first)
 
 	printf("}");
 }
-#endif /* IMG2_HAVE_EXIF_READER */
+#endif /* IMG2_HAS_EXIF */
