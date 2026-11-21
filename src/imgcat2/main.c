@@ -31,6 +31,7 @@ int main(int argc, char **argv)
 	cli_options_t opts = {
 		.input_file = NULL,
 		.interpolation = "lanczos",
+		.filter = IMG2_FILTER_DEFAULT,
 		.fit_mode = false,
 		.silent = true,
 		.fps = 15,

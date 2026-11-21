@@ -212,16 +212,18 @@ static img2_status_t scale_impl(const char *tag, const img2_image_t *src, uint32
 	if (filter == IMG2_FILTER_DEFAULT) {
 		ok = stbir_resize_uint8_srgb(src->pixels, src->width, src->height, (int)src->stride, dst->pixels, w, h, (int)dst->stride, STBIR_RGBA) != NULL;
 	} else {
-		static const stbir_filter map[] = {
-			[IMG2_FILTER_POINT] = STBIR_FILTER_POINT_SAMPLE, [IMG2_FILTER_BOX] = STBIR_FILTER_BOX,
-			[IMG2_FILTER_TRIANGLE] = STBIR_FILTER_TRIANGLE, [IMG2_FILTER_CUBIC] = STBIR_FILTER_CUBICBSPLINE,
-			[IMG2_FILTER_MITCHELL] = STBIR_FILTER_MITCHELL,
-		};
-		if ((unsigned)filter >= sizeof(map) / sizeof(map[0])) {
-			img2_image_destroy(dst);
-			return IMG2_E_ARG;
+		stbir_filter f;
+		switch (filter) {
+			case IMG2_FILTER_POINT:    f = STBIR_FILTER_POINT_SAMPLE; break;
+			case IMG2_FILTER_BOX:      f = STBIR_FILTER_BOX; break;
+			case IMG2_FILTER_TRIANGLE: f = STBIR_FILTER_TRIANGLE; break;
+			case IMG2_FILTER_CUBIC:    f = STBIR_FILTER_CATMULLROM; break;
+			case IMG2_FILTER_MITCHELL: f = STBIR_FILTER_MITCHELL; break;
+			default:
+				img2_image_destroy(dst);
+				return IMG2_E_ARG;
 		}
-		ok = stbir_resize(src->pixels, (int)src->width, (int)src->height, (int)src->stride, dst->pixels, (int)w, (int)h, 0, STBIR_RGBA, STBIR_TYPE_UINT8_SRGB, STBIR_EDGE_CLAMP, map[filter]) != NULL;
+		ok = stbir_resize(src->pixels, (int)src->width, (int)src->height, (int)src->stride, dst->pixels, (int)w, (int)h, (int)dst->stride, STBIR_RGBA, STBIR_TYPE_UINT8_SRGB, STBIR_EDGE_CLAMP, f) != NULL;
 	}
 	if (!ok) {
 		img2_log(IMG2_LOG_ERROR, "%s: stbir_resize failed", tag);
@@ -342,10 +344,6 @@ static img2_status_t scale_prologue(const char *tag, const img2_image_t *src, im
 	if ((unsigned)filter > (unsigned)IMG2_FILTER_MITCHELL) {
 		img2_log(IMG2_LOG_DEBUG, "%s: invalid filter %d", tag, (int)filter);
 		return IMG2_E_ARG;
-	}
-	if (filter != IMG2_FILTER_DEFAULT) {
-		img2_log(IMG2_LOG_DEBUG, "%s: filter %d not supported yet", tag, (int)filter);
-		return IMG2_E_UNSUPPORTED; /* wired in S10 */
 	}
 	return IMG2_OK;
 }

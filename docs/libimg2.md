@@ -179,6 +179,21 @@ int thumbnail(const uint8_t *data, size_t len, uint8_t **png, size_t *png_len)
 `img2_init()`/`img2_shutdown()` are optional (the tables are const, the font cache initialises lazily) but
 recommended around library use; see [Threading model](#threading-model).
 
+### Scaling filters
+
+`img2_scale`/`img2_scale_fit` resample with stb_image_resize2 (RGBA, sRGB, edge clamp):
+
+| `img2_filter_t` | stb_image_resize2 | imgcat2 `--interpolation` |
+|---|---|---|
+| `IMG2_FILTER_DEFAULT` | `stbir_resize_uint8_srgb` (stb's default filter choice) | `lanczos` (default; stb has no Lanczos) |
+| `IMG2_FILTER_POINT` | `STBIR_FILTER_POINT_SAMPLE` | `nearest` |
+| `IMG2_FILTER_BOX` | `STBIR_FILTER_BOX` | `box` |
+| `IMG2_FILTER_TRIANGLE` | `STBIR_FILTER_TRIANGLE` | `bilinear` |
+| `IMG2_FILTER_CUBIC` | `STBIR_FILTER_CATMULLROM` | `cubic` |
+| `IMG2_FILTER_MITCHELL` | `STBIR_FILTER_MITCHELL` | `mitchell` |
+
+A value outside the enum returns `IMG2_E_ARG`; a resampler failure returns `IMG2_E_CODEC`.
+
 ## Ownership and memory
 
 Everything the library allocates is released by an `img2_*` function, never by `free()`:
@@ -236,7 +251,7 @@ Every diagnostic goes through one process-global sink; the library never writes 
 | `IMG2_LOG_ERROR` (0) | unconditional error text (e.g. `Error: ...`, `libpng error: ...`) |
 | `IMG2_LOG_WARN` (1) | unconditional `Warning:`/`Note:`/`Info:` text, libpng/libtiff warnings |
 | `IMG2_LOG_INFO` (2) | messages imgcat2 used to print only in verbose mode (registry lists at `img2_init`, decode summaries) |
-| `IMG2_LOG_DEBUG` (3) | API boundary checks (rejected caller-built images, unsupported filters, ...) |
+| `IMG2_LOG_DEBUG` (3) | API boundary checks (rejected caller-built images, invalid filter values, ...) |
 
 - Default level `IMG2_LOG_ERROR`; `img2_set_log_level(max)` emits every message with `level <= max`.
 - Default sink: the message plus `\n` to stderr, one line per message. Messages keep the historic imgcat2
@@ -370,6 +385,9 @@ TIFF, HEIF and AVIF frames arrive already oriented by their codecs; their EXIF o
   Not covered by the golden test (needs a TTY).
 - **[R19]** Any `img2_*` call concurrent with the final `img2_shutdown()` is unsupported; font handles are
   invalid after it.
+- CLI delta: `--interpolation nearest|bilinear|cubic` now select their filters (imgcat2 1.0 accepted the
+  names but always used the default filter, so their output changes); `box` and `mitchell` are new; `lanczos`
+  (default) output is unchanged. See [Scaling filters](#scaling-filters).
 - Only frame 0 is encoded (no animated output).
 - The macOS fat archive path (`libtool -static`) is written but untested.
 - Host-library packages: with any `IMG2_USE_SYSTEM_*` (or resvg) the installed package links those host

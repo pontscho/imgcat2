@@ -468,7 +468,8 @@ Options:
   -h, --help                Show this help message and exit
       --version             Show version information and exit
   -i, --interpolation TYPE  Interpolation method (default: lanczos)
-                            Available: lanczos, bilinear, nearest, cubic
+                            Available: lanczos, bilinear, nearest, cubic, box, mitchell
+                            (lanczos = stb_image_resize2 default; stb has no Lanczos filter)
   -f, --fit                 Fit image to terminal (maintain aspect ratio, default)
   -r, --resize              Resize to exact terminal dimensions (may distort)
   -w, --width N             Target width in pixels
@@ -512,6 +513,10 @@ imgcat2 photo.jpg
 ```bash
 imgcat2 --interpolation=nearest pixelart.png
 ```
+
+`--interpolation` maps to the libimg2 resampling filters: `lanczos` (default) is the stb_image_resize2 sRGB
+default filter (stb has no true Lanczos), `nearest` = point sampling, `bilinear` = triangle, `cubic` =
+Catmull-Rom, `box` = box, `mitchell` = Mitchell-Netravali.
 
 **View animated GIF:**
 ```bash

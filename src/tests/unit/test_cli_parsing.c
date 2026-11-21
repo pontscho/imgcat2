@@ -274,6 +274,56 @@ CTEST(cli, validate_interpolation)
 }
 
 /**
+ * @test Test interpolation name -> img2_filter_t mapping
+ *
+ * Verifies that validate_options() maps every interpolation name to its img2_filter_t.
+ */
+CTEST(cli, validate_interpolation_filter)
+{
+	static const struct {
+		const char *name;
+		img2_filter_t filter;
+	} cases[] = {
+		{ "lanczos",  IMG2_FILTER_DEFAULT  },
+		{ "nearest",  IMG2_FILTER_POINT    },
+		{ "bilinear", IMG2_FILTER_TRIANGLE },
+		{ "cubic",    IMG2_FILTER_CUBIC    },
+		{ "box",      IMG2_FILTER_BOX      },
+		{ "mitchell", IMG2_FILTER_MITCHELL },
+	};
+	cli_options_t opts = {
+		.input_file = NULL,
+		.interpolation = "lanczos",
+		.fit_mode = true,
+		.silent = false,
+		.fps = 10,
+		.animate = true,
+	};
+
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		opts.interpolation = (char *)cases[i].name;
+		opts.filter = (img2_filter_t)(IMG2_FILTER_MITCHELL + 1); /* poison: validate_options must overwrite it */
+		ASSERT_EQUAL(0, validate_options(&opts));
+		ASSERT_EQUAL((int)cases[i].filter, (int)opts.filter);
+	}
+
+	/* NULL interpolation keeps the default filter */
+	opts.interpolation = NULL;
+	opts.filter = IMG2_FILTER_BOX;
+	ASSERT_EQUAL(0, validate_options(&opts));
+	ASSERT_EQUAL((int)IMG2_FILTER_DEFAULT, (int)opts.filter);
+
+	/* parse + validate of the new names */
+	optind = 1;
+	char *argv[] = { "imgcat2", "-i", "mitchell", "test.png" };
+	opts.interpolation = "lanczos";
+	ASSERT_EQUAL(0, parse_arguments(4, argv, &opts));
+	ASSERT_STR("mitchell", opts.interpolation);
+	ASSERT_EQUAL(0, validate_options(&opts));
+	ASSERT_EQUAL((int)IMG2_FILTER_MITCHELL, (int)opts.filter);
+}
+
+/**
  * @test Test validate_options() with NULL pointer
  *
  * Verifies that validate_options() handles NULL opts safely.

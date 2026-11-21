@@ -356,6 +356,48 @@ CTEST(image_proc, scale_status_codes)
 }
 
 /**
+ * @test S10: img2_scale / img2_scale_fit accept every img2_filter_t and return the right dimensions
+ */
+CTEST(image_proc, scale_every_filter)
+{
+	static const img2_filter_t filters[] = {
+		IMG2_FILTER_DEFAULT, IMG2_FILTER_POINT, IMG2_FILTER_BOX, IMG2_FILTER_TRIANGLE, IMG2_FILTER_CUBIC, IMG2_FILTER_MITCHELL,
+	};
+	img2_image_t *src = img2_image_alloc(8, 4);
+	ASSERT_NOT_NULL(src);
+	for (uint32_t i = 0; i < src->width * src->height * 4; i++) {
+		src->pixels[i] = (uint8_t)(i * 7);
+	}
+
+	for (size_t i = 0; i < sizeof(filters) / sizeof(filters[0]); i++) {
+		img2_image_t *out = NULL;
+		ASSERT_EQUAL(IMG2_OK, img2_scale(src, 5, 9, filters[i], &out));
+		ASSERT_NOT_NULL(out);
+		ASSERT_EQUAL(5, out->width);
+		ASSERT_EQUAL(9, out->height);
+		ASSERT_EQUAL(20, out->stride);
+		img2_image_destroy(out);
+
+		out = NULL;
+		ASSERT_EQUAL(IMG2_OK, img2_scale_fit(src, 16, 16, filters[i], &out));
+		ASSERT_NOT_NULL(out);
+		ASSERT_EQUAL(16, out->width);
+		ASSERT_EQUAL(8, out->height);
+		img2_image_destroy(out);
+	}
+
+	/* values outside the enum are argument errors */
+	img2_image_t *out = (img2_image_t *)1;
+	ASSERT_EQUAL(IMG2_E_ARG, img2_scale(src, 5, 9, (img2_filter_t)(IMG2_FILTER_MITCHELL + 1), &out));
+	ASSERT_NULL(out);
+	out = (img2_image_t *)1;
+	ASSERT_EQUAL(IMG2_E_ARG, img2_scale_fit(src, 16, 16, (img2_filter_t)-1, &out));
+	ASSERT_NULL(out);
+
+	img2_image_destroy(src);
+}
+
+/**
  * @test img2_frames_free() is NULL-safe and zeroes the struct
  */
 CTEST(image_proc, frames_free)

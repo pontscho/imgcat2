@@ -633,11 +633,11 @@ int pipeline_scale(img2_image_t **frames, int frame_count, const cli_options_t *
 
 		if (opts->fit_mode) {
 			/* Fit mode: maintain aspect ratio */
-			st = img2_scale_fit(frames[i], target.width, target.height, IMG2_FILTER_DEFAULT, &scaled_frame);
+			st = img2_scale_fit(frames[i], target.width, target.height, opts->filter, &scaled_frame);
 
 		} else {
 			/* Resize mode: exact dimensions */
-			st = img2_scale(frames[i], target.width, target.height, IMG2_FILTER_DEFAULT, &scaled_frame);
+			st = img2_scale(frames[i], target.width, target.height, opts->filter, &scaled_frame);
 		}
 
 		if (st != IMG2_OK) {

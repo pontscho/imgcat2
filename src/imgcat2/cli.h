@@ -13,6 +13,7 @@
 #include <stdbool.h>
 
 #include <img2/encode.h>
+#include <img2/image.h>
 #include <img2/yuv.h>
 
 /**
@@ -23,7 +24,8 @@
  */
 typedef struct {
 	char *input_file; /**< Input file path, or NULL for stdin */
-	char *interpolation; /**< Interpolation method: lanczos, bilinear, nearest, cubic */
+	char *interpolation; /**< Interpolation method: lanczos, bilinear, nearest, cubic, box, mitchell */
+	img2_filter_t filter; /**< Resampling filter mapped from interpolation by validate_options() */
 	bool fit_mode; /**< true = fit to terminal, false = resize to exact dimensions */
 	bool silent; /**< true = suppress non-error messages */
 	int fps; /**< Animation frames per second (1-15, default: 15) */

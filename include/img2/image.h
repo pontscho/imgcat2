@@ -56,7 +56,7 @@ typedef enum img2_filter {
 	IMG2_FILTER_POINT,        /**< Nearest neighbour */
 	IMG2_FILTER_BOX,          /**< Box filter */
 	IMG2_FILTER_TRIANGLE,     /**< Bilinear (triangle) filter */
-	IMG2_FILTER_CUBIC,        /**< Cubic B-spline */
+	IMG2_FILTER_CUBIC,        /**< Catmull-Rom (interpolating cubic spline) */
 	IMG2_FILTER_MITCHELL      /**< Mitchell-Netravali */
 } img2_filter_t;
 
@@ -93,8 +93,8 @@ void img2_frames_free(img2_frames_t *frames);
  * @param height Target height (> 0)
  * @param filter Resampling filter
  * @param out    Output image (free with img2_image_destroy()); *out = NULL on error
- * @return IMG2_OK; IMG2_E_ARG (invalid source, zero target); IMG2_E_LIMIT (target over the limits);
- *         IMG2_E_UNSUPPORTED (filter not available); IMG2_E_NOMEM; IMG2_E_CODEC
+ * @return IMG2_OK; IMG2_E_ARG (invalid source, zero target, unknown filter value); IMG2_E_LIMIT
+ *         (target over the limits); IMG2_E_NOMEM; IMG2_E_CODEC (stb_image_resize2 failed)
  */
 img2_status_t img2_scale(const img2_image_t *src, uint32_t width, uint32_t height, img2_filter_t filter, img2_image_t **out);
 

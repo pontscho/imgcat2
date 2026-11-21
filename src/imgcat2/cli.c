@@ -39,7 +39,8 @@ void print_usage(const char *program_name)
 	printf("      --version             Show version information and exit\n");
 	printf("      --fonts               List available fonts and exit\n");
 	printf("  -i, --interpolation TYPE  Interpolation method (default: lanczos)\n");
-	printf("                            Available: lanczos, bilinear, nearest, cubic\n");
+	printf("                            Available: lanczos, bilinear, nearest, cubic, box, mitchell\n");
+	printf("                            (lanczos = stb_image_resize2 default; stb has no Lanczos filter)\n");
 	printf("  -f, --fit                 Fit image to terminal (maintain aspect ratio, default)\n");
 	printf("  -r, --resize              Resize to exact terminal dimensions (may distort)\n");
 	printf("  -w, --width N             Target width in pixels\n");
@@ -439,12 +440,31 @@ int validate_options(cli_options_t *opts)
 	}
 
 	/* Validate interpolation method */
+	opts->filter = IMG2_FILTER_DEFAULT;
 	if (opts->interpolation != NULL) {
-		if (strcmp(opts->interpolation, "lanczos") != 0 && strcmp(opts->interpolation, "bilinear") != 0 && strcmp(opts->interpolation, "nearest") != 0 && strcmp(opts->interpolation, "cubic") != 0) {
+		static const struct {
+			const char *name;
+			img2_filter_t filter;
+		} methods[] = {
+			{ "lanczos",  IMG2_FILTER_DEFAULT  }, /* stb has no Lanczos: the stb_image_resize2 sRGB default */
+			{ "bilinear", IMG2_FILTER_TRIANGLE },
+			{ "nearest",  IMG2_FILTER_POINT    },
+			{ "cubic",    IMG2_FILTER_CUBIC    },
+			{ "box",      IMG2_FILTER_BOX      },
+			{ "mitchell", IMG2_FILTER_MITCHELL },
+		};
+		size_t i;
+		for (i = 0; i < sizeof(methods) / sizeof(methods[0]); i++) {
+			if (strcmp(opts->interpolation, methods[i].name) == 0) {
+				break;
+			}
+		}
+		if (i == sizeof(methods) / sizeof(methods[0])) {
 			fprintf(stderr, "Error: Invalid interpolation method '%s'\n", opts->interpolation);
-			fprintf(stderr, "Valid methods: lanczos, bilinear, nearest, cubic\n");
+			fprintf(stderr, "Valid methods: lanczos, bilinear, nearest, cubic, box, mitchell\n");
 			return -1;
 		}
+		opts->filter = methods[i].filter;
 	}
 
 	/* Validate custom dimensions if specified */
