@@ -9,6 +9,7 @@
 
 #include <ctype.h>
 #include <dirent.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,7 @@ typedef struct font_cache_entry_t {
 	img2_font_style_t style;
 	uint8_t *data;
 	size_t data_size;
+	struct img2_font *handle; /* [R4] interned handle, built on first lookup; owned by the entry */
 	struct font_cache_entry_t *next;
 } font_cache_entry_t;
 
@@ -36,7 +38,8 @@ struct img2_font {
 	size_t data_size;
 };
 
-/* Global font cache */
+/* Global font cache: every g_* below is guarded by s_font_lock ([M1a]: mutex + flag, so re-init works) */
+static pthread_mutex_t s_font_lock = PTHREAD_MUTEX_INITIALIZER;
 static font_cache_entry_t *g_font_cache = NULL;
 static img2_font_t *g_fallback_font = NULL;
 static bool g_initialized = false;
@@ -64,15 +67,15 @@ struct img2_font_face {
 static const char *get_system_font_paths(int index)
 {
 #if defined(__linux__)
-	static const char *linux_paths[] = { "/usr/share/fonts", "/usr/local/share/fonts", "~/.local/share/fonts", "~/.fonts", NULL };
+	static const char *const linux_paths[] = { "/usr/share/fonts", "/usr/local/share/fonts", "~/.local/share/fonts", "~/.fonts", NULL };
 	return linux_paths[index];
 
 #elif defined(__APPLE__)
-	static const char *macos_paths[] = { "/System/Library/Fonts", "/Library/Fonts", "~/Library/Fonts", NULL };
+	static const char *const macos_paths[] = { "/System/Library/Fonts", "/Library/Fonts", "~/Library/Fonts", NULL };
 	return macos_paths[index];
 
 #elif defined(_WIN32)
-	static const char *windows_paths[] = { "C:\\Windows\\Fonts", NULL };
+	static const char *const windows_paths[] = { "C:\\Windows\\Fonts", NULL };
 	return windows_paths[index];
 
 #else
@@ -89,7 +92,11 @@ static char *expand_path(const char *path)
 		return strdup(path);
 	}
 
+#ifdef IMG2_HAVE_SECURE_GETENV
+	const char *home = secure_getenv("HOME"); /* [SL1] ignore HOME in setuid/setgid processes */
+#else
 	const char *home = getenv("HOME");
+#endif
 	if (home == NULL) {
 		return strdup(path);
 	}
@@ -343,6 +350,7 @@ static void scan_font_directory(const char *dir_path)
 		cache_entry->style = style;
 		cache_entry->data = NULL;
 		cache_entry->data_size = 0;
+		cache_entry->handle = NULL;
 		cache_entry->next = g_font_cache;
 		g_font_cache = cache_entry;
 	}
@@ -352,9 +360,9 @@ static void scan_font_directory(const char *dir_path)
 }
 
 /**
- * @brief Initialize font manager
+ * @brief Initialize font manager (caller holds s_font_lock)
  */
-bool img2_font_manager_init(void)
+static bool img2_font_manager_init_locked(void)
 {
 	if (g_initialized) {
 		return true;
@@ -379,6 +387,7 @@ bool img2_font_manager_init(void)
 		regular->style = IMG2_FONT_STYLE_NORMAL;
 		regular->data = (uint8_t *)img2_embedded_dejavu_regular.data;
 		regular->data_size = img2_embedded_dejavu_regular.size;
+		regular->handle = NULL;
 		regular->next = g_font_cache;
 		g_font_cache = regular;
 	}
@@ -392,6 +401,7 @@ bool img2_font_manager_init(void)
 		bold->style = IMG2_FONT_STYLE_NORMAL;
 		bold->data = (uint8_t *)img2_embedded_dejavu_bold.data;
 		bold->data_size = img2_embedded_dejavu_bold.size;
+		bold->handle = NULL;
 		bold->next = g_font_cache;
 		g_font_cache = bold;
 	}
@@ -405,6 +415,7 @@ bool img2_font_manager_init(void)
 		italic->style = IMG2_FONT_STYLE_ITALIC;
 		italic->data = (uint8_t *)img2_embedded_dejavu_italic.data;
 		italic->data_size = img2_embedded_dejavu_italic.size;
+		italic->handle = NULL;
 		italic->next = g_font_cache;
 		g_font_cache = italic;
 	}
@@ -418,6 +429,7 @@ bool img2_font_manager_init(void)
 		bold_italic->style = IMG2_FONT_STYLE_ITALIC;
 		bold_italic->data = (uint8_t *)img2_embedded_dejavu_bold_italic.data;
 		bold_italic->data_size = img2_embedded_dejavu_bold_italic.size;
+		bold_italic->handle = NULL;
 		bold_italic->next = g_font_cache;
 		g_font_cache = bold_italic;
 	}
@@ -447,9 +459,20 @@ bool img2_font_manager_init(void)
 }
 
 /**
- * @brief Cleanup font manager
+ * @brief Free a cache-owned handle
  */
-void img2_font_manager_cleanup(void)
+static void free_handle(img2_font_t *font)
+{
+	if (font != NULL) {
+		free(font->family);
+		free(font);
+	}
+}
+
+/**
+ * @brief Cleanup font manager (caller holds s_font_lock)
+ */
+static void img2_font_manager_cleanup_locked(void)
 {
 	if (!g_initialized) {
 		return;
@@ -461,6 +484,7 @@ void img2_font_manager_cleanup(void)
 		font_cache_entry_t *next = entry->next;
 		/* Check if data needs to be freed before freeing path */
 		bool is_embedded = (entry->path != NULL && strcmp(entry->path, "[embedded]") == 0);
+		free_handle(entry->handle);
 		free(entry->family);
 		free(entry->path);
 		/* Only free data if it's not embedded (dynamically loaded from file) */
@@ -473,13 +497,35 @@ void img2_font_manager_cleanup(void)
 	g_font_cache = NULL;
 
 	/* Free fallback font */
-	if (g_fallback_font != NULL) {
-		free(g_fallback_font->family);
-		free(g_fallback_font);
-		g_fallback_font = NULL;
-	}
+	free_handle(g_fallback_font);
+	g_fallback_font = NULL;
 
 	g_initialized = false;
+}
+
+bool img2_font_manager_init(void)
+{
+	pthread_mutex_lock(&s_font_lock);
+	bool ok = img2_font_manager_init_locked();
+	pthread_mutex_unlock(&s_font_lock);
+	return ok;
+}
+
+void img2_font_manager_cleanup(void)
+{
+	pthread_mutex_lock(&s_font_lock);
+	img2_font_manager_cleanup_locked();
+	pthread_mutex_unlock(&s_font_lock);
+}
+
+void img2_font_manager_cleanup_final(const int *refs)
+{
+	/* [R19] the caller (img2_shutdown) holds s_init_lock; lock order s_init_lock -> s_font_lock */
+	pthread_mutex_lock(&s_font_lock);
+	if (refs == NULL || *refs == 0) {
+		img2_font_manager_cleanup_locked();
+	}
+	pthread_mutex_unlock(&s_font_lock);
 }
 
 /**
@@ -572,9 +618,9 @@ static font_cache_entry_t *find_family_match(const char *family)
 }
 
 /**
- * @brief Load the embedded fallback font
+ * @brief Load the embedded fallback font (caller holds s_font_lock)
  */
-static img2_font_t *img2_font_find_fallback(void)
+static img2_font_t *img2_font_find_fallback_locked(void)
 {
 	if (!g_initialized || g_fallback_font == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Fallback font not available");
@@ -585,9 +631,9 @@ static img2_font_t *img2_font_find_fallback(void)
 }
 
 /**
- * @brief Load a font by family name
+ * @brief Load a font by family name (caller holds s_font_lock; [R3] calls only *_locked helpers)
  */
-img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_font_style_t style)
+static img2_font_t *img2_font_find_locked(const char *family, img2_font_weight_t weight, img2_font_style_t style)
 {
 	if (!g_initialized) {
 		img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
@@ -613,22 +659,26 @@ img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_
 	/* 4. If still not found and we tried a mapped name, check fallback font name match */
 	if (entry == NULL && strcmp(mapped_family, "DejaVu Sans Mono") == 0) {
 		/* Use embedded fallback */
-		return img2_font_find_fallback();
+		return img2_font_find_fallback_locked();
 	}
 
 	/* 5. Try fallback as last resort */
 	if (entry == NULL) {
 		// fprintf(stderr, "Warning: Font '%s' not found, using fallback\n", family);
-		return img2_font_find_fallback();
+		return img2_font_find_fallback_locked();
 	}
 
 	/* Load font file if not already loaded */
 	if (!load_font_file(entry)) {
 		img2_log(IMG2_LOG_WARN, "Warning: Failed to load font '%s', using fallback", family);
-		return img2_font_find_fallback();
+		return img2_font_find_fallback_locked();
 	}
 
-	/* Create font handle */
+	/* [R4] Interned handle: built once per cache entry, owned by the cache until the last img2_shutdown() */
+	if (entry->handle != NULL) {
+		return entry->handle;
+	}
+
 	img2_font_t *font = (img2_font_t *)malloc(sizeof(img2_font_t));
 	if (font == NULL) {
 		return NULL;
@@ -640,6 +690,29 @@ img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_
 	font->data = entry->data;
 	font->data_size = entry->data_size;
 
+	entry->handle = font;
+	return font;
+}
+
+img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_font_style_t style)
+{
+	pthread_mutex_lock(&s_font_lock);
+	if (!g_initialized) {
+		img2_font_manager_init_locked();
+	}
+	img2_font_t *font = img2_font_find_locked(family, weight, style);
+	pthread_mutex_unlock(&s_font_lock);
+	return font;
+}
+
+img2_font_t *img2_font_find_fallback(void)
+{
+	pthread_mutex_lock(&s_font_lock);
+	if (!g_initialized) {
+		img2_font_manager_init_locked();
+	}
+	img2_font_t *font = img2_font_find_fallback_locked();
+	pthread_mutex_unlock(&s_font_lock);
 	return font;
 }
 
@@ -689,9 +762,9 @@ static const char *style_to_string(img2_font_style_t style)
 }
 
 /**
- * @brief List all available fonts
+ * @brief List all available fonts (caller holds s_font_lock)
  */
-void img2_font_manager_list_fonts(void)
+static void img2_font_manager_list_fonts_locked(void)
 {
 	if (!g_initialized) {
 		img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
@@ -774,7 +847,18 @@ void img2_font_manager_list_fonts(void)
 	}
 }
 
-img2_font_face_t *img2_font_face_open(const img2_font_t *font)
+void img2_font_manager_list_fonts(void)
+{
+	pthread_mutex_lock(&s_font_lock);
+	if (!g_initialized) {
+		img2_font_manager_init_locked();
+	}
+	img2_font_manager_list_fonts_locked();
+	pthread_mutex_unlock(&s_font_lock);
+}
+
+/* Face over a handle's data (caller holds s_font_lock) */
+static img2_font_face_t *img2_font_face_open_locked(const img2_font_t *font)
 {
 	size_t size = 0;
 	const uint8_t *data = img2_font_get_data(font, &size);
@@ -790,6 +874,17 @@ img2_font_face_t *img2_font_face_open(const img2_font_t *font)
 		free(face);
 		return NULL;
 	}
+	return face;
+}
+
+img2_font_face_t *img2_font_face_open(const img2_font_t *font)
+{
+	pthread_mutex_lock(&s_font_lock);
+	if (!g_initialized) {
+		img2_font_manager_init_locked();
+	}
+	img2_font_face_t *face = img2_font_face_open_locked(font);
+	pthread_mutex_unlock(&s_font_lock);
 	return face;
 }
 

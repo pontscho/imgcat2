@@ -13,10 +13,9 @@
 #include <string.h>
 
 #include "../../libimg2/core/image.h"
+#include "../../libimg2/encoders/encoder.h"
 #include "../ctest.h"
 
-/* Forward declaration for PNG encoder function */
-extern int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 
 /* PNG magic bytes (PNG signature) */
 static const uint8_t PNG_SIGNATURE[] = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
@@ -37,17 +36,17 @@ CTEST(encoder_png, null_inputs)
 
 	/* NULL image pointer */
 	int result = img2_encode_png(NULL, 6, &out_data, &out_size);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 	ASSERT_NULL(out_data);
 	ASSERT_EQUAL(0, out_size);
 
 	/* NULL out_data pointer */
 	result = img2_encode_png(img, 6, NULL, &out_size);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	/* NULL out_size pointer */
 	result = img2_encode_png(img, 6, &out_data, NULL);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	img2_image_destroy(img);
 }

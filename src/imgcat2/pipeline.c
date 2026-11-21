@@ -505,11 +505,15 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, img
 
 	/* Decode with registry */
 	img2_decode_opts_t dopts = { .force_mime = IMG2_MIME_UNKNOWN, .yuv = (opts != NULL && opts->yuv_input) ? &opts->yuv : NULL, .max_frames = 0, .jpeg_deblock = -1 };
-	img2_image_t **frames = img2_decoder_dispatch(&dopts, buffer, size, mime, out_frame_count);
-	if (frames == NULL || *out_frame_count <= 0) {
+	img2_frames_t fr = { 0 };
+	if (img2_decoder_dispatch(&dopts, buffer, size, mime, &fr) != IMG2_OK || fr.count <= 0) {
+		img2_frames_free(&fr);
+		*out_frame_count = 0;
 		fprintf(stderr, "pipeline_decode: failed to decode image\n");
 		return -1;
 	}
+	img2_image_t **frames = fr.frames;
+	*out_frame_count = fr.count;
 
 #ifdef IMG2_HAVE_EXIF_READER
 	/* Apply EXIF orientation transformation
@@ -628,18 +632,19 @@ int pipeline_scale(img2_image_t **frames, int frame_count, const cli_options_t *
 
 	/* Scale each frame */
 	for (int i = 0; i < frame_count; i++) {
-		img2_image_t *scaled_frame;
+		img2_image_t *scaled_frame = NULL;
+		img2_status_t st;
 
 		if (opts->fit_mode) {
 			/* Fit mode: maintain aspect ratio */
-			scaled_frame = img2_image_scale_fit(frames[i], target.width, target.height);
+			st = img2_image_scale_fit(frames[i], target.width, target.height, &scaled_frame);
 
 		} else {
 			/* Resize mode: exact dimensions */
-			scaled_frame = img2_image_scale_resize(frames[i], target.width, target.height);
+			st = img2_image_scale_resize(frames[i], target.width, target.height, &scaled_frame);
 		}
 
-		if (scaled_frame == NULL) {
+		if (st != IMG2_OK) {
 			fprintf(stderr, "pipeline_scale: failed to scale frame %d\n", i);
 			/* Free previously scaled frames */
 			for (int j = 0; j < i; j++) {

@@ -637,14 +637,14 @@ void img2_xmp_init(img2_xmp_t *xmp)
 	memset(xmp, 0, sizeof(img2_xmp_t));
 }
 
-int img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len)
+img2_status_t img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len)
 {
 	if (!exif || !tiff_data) {
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	if (len < 8) {
-		return -1;
+		return IMG2_E_FORMAT;
 	}
 
 	/* Validate TIFF magic ('II' or 'MM' + 0x002A) */
@@ -654,13 +654,13 @@ int img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len
 	} else if (tiff_data[0] == 'M' && tiff_data[1] == 'M') {
 		byte_order = BYTE_ORDER_BIG_ENDIAN;
 	} else {
-		return -1;
+		return IMG2_E_FORMAT;
 	}
 
 	/* Verify TIFF magic number (0x002A) */
 	uint16_t magic = read_u16(tiff_data + 2, byte_order);
 	if (magic != 0x002A) {
-		return -1;
+		return IMG2_E_FORMAT;
 	}
 
 	/* Read IFD0 offset */
@@ -675,59 +675,59 @@ int img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len
 	/* Call parse_ifd() for IFD0 */
 	parse_ifd(&ctx, exif, ifd0_offset, false);
 
-	return 0;
+	return IMG2_OK;
 }
 
-int img2_exif_parse(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len)
+img2_status_t img2_exif_parse(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len)
 {
 	return img2_exif_parse_jpeg(exif, jpeg_data, len);
 }
 
-int img2_exif_parse_jpeg(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len)
+img2_status_t img2_exif_parse_jpeg(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len)
 {
 	if (!exif || !jpeg_data) {
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Find EXIF APP1 segment with "Exif\0\0" marker */
 	const uint8_t *tiff_data = NULL;
 	size_t tiff_len = 0;
 	if (find_app1_segment(jpeg_data, len, "Exif\0\0", 6, &tiff_data, &tiff_len) != 0) {
-		return -1;
+		return IMG2_E_FORMAT;
 	}
 
 	/* Call img2_exif_parse_tiff() with extracted TIFF data */
 	return img2_exif_parse_tiff(exif, tiff_data, tiff_len);
 }
 
-int img2_xmp_parse_xml(img2_xmp_t *xmp, const char *xml_data, size_t len)
+img2_status_t img2_xmp_parse_xml(img2_xmp_t *xmp, const char *xml_data, size_t len)
 {
 	if (!xmp || !xml_data) {
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Parse XML */
 	img2_xml_document_t *doc = img2_xml_document_create();
 	if (!doc) {
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	if (img2_xml_document_parse(doc, xml_data, len) != 0) {
 		img2_xml_document_destroy(doc);
-		return -1;
+		return IMG2_E_FORMAT;
 	}
 
 	/* Navigate XMP structure: rdf:RDF -> rdf:Description */
 	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	if (!root) {
 		img2_xml_document_destroy(doc);
-		return -1;
+		return IMG2_E_FORMAT;
 	}
 
 	img2_xml_node_t *desc = img2_xml_element_first_child(root, NULL);
 	if (!desc) {
 		img2_xml_document_destroy(doc);
-		return -1;
+		return IMG2_E_FORMAT;
 	}
 
 	/* Extract Dublin Core, XMP Basic, and IPTC/Photoshop fields */
@@ -799,25 +799,25 @@ int img2_xmp_parse_xml(img2_xmp_t *xmp, const char *xml_data, size_t len)
 	}
 
 	img2_xml_document_destroy(doc);
-	return 0;
+	return IMG2_OK;
 }
 
-int img2_xmp_parse(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len)
+img2_status_t img2_xmp_parse(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len)
 {
 	return img2_xmp_parse_jpeg(xmp, jpeg_data, len);
 }
 
-int img2_xmp_parse_jpeg(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len)
+img2_status_t img2_xmp_parse_jpeg(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len)
 {
 	if (!xmp || !jpeg_data) {
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Find XMP APP1 segment with "http://ns.adobe.com/xap/1.0/\0" marker */
 	const uint8_t *xml_data = NULL;
 	size_t xml_len = 0;
 	if (find_app1_segment(jpeg_data, len, "http://ns.adobe.com/xap/1.0/\0", 29, &xml_data, &xml_len) != 0) {
-		return -1;
+		return IMG2_E_FORMAT;
 	}
 
 	/* Call img2_xmp_parse_xml() with extracted XML data */

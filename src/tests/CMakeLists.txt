@@ -37,6 +37,11 @@ img2_add_test(test_xml_parser SOURCES unit/test_xml_parser.c REQUIRES EXIF_READE
 img2_add_test(test_exif_reader SOURCES unit/test_exif_reader.c REQUIRES EXIF_READER)
 img2_add_test(test_metadata_output SOURCES unit/test_metadata_output.c LINK cli REQUIRES EXIF_READER)
 img2_add_test(test_log SOURCES unit/test_log.c)
+img2_add_test(test_threads SOURCES unit/test_threads.c TIMEOUT 120)
+if(TARGET test_threads)
+	target_link_libraries(test_threads PRIVATE Threads::Threads)
+	target_compile_definitions(test_threads PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
+endif()
 
 # ============================================================================
 # INTEGRATION TESTS
@@ -83,7 +88,15 @@ add_test(NAME img2_layering_lib COMMAND ${CMAKE_COMMAND} -DMODE=lib -DROOT=${PRO
 	-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_layering.cmake)
 set_tests_properties(img2_layering_lib PROPERTIES LABELS guard)
 if(CMAKE_NM AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	# prefix + no-terminate (forbidden references, also in the -UNDEBUG img2_assertcheck objects)
+	# + [SM3] mutable-state allow-list
 	add_test(NAME img2_symbols COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} -DPREFIX=img2_
-		-DARCHIVE=$<TARGET_FILE:img2> -P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_symbols.cmake)
+		-DARCHIVE=$<TARGET_FILE:img2>
+		-DOBJ_LIST_FILE=${PROJECT_BINARY_DIR}/src/libimg2/img2_objects_debug.txt
+		"-DFORBIDDEN=exit\;_exit\;_Exit\;quick_exit\;abort\;__assert_fail\;__assert_perror_fail\;__assert"
+		-DOBJDUMP=${CMAKE_OBJDUMP}
+		-DMUTABLE_ALLOWLIST=${PROJECT_SOURCE_DIR}/cmake/scripts/img2_mutable_allowlist.txt
+		-DSRC_DIR=${PROJECT_SOURCE_DIR}/src/libimg2
+		-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_symbols.cmake)
 	set_tests_properties(img2_symbols PROPERTIES LABELS guard)
 endif()

@@ -22,6 +22,7 @@
 #include "../../libimg2/decoders/magic.h"
 #include "../../libimg2/decoders/yuv.h"
 #include "../ctest.h"
+#include "../decoder_internal.h"
 
 /** Garbage byte written into stride padding and unused samples */
 #define PAD_BYTE 0xEE
@@ -225,7 +226,7 @@ static int decode_and_check(img2_yuv_format_t f, uint32_t w, uint32_t h, size_t 
 	uint8_t *buf = build_frame(f, w, h, ys, cs, s, &len);
 	img2_yuv_params_t p = { .format = f, .width = w, .height = h, .y_stride = ys, .uv_stride = cs };
 	int fc = -1;
-	img2_image_t **frames = img2_decode_yuv(buf, len, &p, &fc);
+	img2_image_t **frames = test_decode_yuv(buf, len, &p, &fc);
 	free(buf);
 	if (frames == NULL || fc != 1 || frames[0]->width != w || frames[0]->height != h) {
 		img2_decoder_free_frames(frames, fc);
@@ -361,7 +362,7 @@ CTEST(decoder_yuv, parse_spec_invalid)
 		if (rc == 0) {
 			fprintf(stderr, "unexpectedly accepted: '%s'\n", bad[i]);
 		}
-		ASSERT_EQUAL(-1, rc);
+		ASSERT_EQUAL(IMG2_E_ARG, rc);
 		ASSERT_TRUE(err[0] != '\0'); /* a message was produced */
 	}
 
@@ -370,12 +371,12 @@ CTEST(decoder_yuv, parse_spec_invalid)
 	memset(longspec, '1', sizeof(longspec) - 1);
 	longspec[sizeof(longspec) - 1] = '\0';
 	memcpy(longspec, "i420:", 5);
-	ASSERT_EQUAL(-1, img2_yuv_parse_spec(longspec, &p, err, sizeof(err)));
+	ASSERT_EQUAL(IMG2_E_ARG, img2_yuv_parse_spec(longspec, &p, err, sizeof(err)));
 
 	/* NULL handling, NULL error buffer allowed */
-	ASSERT_EQUAL(-1, img2_yuv_parse_spec(NULL, &p, err, sizeof(err)));
-	ASSERT_EQUAL(-1, img2_yuv_parse_spec("i420:2:2", NULL, err, sizeof(err)));
-	ASSERT_EQUAL(-1, img2_yuv_parse_spec("bogus:2:2", &p, NULL, 0));
+	ASSERT_EQUAL(IMG2_E_ARG, img2_yuv_parse_spec(NULL, &p, err, sizeof(err)));
+	ASSERT_EQUAL(IMG2_E_ARG, img2_yuv_parse_spec("i420:2:2", NULL, err, sizeof(err)));
+	ASSERT_EQUAL(IMG2_E_ARG, img2_yuv_parse_spec("bogus:2:2", &p, NULL, 0));
 	ASSERT_EQUAL(0, img2_yuv_parse_spec("i420:2:2", &p, NULL, 0));
 
 	/* Specific messages */
@@ -440,7 +441,7 @@ static bool decode_constant(img2_yuv_format_t f, uint8_t y, uint8_t u, uint8_t v
 	uint8_t *buf = build_frame(f, 3, 3, 0, 0, &s, &len);
 	img2_yuv_params_t p = { .format = f, .width = 3, .height = 3 };
 	int fc = 0;
-	img2_image_t **frames = img2_decode_yuv(buf, len, &p, &fc);
+	img2_image_t **frames = test_decode_yuv(buf, len, &p, &fc);
 	free(buf);
 	if (frames == NULL) {
 		return false;
@@ -571,7 +572,7 @@ CTEST(decoder_yuv, lenient_last_row_and_truncation)
 
 		/* Exactly the lenient size decodes */
 		int fc = 0;
-		img2_image_t **frames = img2_decode_yuv(buf, need, &p, &fc);
+		img2_image_t **frames = test_decode_yuv(buf, need, &p, &fc);
 		ASSERT_NOT_NULL(frames);
 		ASSERT_EQUAL(1, fc);
 		ASSERT_INTERVAL(0, 1, max_error_vs_reference(frames[0], f, &s));
@@ -579,12 +580,12 @@ CTEST(decoder_yuv, lenient_last_row_and_truncation)
 
 		/* One byte short fails */
 		fc = 42;
-		frames = img2_decode_yuv(buf, need - 1, &p, &fc);
+		frames = test_decode_yuv(buf, need - 1, &p, &fc);
 		ASSERT_NULL(frames);
 		ASSERT_EQUAL(0, fc);
 
 		/* Way short fails */
-		frames = img2_decode_yuv(buf, 1, &p, &fc);
+		frames = test_decode_yuv(buf, 1, &p, &fc);
 		ASSERT_NULL(frames);
 
 		free(buf);
@@ -604,7 +605,7 @@ CTEST(decoder_yuv, trailing_data_first_frame_only)
 
 	img2_yuv_params_t p = { .format = IMG2_YUV_FMT_I420, .width = 3, .height = 3 };
 	int fc = 0;
-	img2_image_t **frames = img2_decode_yuv(buf, len * 2, &p, &fc);
+	img2_image_t **frames = test_decode_yuv(buf, len * 2, &p, &fc);
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, fc);
 	ASSERT_INTERVAL(0, 1, max_error_vs_reference(frames[0], IMG2_YUV_FMT_I420, &s));
@@ -621,41 +622,41 @@ CTEST(decoder_yuv, invalid_parameters)
 	int fc = 7;
 
 	img2_yuv_params_t ok = { .format = IMG2_YUV_FMT_I420, .width = 2, .height = 2 };
-	ASSERT_NULL(img2_decode_yuv(NULL, sizeof(data), &ok, &fc));
+	ASSERT_NULL(test_decode_yuv(NULL, sizeof(data), &ok, &fc));
 	ASSERT_EQUAL(0, fc);
-	ASSERT_NULL(img2_decode_yuv(data, 0, &ok, &fc));
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), NULL, &fc));
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), &ok, NULL));
+	ASSERT_NULL(test_decode_yuv(data, 0, &ok, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), NULL, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), &ok, NULL));
 
 	img2_yuv_params_t bad = ok;
 	bad.format = IMG2_YUV_FMT_NONE;
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), &bad, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), &bad, &fc));
 
 	bad = ok;
 	bad.width = 0;
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), &bad, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), &bad, &fc));
 
 	bad = ok;
 	bad.height = 0;
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), &bad, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), &bad, &fc));
 
 	bad = ok;
 	bad.width = IMG2_MAX_DIMENSION + 1;
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), &bad, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), &bad, &fc));
 
 	bad = ok;
 	bad.y_stride = 1; /* < width */
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), &bad, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), &bad, &fc));
 
 	bad = ok;
 	bad.uv_stride = SIZE_MAX; /* overflow */
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), &bad, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), &bad, &fc));
 
 	bad = (img2_yuv_params_t){ .format = IMG2_YUV_FMT_GRAY, .width = 2, .height = 2, .uv_stride = 2 };
-	ASSERT_NULL(img2_decode_yuv(data, sizeof(data), &bad, &fc));
+	ASSERT_NULL(test_decode_yuv(data, sizeof(data), &bad, &fc));
 
 	/* Sanity: the valid params decode */
-	img2_image_t **frames = img2_decode_yuv(data, sizeof(data), &ok, &fc);
+	img2_image_t **frames = test_decode_yuv(data, sizeof(data), &ok, &fc);
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, fc);
 	img2_decoder_free_frames(frames, fc);
@@ -687,16 +688,16 @@ CTEST(decoder_yuv, decoder_decode_requires_yuv_options)
 	img2_decoder_registry_init();
 
 	/* No options: refused */
-	ASSERT_NULL(img2_decoder_dispatch(NULL, data, sizeof(data), IMG2_MIME_YUV, &fc));
+	ASSERT_NULL(test_dispatch(NULL, data, sizeof(data), IMG2_MIME_YUV, &fc));
 
 	img2_decode_opts_t opts = { .force_mime = IMG2_MIME_UNKNOWN, .yuv = NULL, .max_frames = 0, .jpeg_deblock = -1 };
-	ASSERT_NULL(img2_decoder_dispatch(&opts, data, sizeof(data), IMG2_MIME_YUV, &fc));
+	ASSERT_NULL(test_dispatch(&opts, data, sizeof(data), IMG2_MIME_YUV, &fc));
 
 	/* With --yuv geometry */
 	img2_yuv_params_t yuv;
 	ASSERT_EQUAL(0, img2_yuv_parse_spec("gray:4:4", &yuv, NULL, 0));
 	opts.yuv = &yuv;
-	img2_image_t **frames = img2_decoder_dispatch(&opts, data, sizeof(data), IMG2_MIME_YUV, &fc);
+	img2_image_t **frames = test_dispatch(&opts, data, sizeof(data), IMG2_MIME_YUV, &fc);
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, fc);
 	ASSERT_EQUAL(0, frames[0]->pixels[0]);

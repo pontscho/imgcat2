@@ -64,11 +64,11 @@ static void jpeg_error_exit(j_common_ptr cinfo)
  * @note JPEG does not support alpha channel, it will be stripped
  * @note Caller must free *out_data with free() when done
  */
-int img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+img2_status_t img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_jpeg");
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Initialize outputs */
@@ -103,7 +103,7 @@ int img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, s
 			*out_data = NULL;
 		}
 		*out_size = 0;
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Create compressor */
@@ -135,7 +135,7 @@ int img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, s
 	if (row_buffer == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JPEG row buffer");
 		jpeg_destroy_compress(&cinfo);
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	/* Write scanlines */
@@ -161,7 +161,7 @@ int img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, s
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to write JPEG scanline %u", y);
 			free(row_buffer);
 			jpeg_destroy_compress(&cinfo);
-			return -1;
+			return IMG2_E_CODEC;
 		}
 	}
 
@@ -177,14 +177,14 @@ int img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, s
 	/* Allocate and copy output data */
 	if (jpeg_buffer == NULL || jpeg_size == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: JPEG encoder produced no output");
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	*out_data = (uint8_t *)malloc(jpeg_size);
 	if (*out_data == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%lu bytes)", jpeg_size);
 		free(jpeg_buffer);
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	memcpy(*out_data, jpeg_buffer, jpeg_size);
@@ -193,5 +193,5 @@ int img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, s
 	/* Free libjpeg's buffer */
 	free(jpeg_buffer);
 
-	return 0;
+	return IMG2_OK;
 }

@@ -97,11 +97,11 @@ static struct heif_error heif_memory_write_func(struct heif_context *ctx, const 
  * @note Caller must free *out_data with free() when done
  * @note Requires HEVC encoder to be available in libheif
  */
-int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_heif");
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Initialize outputs */
@@ -121,7 +121,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 	struct heif_context *ctx = heif_context_alloc();
 	if (ctx == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	/* Create HEIF image from RGBA8888 */
@@ -131,7 +131,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 	if (err.code != heif_error_Ok) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create HEIF image: %s", err.message);
 		heif_context_free(ctx);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Add image plane */
@@ -140,7 +140,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to add HEIF image plane: %s", err.message);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Get plane pointer and stride */
@@ -150,7 +150,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to get HEIF image plane");
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Copy pixel data row-by-row (handle stride) */
@@ -167,7 +167,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 		img2_log(IMG2_LOG_ERROR, "Error: No HEVC encoder available: %s", err.message);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Set quality */
@@ -177,7 +177,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 		heif_encoder_release(encoder);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Encode image */
@@ -188,7 +188,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 		heif_encoder_release(encoder);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Release encoder (no longer needed) */
@@ -215,7 +215,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
 		}
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	/* Cleanup HEIF structures */
@@ -229,7 +229,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
 		}
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Allocate and copy output data */
@@ -237,7 +237,7 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 	if (*out_data == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%zu bytes)", write_state.size);
 		free(write_state.buffer);
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	memcpy(*out_data, write_state.buffer, write_state.size);
@@ -246,5 +246,5 @@ int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, s
 	/* Free write state buffer */
 	free(write_state.buffer);
 
-	return 0;
+	return IMG2_OK;
 }

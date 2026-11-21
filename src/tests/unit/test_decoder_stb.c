@@ -28,15 +28,15 @@ CTEST(decoder_stb, null_parameters)
 	uint8_t dummy_data[10] = { 0 };
 
 	/* NULL data pointer */
-	img2_image_t **frames = img2_decode_stb(NULL, 100, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_stb, NULL, 100, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* Zero length */
-	frames = img2_decode_stb(dummy_data, 0, &frame_count);
+	frames = test_decode(img2_decode_stb, dummy_data, 0, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* NULL frame_count */
-	frames = img2_decode_stb(dummy_data, 10, NULL);
+	frames = test_decode(img2_decode_stb, dummy_data, 10, NULL);
 	ASSERT_NULL(frames);
 }
 
@@ -50,7 +50,7 @@ CTEST(decoder_stb, invalid_data)
 	int frame_count;
 	uint8_t invalid_data[] = "This is not a valid image file";
 
-	img2_image_t **frames = img2_decode_stb(invalid_data, sizeof(invalid_data), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_stb, invalid_data, sizeof(invalid_data), &frame_count);
 	ASSERT_NULL(frames);
 	ASSERT_EQUAL(0, frame_count);
 }
@@ -71,7 +71,7 @@ CTEST(decoder_stb, decode_bmp_1x1)
 		                               0x00, 0x00 };
 
 	int frame_count;
-	img2_image_t **frames = img2_decode_stb(bmp_1x1, sizeof(bmp_1x1), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_stb, bmp_1x1, sizeof(bmp_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -171,7 +171,7 @@ CTEST(decoder_stb, decode_bmp_2x2)
 	};
 
 	int frame_count;
-	img2_image_t **frames = img2_decode_stb(bmp_2x2, sizeof(bmp_2x2), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_stb, bmp_2x2, sizeof(bmp_2x2), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -206,7 +206,7 @@ CTEST(decoder_stb, decode_tga)
 	};
 
 	int frame_count;
-	img2_image_t **frames = img2_decode_stb(tga_1x1, sizeof(tga_1x1), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_stb, tga_1x1, sizeof(tga_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -238,7 +238,7 @@ CTEST(decoder_stb, decode_ppm)
 	};
 
 	int frame_count;
-	img2_image_t **frames = img2_decode_stb(ppm_2x2, sizeof(ppm_2x2), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_stb, ppm_2x2, sizeof(ppm_2x2), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -272,7 +272,7 @@ CTEST(decoder_stb, decode_pgm)
 	                                 "\x00\x7F\xAF\xFF"; /* 4 grayscale pixels */
 
 	int frame_count;
-	img2_image_t **frames = img2_decode_stb((const uint8_t *)pgm_2x2, strlen((const char *)pgm_2x2) + 4, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_stb, (const uint8_t *)pgm_2x2, strlen((const char *)pgm_2x2) + 4, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -320,7 +320,7 @@ CTEST(decoder_stb, decode_bmp_through_registry)
 		                               0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 	int frame_count;
-	img2_image_t **frames = img2_decoder_dispatch(NULL, bmp_1x1, sizeof(bmp_1x1), IMG2_MIME_BMP, &frame_count);
+	img2_image_t **frames = test_dispatch(NULL, bmp_1x1, sizeof(bmp_1x1), IMG2_MIME_BMP, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -342,8 +342,8 @@ CTEST(decoder_stb, find_by_mime_bmp)
 
 	const img2_decoder_entry_t *decoder = img2_decoder_find(IMG2_MIME_BMP);
 	ASSERT_NOT_NULL(decoder);
-	ASSERT_EQUAL(IMG2_MIME_BMP, decoder->mime_type);
-	ASSERT_NOT_NULL(decoder->name);
+	ASSERT_EQUAL(IMG2_MIME_BMP, decoder->info.mime);
+	ASSERT_NOT_NULL(decoder->info.name);
 	ASSERT_NOT_NULL(decoder->decode);
 }
 
@@ -358,7 +358,7 @@ CTEST(decoder_stb, single_frame_only)
 		                               0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 	int frame_count = -1;
-	img2_image_t **frames = img2_decode_stb(bmp_1x1, sizeof(bmp_1x1), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_stb, bmp_1x1, sizeof(bmp_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count); /* STB is always single-frame */

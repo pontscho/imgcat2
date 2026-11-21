@@ -20,9 +20,6 @@
 
 #ifdef IMG2_HAVE_JPEGQS
 #include "libjpegqs.h"
-
-/* threads = -1: keep the OpenMP default, so OMP_NUM_THREADS is honoured */
-static jpegqs_control_t s_jpegqs_opts = { .flags = JPEGQS_DIAGONALS | JPEGQS_JOINT_YUV | JPEGQS_UPSAMPLE_UV, .niter = 5, .threads = -1, .progprec = 0, .userdata = NULL, .progress = NULL };
 #endif
 
 /* EXIF/XMP metadata support */
@@ -71,20 +68,31 @@ static void jpeg_error_exit(j_common_ptr cinfo)
  * @param data Raw JPEG file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (JPEG is static)
+ * @param deblock -1 default (jpegqs if built), 0 plain libjpeg, 1 jpegqs if built
+ * @param st Output: status on error
  * @return Array with single img2_image_t*, or NULL on error
  *
  * @note JPEG does not support animation or alpha channel
  * @note Alpha channel is added (opaque, 255) during RGB→RGBA conversion
  */
-img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *frame_count, int deblock, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jpeg");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
 	*frame_count = 0;
+
+#ifdef IMG2_HAVE_JPEGQS
+	/* Per-call jpegqs settings (formerly a mutable global); threads = -1 keeps the OpenMP default,
+	 * so OMP_NUM_THREADS is honoured */
+	jpegqs_control_t qs = { .flags = JPEGQS_DIAGONALS | JPEGQS_JOINT_YUV | JPEGQS_UPSAMPLE_UV, .niter = 5, .threads = -1, .progprec = 0, .userdata = NULL, .progress = NULL };
+	const bool use_qs = (deblock != 0);
+#else
+	(void)deblock;
+#endif
 
 	// Create JPEG decompressor
 	struct jpeg_decompress_struct cinfo;
@@ -97,7 +105,7 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 	if (setjmp(jerr.setjmp_buffer)) {
 		// longjmp returns here if error occurs
 		jpeg_destroy_decompress(&cinfo);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Create decompressor
@@ -110,7 +118,7 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 	if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG header");
 		jpeg_destroy_decompress(&cinfo);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Set output format to RGB (3 channels)
@@ -118,13 +126,14 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 
 	// Start decompression
 #ifdef IMG2_HAVE_JPEGQS
-	if (!jpegqs_start_decompress(&cinfo, &s_jpegqs_opts)) {
+	const boolean started = use_qs ? jpegqs_start_decompress(&cinfo, &qs) : jpeg_start_decompress(&cinfo);
 #else
-	if (!jpeg_start_decompress(&cinfo)) {
+	const boolean started = jpeg_start_decompress(&cinfo);
 #endif
+	if (!started) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to start JPEG decompression");
 		jpeg_destroy_decompress(&cinfo);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Get output dimensions
@@ -135,7 +144,7 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 	if (channels != 3) {
 		img2_log(IMG2_LOG_ERROR, "Error: Unexpected JPEG output channels: %d (expected 3)", channels);
 		jpeg_destroy_decompress(&cinfo);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Create img2_image_t structure for RGBA output
@@ -143,7 +152,7 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		jpeg_destroy_decompress(&cinfo);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Allocate row buffer for RGB scanline (libjpeg outputs RGB)
@@ -153,7 +162,7 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JPEG row buffer");
 		img2_image_destroy(img);
 		jpeg_destroy_decompress(&cinfo);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Read scanlines and convert RGB to RGBA
@@ -168,7 +177,7 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 			free(row_buffer);
 			img2_image_destroy(img);
 			jpeg_destroy_decompress(&cinfo);
-			return NULL;
+			return img2_decode_fail(st, IMG2_E_CODEC);
 		}
 
 		// Convert RGB to RGBA (add alpha=255)
@@ -187,8 +196,12 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 
 	// Finish decompression
 #ifdef IMG2_HAVE_JPEGQS
-	if (!jpegqs_finish_decompress(&cinfo)) {
-		img2_log(IMG2_LOG_WARN, "Warning: jpegqs_finish_decompress() returned false");
+	if (use_qs) {
+		if (!jpegqs_finish_decompress(&cinfo)) {
+			img2_log(IMG2_LOG_WARN, "Warning: jpegqs_finish_decompress() returned false");
+		}
+	} else if (!jpeg_finish_decompress(&cinfo)) {
+		img2_log(IMG2_LOG_WARN, "Warning: jpeg_finish_decompress() returned false");
 	}
 #else
 	if (!jpeg_finish_decompress(&cinfo)) {
@@ -244,7 +257,7 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = img;
@@ -253,4 +266,15 @@ img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_coun
 	// fprintf(stderr, "JPEG decoded: %ux%u, RGB→RGBA\n", width, height);
 
 	return frames;
+}
+
+img2_status_t img2_decode_jpeg(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_jpeg_frames(data, len, &count, opts != NULL ? opts->jpeg_deblock : -1, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

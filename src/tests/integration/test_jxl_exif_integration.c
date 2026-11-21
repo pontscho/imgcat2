@@ -15,10 +15,10 @@
 
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
+#include "../decoder_internal.h"
 #endif
 
 /* Forward declaration of img2_decode_jxl from decoder */
-img2_image_t **img2_decode_jxl(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Minimal valid JXL with EXIF metadata
@@ -147,7 +147,7 @@ static const uint8_t jxl_with_exif[] = {
 CTEST(jxl_exif_integration, decode_with_exif)
 {
 	int frame_count = 0;
-	img2_image_t **frames = img2_decode_jxl(jxl_with_exif, sizeof(jxl_with_exif), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_jxl, jxl_with_exif, sizeof(jxl_with_exif), &frame_count);
 
 	// Note: This test may fail if the JXL data above is not valid
 	// The actual implementation would need a valid JXL file with EXIF box
@@ -234,7 +234,7 @@ CTEST(jxl_exif_integration, decode_without_exif)
 	};
 
 	int frame_count = 0;
-	img2_image_t **frames = img2_decode_jxl(jxl_no_exif, sizeof(jxl_no_exif), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_jxl, jxl_no_exif, sizeof(jxl_no_exif), &frame_count);
 
 	// Note: This test may fail if the JXL data above is not valid
 	if (frames == NULL) {
@@ -372,7 +372,7 @@ CTEST(jxl_exif_integration, decode_with_xmp)
 	};
 
 	int frame_count = 0;
-	img2_image_t **frames = img2_decode_jxl(jxl_with_xmp, sizeof(jxl_with_xmp), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_jxl, jxl_with_xmp, sizeof(jxl_with_xmp), &frame_count);
 
 	// Note: This test may fail if the JXL data above is not valid
 	if (frames == NULL) {

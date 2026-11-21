@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "status.h"
+
 /**
  * @defgroup ResourceLimits Image Resource Limits
  * @{
@@ -42,14 +44,38 @@ typedef struct img2_xmp img2_xmp_t;
  * Offset calculation: pixels[(y * width + x) * 4 + channel]
  */
 typedef struct img2_image {
-	uint32_t width; /**< Image width in pixels */
-	uint32_t height; /**< Image height in pixels */
-	uint8_t *pixels; /**< RGBA8888 pixel data: width × height × 4 bytes */
-
-	/* EXIF/XMP metadata (JPEG only) */
-	img2_exif_t *exif; /**< EXIF metadata, NULL if not JPEG or no EXIF */
-	img2_xmp_t *xmp; /**< XMP metadata, NULL if no XMP */
+	uint32_t width, height;
+	uint32_t stride;          /* bytes per row; == width * 4 today */
+	uint8_t *pixels;          /* RGBA8888 */
+	uint32_t delay_ms;        /* frame duration, 0 = unknown/not animated (filled in S11) */
+	img2_exif_t *exif;
+	img2_xmp_t *xmp;
 } img2_image_t;
+
+/**
+ * @brief Decoded frame set (count >= 1 on success)
+ */
+typedef struct img2_frames { img2_image_t **frames; int count; int loop_count; } img2_frames_t;
+
+/**
+ * @brief Destroy all frames, free the array and zero *f (NULL-safe)
+ */
+void img2_frames_free(img2_frames_t *f);
+
+/* [P3] S7 moves this enum verbatim into <img2/image.h> */
+typedef enum img2_filter {
+	IMG2_FILTER_DEFAULT = 0,  /* stb_image_resize2 sRGB default (imgcat2 "lanczos") */
+	IMG2_FILTER_POINT, IMG2_FILTER_BOX, IMG2_FILTER_TRIANGLE, IMG2_FILTER_CUBIC, IMG2_FILTER_MITCHELL
+} img2_filter_t;
+
+/**
+ * @brief Aspect-preserving fit of src_w x src_h into max_w x max_h
+ *
+ * @return IMG2_OK with 1 <= *out_w <= max_w and 1 <= *out_h <= max_h, or IMG2_E_ARG
+ *         (zero argument, NULL output, or a degenerate result)
+ */
+img2_status_t img2_fit_size(uint32_t src_w, uint32_t src_h, uint32_t max_w, uint32_t max_h,
+                            uint32_t *out_w, uint32_t *out_h);
 
 /**
  * @brief Create a new image with specified dimensions
@@ -69,7 +95,7 @@ img2_image_t *img2_image_alloc(uint32_t width, uint32_t height);
 /**
  * @brief Destroy an image and free all resources
  *
- * Frees the pixel buffer and image structure. NULL-safe.
+ * Frees the pixel buffer, EXIF/XMP metadata and image structure. NULL-safe.
  *
  * @param img Image to destroy (can be NULL)
  */
@@ -145,13 +171,13 @@ bool img2_image_calc_size(uint32_t width, uint32_t height, size_t *out_size);
  * @param src Source image to scale
  * @param target_width Maximum width of scaled image
  * @param target_height Maximum height of scaled image
- * @return Scaled image, or NULL on error
+ * @param out Output: scaled image (NULL on error)
+ * @return IMG2_OK, IMG2_E_ARG, IMG2_E_LIMIT, IMG2_E_NOMEM or IMG2_E_CODEC
  *
  * @note Caller must free with img2_image_destroy()
  * @note Uses high-quality resampling (Mitchell filter for downsampling)
- * @note Returns NULL if src is NULL or allocation fails
  */
-img2_image_t *img2_image_scale_fit(const img2_image_t *src, uint32_t target_width, uint32_t target_height);
+img2_status_t img2_image_scale_fit(const img2_image_t *src, uint32_t target_width, uint32_t target_height, img2_image_t **out);
 
 /**
  * @brief Scale image to exact dimensions (may distort aspect ratio)
@@ -162,13 +188,13 @@ img2_image_t *img2_image_scale_fit(const img2_image_t *src, uint32_t target_widt
  * @param src Source image to scale
  * @param target_width Exact width of scaled image
  * @param target_height Exact height of scaled image
- * @return Scaled image, or NULL on error
+ * @param out Output: scaled image (NULL on error)
+ * @return IMG2_OK, IMG2_E_ARG, IMG2_E_LIMIT, IMG2_E_NOMEM or IMG2_E_CODEC
  *
  * @note Caller must free with img2_image_destroy()
  * @note Uses high-quality resampling
- * @note Returns NULL if src is NULL or allocation fails
  */
-img2_image_t *img2_image_scale_resize(const img2_image_t *src, uint32_t target_width, uint32_t target_height);
+img2_status_t img2_image_scale_resize(const img2_image_t *src, uint32_t target_width, uint32_t target_height, img2_image_t **out);
 
 /**
  * @brief Apply EXIF orientation transformation to image
@@ -187,14 +213,14 @@ img2_image_t *img2_image_scale_resize(const img2_image_t *src, uint32_t target_w
  *
  * @param img Image to transform (modified in-place)
  * @param orientation EXIF orientation value (1-8)
- * @return 0 on success, -1 on error
+ * @return IMG2_OK, or IMG2_E_ARG / IMG2_E_NOMEM (all < 0)
  *
  * @note Orientation value 1 returns immediately without transformation
  * @note Dimensions are swapped for 90°/270° rotations (orientations 5,6,7,8)
  * @note Invalid orientation values (not 1-8) return -1
  * @note NULL img or NULL img->pixels return -1
  */
-int img2_image_orient(img2_image_t *img, uint16_t orientation);
+img2_status_t img2_image_orient(img2_image_t *img, uint16_t orientation);
 
 /**
  * @brief Convert RGB pixel data to RGBA
@@ -205,12 +231,13 @@ int img2_image_orient(img2_image_t *img, uint16_t orientation);
  * @param rgb Source RGB pixel data (width × height × 3 bytes)
  * @param width Image width in pixels
  * @param height Image height in pixels
- * @return New img2_image_t with RGBA data, or NULL on error
+ * @param out Output: new RGBA image (NULL on error)
+ * @return IMG2_OK, IMG2_E_ARG, IMG2_E_LIMIT or IMG2_E_NOMEM
  *
  * @note Caller must free with img2_image_destroy()
  * @note Alpha channel is set to 255 (opaque) for all pixels
  */
-img2_image_t *img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height);
+img2_status_t img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height, img2_image_t **out);
 
 /**
  * @brief Convert grayscale pixel data to RGBA
@@ -221,11 +248,12 @@ img2_image_t *img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint3
  * @param gray Source grayscale pixel data (width × height bytes)
  * @param width Image width in pixels
  * @param height Image height in pixels
- * @return New img2_image_t with RGBA data, or NULL on error
+ * @param out Output: new RGBA image (NULL on error)
+ * @return IMG2_OK, IMG2_E_ARG, IMG2_E_LIMIT or IMG2_E_NOMEM
  *
  * @note Caller must free with img2_image_destroy()
  * @note Alpha channel is set to 255 (opaque) for all pixels
  */
-img2_image_t *img2_convert_gray_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height);
+img2_status_t img2_convert_gray_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height, img2_image_t **out);
 
 #endif /* IMG2_INTERNAL_CORE_IMAGE_H */

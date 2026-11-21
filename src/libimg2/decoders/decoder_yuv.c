@@ -27,6 +27,7 @@
 /* clang-format on */
 
 #include "yuv.h"
+#include "decoder.h"
 #include "../core/log.h"
 
 /** Maximum accepted length of a --yuv specification string */
@@ -351,21 +352,21 @@ static int parse_field(const char *field, const char *what, uint64_t max, uint64
 	return 0;
 }
 
-int img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, size_t err_len)
+img2_status_t img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, size_t err_len)
 {
 	if (spec == NULL || out == NULL) {
 		YUV_ERR(err, err_len, "missing specification");
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	size_t spec_len = strlen(spec);
 	if (spec_len == 0) {
 		YUV_ERR(err, err_len, "empty specification (expected %s)", YUV_SPEC_SYNTAX);
-		return -1;
+		return IMG2_E_ARG;
 	}
 	if (spec_len >= YUV_SPEC_MAX_LEN) {
 		YUV_ERR(err, err_len, "specification too long (max %d characters)", YUV_SPEC_MAX_LEN - 1);
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Split a private copy on ':' */
@@ -378,7 +379,7 @@ int img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, siz
 	for (;;) {
 		if (nfields == YUV_SPEC_MAX_FIELDS) {
 			YUV_ERR(err, err_len, "too many fields (expected %s)", YUV_SPEC_SYNTAX);
-			return -1;
+			return IMG2_E_ARG;
 		}
 		fields[nfields++] = cursor;
 		char *colon = strchr(cursor, ':');
@@ -391,50 +392,50 @@ int img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, siz
 
 	if (nfields < 3) {
 		YUV_ERR(err, err_len, "missing fields (expected %s)", YUV_SPEC_SYNTAX);
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Format */
 	if (fields[0][0] == '\0') {
 		YUV_ERR(err, err_len, "missing format (expected %s)", YUV_SPEC_SYNTAX);
-		return -1;
+		return IMG2_E_ARG;
 	}
 	img2_yuv_params_t p = { 0 };
 	p.format = img2_yuv_format_from_name(fields[0]);
 	if (p.format == IMG2_YUV_FMT_NONE) {
 		YUV_ERR(err, err_len, "unknown format '%s' (supported: %s)", fields[0], YUV_SPEC_FORMATS);
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Dimensions (mandatory) */
 	uint64_t v = 0;
 	if (parse_field(fields[1], "width", UINT32_MAX, &v, err, err_len) < 0) {
-		return -1;
+		return IMG2_E_ARG;
 	}
 	p.width = (uint32_t)v;
 	if (parse_field(fields[2], "height", UINT32_MAX, &v, err, err_len) < 0) {
-		return -1;
+		return IMG2_E_ARG;
 	}
 	p.height = (uint32_t)v;
 
 	/* Strides (optional, empty = default) */
 	if (nfields > 3 && fields[3][0] != '\0') {
 		if (parse_field(fields[3], "y_stride", SIZE_MAX, &v, err, err_len) < 0) {
-			return -1;
+			return IMG2_E_ARG;
 		}
 		if (v == 0) {
 			YUV_ERR(err, err_len, "y_stride must be greater than 0");
-			return -1;
+			return IMG2_E_ARG;
 		}
 		p.y_stride = (size_t)v;
 	}
 	if (nfields > 4 && fields[4][0] != '\0') {
 		if (parse_field(fields[4], "uv_stride", SIZE_MAX, &v, err, err_len) < 0) {
-			return -1;
+			return IMG2_E_ARG;
 		}
 		if (v == 0) {
 			YUV_ERR(err, err_len, "uv_stride must be greater than 0");
-			return -1;
+			return IMG2_E_ARG;
 		}
 		p.uv_stride = (size_t)v;
 	}
@@ -442,13 +443,13 @@ int img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, siz
 	/* Validate geometry and resolve default strides */
 	yuv_layout_t L;
 	if (yuv_compute_layout(&p, &L, err, err_len) < 0) {
-		return -1;
+		return IMG2_E_ARG;
 	}
 	p.y_stride = L.y_stride;
 	p.uv_stride = L.c_stride;
 
 	*out = p;
-	return 0;
+	return IMG2_OK;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -517,32 +518,32 @@ static void convert_row_gray(const uint8_t *y_row, uint32_t width, uint8_t *dst)
 	}
 }
 
-img2_image_t **img2_decode_yuv(const uint8_t *data, size_t len, const img2_yuv_params_t *params, int *frame_count)
+static img2_image_t **decode_yuv_frames(const uint8_t *data, size_t len, const img2_yuv_params_t *params, int *frame_count, img2_status_t *st)
 {
 	if (frame_count != NULL) {
 		*frame_count = 0;
 	}
 	if (data == NULL || len == 0 || params == NULL || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_yuv");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	char err[160];
 	yuv_layout_t L;
 	if (yuv_compute_layout(params, &L, err, sizeof(err)) < 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid YUV parameters: %s", err);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	if (len < L.required) {
 		img2_log(IMG2_LOG_ERROR, "Error: Raw YUV input too short for %s %ux%u: need %zu bytes, have %zu", img2_yuv_format_name(params->format), params->width, params->height, L.required, len);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	img2_image_t *img = img2_image_alloc(params->width, params->height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	const uint32_t w = params->width;
@@ -572,7 +573,7 @@ img2_image_t **img2_decode_yuv(const uint8_t *data, size_t len, const img2_yuv_p
 			default:
 				/* Unreachable: rejected by yuv_compute_layout() */
 				img2_image_destroy(img);
-				return NULL;
+				return img2_decode_fail(st, IMG2_E_INTERNAL);
 		}
 	}
 
@@ -580,10 +581,24 @@ img2_image_t **img2_decode_yuv(const uint8_t *data, size_t len, const img2_yuv_p
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = img;
 	*frame_count = 1;
 	return frames;
+}
+
+img2_status_t img2_decode_yuv(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	if (opts == NULL || opts->yuv == NULL) {
+		return img2_frames_adopt(out, NULL, 0, IMG2_E_ARG);
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_yuv_frames(data, len, opts->yuv, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

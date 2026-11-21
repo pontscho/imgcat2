@@ -40,11 +40,11 @@
  *
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_qoi_static");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -55,7 +55,7 @@ static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *fr
 	void *pixels = qoi_decode(data, (int)len, &desc, 4); // 4 = RGBA
 	if (pixels == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to decode QOI image");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Create img2_image_t structure
@@ -63,7 +63,7 @@ static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *fr
 	if (output == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		free(pixels);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Copy pixels (QOI already returns RGBA8888, same as our format)
@@ -78,7 +78,7 @@ static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *fr
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(output);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = output;
@@ -95,8 +95,20 @@ static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *fr
  * @param frame_count Output: number of frames decoded (always 1 for QOI)
  * @return Array of img2_image_t* pointers, or NULL on error
  */
-img2_image_t **img2_decode_qoi(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_qoi_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	// QOI files are always single images (no animation)
-	return decode_qoi_static(data, len, frame_count);
+	return decode_qoi_static(data, len, frame_count, st);
+}
+
+img2_status_t img2_decode_qoi(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_qoi_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

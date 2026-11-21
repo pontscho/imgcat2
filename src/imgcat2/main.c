@@ -94,9 +94,9 @@ int main(int argc, char **argv)
 
 		/* Handle --fonts option: list available fonts and exit */
 	} else if (opts.list_fonts) {
-		img2_font_manager_init();
+		img2_init();
 		img2_font_manager_list_fonts();
-		img2_font_manager_cleanup();
+		img2_shutdown();
 		return EXIT_SUCCESS;
 	}
 
@@ -117,11 +117,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	/* Initialize encoder registry */
-	img2_encoder_registry_init();
-
-	/* Initialize decoder registry */
-	img2_decoder_registry_init();
+	/* Initialize the library (logs the encoder and decoder tables at INFO) */
+	img2_init();
 
 	/* Pipeline variables */
 	uint8_t *buffer = NULL;
@@ -295,5 +292,6 @@ cleanup:
 		free(scaled_frames);
 	}
 
+	img2_shutdown();
 	return exit_code;
 }

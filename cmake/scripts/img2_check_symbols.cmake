@@ -1,10 +1,16 @@
 # Symbol guard (cmake -P).
-#   cmake -DNM=<nm> -DPREFIX=img2_ [-DARCHIVE=<lib.a>] [-DOBJ_LIST=<obj;obj>] [-DFORBIDDEN=<sym;...>]
+#   cmake -DNM=<nm> -DPREFIX=img2_ [-DARCHIVE=<lib.a>] [-DOBJ_LIST=<obj;obj>] [-DOBJ_LIST_FILE=<file>]
+#         [-DFORBIDDEN=<sym;...>] [-DOBJDUMP=<objdump> -DMUTABLE_ALLOWLIST=<file>] [-DSRC_DIR=<src/libimg2>]
 #         -P cmake/scripts/img2_check_symbols.cmake
 #
-# Runs `${NM} -A -P -g` on the archive and/or each listed object.
+# Runs `${NM} -A -P -g` on the archive and/or each listed object (OBJ_LIST_FILE holds a ';' list,
+# e.g. the -UNDEBUG img2_assertcheck objects).
 # - Every defined global (types T D B R C V W G S) must start with ${PREFIX}.
-# - With FORBIDDEN set, any undefined (U) reference to a listed symbol fails.
+# - With FORBIDDEN set, any undefined (U) reference to a listed symbol fails (no-terminate guarantee).
+# - With OBJDUMP + MUTABLE_ALLOWLIST ([SM3] mutable-state audit, ARCHIVE only): every object symbol
+#   (type flag O) in .data*/.bss*/.tdata*/.tbss*/*COM* (not .data.rel.ro*) must be allow-listed as
+#   "<object-basename> <symbol>[*] <reason>"; stbi__g_failure_reason must live in .tbss/.tdata.
+# - With SRC_DIR: no stbi_set_/stbi_hdr_to_ldr_/stbi_ldr_to_hdr_/stbi_convert_iphone call in our sources.
 # On a hit: message(FATAL_ERROR) listing "member: symbol".
 # IMG2_SYMBOL_ALLOWLIST is a hook for exemptions and must stay empty.
 
@@ -14,12 +20,25 @@ if(NOT DEFINED NM OR NOT DEFINED PREFIX)
 	message(FATAL_ERROR "usage: cmake -DNM=<nm> -DPREFIX=<prefix> [-DARCHIVE=<a>] [-DOBJ_LIST=<o;o>] [-DFORBIDDEN=<s;s>] -P img2_check_symbols.cmake")
 endif()
 
+# ctest passes the list with escaped separators ("a\;b"); turn them into real list separators
+if(DEFINED FORBIDDEN)
+	string(REPLACE "\\;" ";" FORBIDDEN "${FORBIDDEN}")
+endif()
+
 set(_inputs "")
 if(DEFINED ARCHIVE AND NOT ARCHIVE STREQUAL "")
 	list(APPEND _inputs "${ARCHIVE}")
 endif()
 if(DEFINED OBJ_LIST AND NOT OBJ_LIST STREQUAL "")
 	list(APPEND _inputs ${OBJ_LIST})
+endif()
+if(DEFINED OBJ_LIST_FILE AND NOT OBJ_LIST_FILE STREQUAL "")
+	if(NOT EXISTS "${OBJ_LIST_FILE}")
+		message(FATAL_ERROR "img2_check_symbols: OBJ_LIST_FILE not found: ${OBJ_LIST_FILE}")
+	endif()
+	file(READ "${OBJ_LIST_FILE}" _objs)
+	string(STRIP "${_objs}" _objs)
+	list(APPEND _inputs ${_objs})
 endif()
 if(NOT _inputs)
 	message(FATAL_ERROR "img2_check_symbols: neither ARCHIVE nor OBJ_LIST given")
@@ -64,6 +83,101 @@ foreach(_in IN LISTS _inputs)
 		endif()
 	endforeach()
 endforeach()
+
+# [SM3] mutable-state audit
+if(DEFINED OBJDUMP AND NOT OBJDUMP STREQUAL "" AND DEFINED MUTABLE_ALLOWLIST AND DEFINED ARCHIVE)
+	file(STRINGS "${MUTABLE_ALLOWLIST}" _allow_lines)
+	set(_allow_objs "")
+	set(_allow_syms "")
+	foreach(_a IN LISTS _allow_lines)
+		if(_a MATCHES "^([^ #][^ ]*) ([^ ]+)( .*)?$")
+			list(APPEND _allow_objs "${CMAKE_MATCH_1}")
+			list(APPEND _allow_syms "${CMAKE_MATCH_2}")
+		endif()
+	endforeach()
+	list(LENGTH _allow_objs _nallow)
+	execute_process(COMMAND "${OBJDUMP}" -t "${ARCHIVE}"
+		OUTPUT_VARIABLE _out ERROR_VARIABLE _err RESULT_VARIABLE _rc)
+	if(NOT _rc EQUAL 0)
+		message(FATAL_ERROR "img2_check_symbols: ${OBJDUMP} failed on ${ARCHIVE} (${_rc}): ${_err}")
+	endif()
+	string(REPLACE ";" "\\;" _out "${_out}")
+	string(REPLACE "\n" ";" _lines "${_out}")
+	set(_obj "")
+	set(_nmutable 0)
+	set(_failure_reason_ok FALSE)
+	set(_failure_reason_seen FALSE)
+	foreach(_l IN LISTS _lines)
+		if(_l MATCHES "^([^ :]+\\.o):[ \t]+file format")
+			set(_obj "${CMAKE_MATCH_1}")
+			continue()
+		endif()
+		# "<value> <7 flag chars> <section>\t<size> <name>"
+		if(NOT _l MATCHES "^[0-9a-f]+ (.......) ([^ \t]+)[ \t]+[0-9a-f]+[ \t]+(.+)$")
+			continue()
+		endif()
+		set(_flags "${CMAKE_MATCH_1}")
+		set(_sec "${CMAKE_MATCH_2}")
+		set(_name "${CMAKE_MATCH_3}")
+		if(_obj STREQUAL "decoder_stb.c.o" AND _name STREQUAL "stbi__g_failure_reason")
+			set(_failure_reason_seen TRUE)
+			if(_sec MATCHES "^\\.(tbss|tdata)")
+				set(_failure_reason_ok TRUE)
+			endif()
+		endif()
+		string(SUBSTRING "${_flags}" 6 1 _type)
+		if(NOT _type STREQUAL "O")
+			continue()
+		endif()
+		if(_sec MATCHES "^\\.data\\.rel\\.ro")
+			continue()
+		endif()
+		if(NOT (_sec MATCHES "^\\.(data|bss|tdata|tbss)" OR _sec STREQUAL "*COM*"))
+			continue()
+		endif()
+		math(EXPR _nmutable "${_nmutable} + 1")
+		set(_ok FALSE)
+		if(_nallow GREATER 0)
+			math(EXPR _last "${_nallow} - 1")
+			foreach(_i RANGE ${_last})
+				list(GET _allow_objs ${_i} _ao)
+				list(GET _allow_syms ${_i} _as)
+				if(NOT _ao STREQUAL _obj)
+					continue()
+				endif()
+				if(_as MATCHES "\\*$")
+					string(REGEX REPLACE "\\*$" "" _pfx "${_as}")
+					string(FIND "${_name}" "${_pfx}" _p)
+					if(_p EQUAL 0)
+						set(_ok TRUE)
+						break()
+					endif()
+				elseif(_as STREQUAL _name)
+					set(_ok TRUE)
+					break()
+				endif()
+			endforeach()
+		endif()
+		if(NOT _ok)
+			list(APPEND _violations "${_obj}: ${_name} (${_sec}, mutable state not in ${MUTABLE_ALLOWLIST})")
+		endif()
+	endforeach()
+	if(_failure_reason_seen AND NOT _failure_reason_ok)
+		list(APPEND _violations "decoder_stb.c.o: stbi__g_failure_reason (must be thread-local: .tbss/.tdata)")
+	endif()
+	message(STATUS "img2_check_symbols: mutable-state audit: ${_nmutable} writable object symbol(s) checked")
+endif()
+
+# stb_image global setters must never be called from our sources
+if(DEFINED SRC_DIR AND NOT SRC_DIR STREQUAL "")
+	file(GLOB_RECURSE _srcs "${SRC_DIR}/*.c")
+	foreach(_f IN LISTS _srcs)
+		file(READ "${_f}" _txt)
+		if(_txt MATCHES "stbi_set_|stbi_hdr_to_ldr_|stbi_ldr_to_hdr_|stbi_convert_iphone")
+			list(APPEND _violations "${_f}: calls an stb_image global setter")
+		endif()
+	endforeach()
+endif()
 
 if(_violations)
 	list(LENGTH _violations _n)

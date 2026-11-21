@@ -239,11 +239,11 @@ static char *inline_svg_styles(const char *svg_data)
  * @note Output format is RGBA8888
  * @note SVGs without explicit dimensions use 512x512 default
  */
-img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_svg_nanosvg_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_svg_nanosvg");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -254,7 +254,7 @@ img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *fra
 	char *svg_copy = (char *)malloc(len + 1);
 	if (svg_copy == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate SVG copy buffer");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 	memcpy(svg_copy, data, len);
 	svg_copy[len] = '\0';
@@ -264,24 +264,16 @@ img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *fra
 	free(svg_copy);
 	if (svg_processed == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to process SVG styles");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
-	// Initialize font manager (for text rendering)
-	static bool font_mgr_initialized = false;
-	if (!font_mgr_initialized) {
-		if (img2_font_manager_init()) {
-			font_mgr_initialized = true;
-		}
-	}
-
-	// Parse SVG image
+	// Parse (text rendering initialises the font manager lazily, under its lock) SVG image
 	NSVGimage *svg_image = nsvgParse(svg_processed, "px", 96.0f);
 	free(svg_processed);
 
 	if (svg_image == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to parse SVG image");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Determine dimensions
@@ -301,13 +293,13 @@ img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *fra
 	if (width == 0 || height == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid SVG dimensions: %ux%u", width, height);
 		nsvgDelete(svg_image);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
 		img2_log(IMG2_LOG_ERROR, "Error: SVG dimensions exceed maximum (%u): %ux%u", IMG2_MAX_DIMENSION, width, height);
 		nsvgDelete(svg_image);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_LIMIT);
 	}
 
 	// Check pixel count limit
@@ -315,7 +307,7 @@ img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *fra
 	if (pixel_count > IMG2_MAX_PIXELS) {
 		img2_log(IMG2_LOG_ERROR, "Error: SVG pixel count exceeds maximum (%lu): %llu", (unsigned long)IMG2_MAX_PIXELS, (unsigned long long)pixel_count);
 		nsvgDelete(svg_image);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_LIMIT);
 	}
 
 	// Create rasterizer
@@ -323,7 +315,7 @@ img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *fra
 	if (rast == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create SVG rasterizer");
 		nsvgDelete(svg_image);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Create img2_image_t structure
@@ -332,7 +324,7 @@ img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *fra
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		nsvgDeleteRasterizer(rast);
 		nsvgDelete(svg_image);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Rasterize SVG to pixel buffer
@@ -348,11 +340,23 @@ img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *fra
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(output);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = output;
 	*frame_count = 1;
 
 	return frames;
+}
+
+img2_status_t img2_decode_svg_nanosvg(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_svg_nanosvg_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

@@ -18,10 +18,10 @@
 
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
+#include "../decoder_internal.h"
 #endif
 
 /* Forward declaration of img2_decode_tiff from decoder */
-img2_image_t **img2_decode_tiff(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Read entire file into memory
@@ -66,7 +66,7 @@ CTEST(tiff_exif_integration, decode_with_exif)
 	ASSERT_TRUE(len > 0);
 
 	int frame_count = 0;
-	img2_image_t **frames = img2_decode_tiff(data, len, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_tiff, data, len, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -109,7 +109,7 @@ CTEST(tiff_exif_integration, decode_another_tiff)
 	ASSERT_TRUE(len > 0);
 
 	int frame_count = 0;
-	img2_image_t **frames = img2_decode_tiff(data, len, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_tiff, data, len, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);

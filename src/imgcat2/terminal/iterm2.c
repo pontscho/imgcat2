@@ -102,7 +102,7 @@ int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *o
 	if (opts->iterm2_format == IMG2_FORMAT_PNG) {
 		/* PNG encoding with compression level 3 for speed */
 		int compression = 3;
-		if (img2_encode_png(img, compression, &encoded_data, &encoded_size) != 0) {
+		if (img2_encode_png(img, compression, &encoded_data, &encoded_size) != IMG2_OK) {
 			fprintf(stderr, "Error: Failed to encode PNG for iTerm2\n");
 			return -1;
 		}
@@ -110,7 +110,7 @@ int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *o
 
 	} else {
 		/* JPEG encoding with configured quality */
-		if (img2_encode_jpeg(img, opts->jpeg_quality, &encoded_data, &encoded_size) != 0) {
+		if (img2_encode_jpeg(img, opts->jpeg_quality, &encoded_data, &encoded_size) != IMG2_OK) {
 			fprintf(stderr, "Error: Failed to encode JPEG for iTerm2\n");
 			return -1;
 		}

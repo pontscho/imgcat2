@@ -39,10 +39,9 @@ typedef enum {
 typedef struct img2_font img2_font_t;
 
 /**
- * @brief Initialize font manager
+ * @brief Initialize font manager (optional: every entry point initialises lazily)
  *
- * Scans system font directories and builds font cache.
- * Must be called before any other font_* functions.
+ * Scans system font directories and builds font cache. Thread-safe (s_font_lock).
  *
  * @return true on success, false on failure
  */
@@ -51,16 +50,25 @@ bool img2_font_manager_init(void);
 /**
  * @brief Cleanup font manager
  *
- * Frees all cached fonts and resources.
- * Should be called at program exit.
+ * Frees all cached fonts, the interned handles and the fallback; a later call
+ * re-initialises. Takes s_font_lock.
  */
 void img2_font_manager_cleanup(void);
+
+/**
+ * @brief Internal: cleanup for the final img2_shutdown()
+ *
+ * Runs with s_init_lock held by the caller; takes s_font_lock and frees the
+ * cache only if *refs is still 0 (lock order s_init_lock -> s_font_lock).
+ */
+void img2_font_manager_cleanup_final(const int *refs);
 
 /**
  * @brief Load a font by family name
  *
  * Searches system fonts first, falls back to embedded font if not found.
- * The returned font is cached and managed by font_manager.
+ * [R4] Handles are interned in the cache: the library owns them, they stay
+ * valid until the last img2_shutdown(); there is no release call.
  *
  * @param family Font family name (e.g., "Arial", "DejaVu Sans")
  * @param weight Font weight (IMG2_FONT_WEIGHT_NORMAL or IMG2_FONT_WEIGHT_BOLD)
@@ -70,6 +78,11 @@ void img2_font_manager_cleanup(void);
  * @note The returned pointer is owned by font_manager, do not free
  */
 img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_font_style_t style);
+
+/**
+ * @brief The embedded DejaVu Sans Mono fallback handle (interned; NULL on OOM)
+ */
+img2_font_t *img2_font_find_fallback(void);
 
 /**
  * @brief Get TTF font data from a font handle

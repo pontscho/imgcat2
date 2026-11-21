@@ -32,11 +32,11 @@
  * @note Output format is RGBA8888
  * @note Falls back to nanosvg if resvg fails
  */
-img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_svg_resvg_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_svg_resvg");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -46,7 +46,7 @@ img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame
 	resvg_options *opt = resvg_options_create();
 	if (opt == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create resvg options");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Parse SVG from memory
@@ -56,7 +56,7 @@ img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame
 	if (err != RESVG_OK || tree == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: resvg failed to parse SVG (error code: %d)", err);
 		resvg_options_destroy(opt);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Get SVG dimensions
@@ -69,14 +69,14 @@ img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid SVG dimensions: %ux%u", width, height);
 		resvg_tree_destroy(tree);
 		resvg_options_destroy(opt);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
 		img2_log(IMG2_LOG_ERROR, "Error: SVG dimensions exceed maximum (%u): %ux%u", IMG2_MAX_DIMENSION, width, height);
 		resvg_tree_destroy(tree);
 		resvg_options_destroy(opt);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_LIMIT);
 	}
 
 	// Check pixel count limit
@@ -85,7 +85,7 @@ img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame
 		img2_log(IMG2_LOG_ERROR, "Error: SVG pixel count exceeds maximum (%lu): %llu", (unsigned long)IMG2_MAX_PIXELS, (unsigned long long)pixel_count);
 		resvg_tree_destroy(tree);
 		resvg_options_destroy(opt);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_LIMIT);
 	}
 
 	// Create img2_image_t structure
@@ -94,7 +94,7 @@ img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		resvg_tree_destroy(tree);
 		resvg_options_destroy(opt);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Render SVG to pixel buffer
@@ -110,11 +110,23 @@ img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(output);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = output;
 	*frame_count = 1;
 
 	return frames;
+}
+
+img2_status_t img2_decode_svg_resvg(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_svg_resvg_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

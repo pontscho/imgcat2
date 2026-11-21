@@ -27,24 +27,25 @@ CTEST(encoder, registry_init)
 	/* Initialize registry */
 	img2_encoder_registry_init();
 
-	/* Verify registry is populated */
-	ASSERT_NOT_NULL(img2_encoder_registry);
-	ASSERT_TRUE(img2_encoder_registry_size > 0);
+	/* Verify the const table is populated (no init needed) */
+	ASSERT_TRUE(img2_encoder_count() > 0);
+	ASSERT_NOT_NULL(img2_encoder_info(0));
+	ASSERT_NULL(img2_encoder_info(img2_encoder_count()));
 
 	/* Verify at least one encoder is available (JPEG or PNG) */
 #if defined(IMG2_HAVE_LIBJPEG) || defined(IMG2_HAVE_LIBPNG)
-	ASSERT_TRUE(img2_encoder_registry_size >= 1);
+	ASSERT_TRUE(img2_encoder_count() >= 1);
 #endif
 
 #ifdef IMG2_HAVE_LIBJPEG
 	/* Verify JPEG encoder exists in registry */
 	bool found_jpeg = false;
-	for (size_t i = 0; i < img2_encoder_registry_size; i++) {
-		if (img2_encoder_registry[i].format == IMG2_FORMAT_JPEG) {
+	for (size_t i = 0; i < img2_encoder_count(); i++) {
+		if (img2_encoder_info(i)->format == IMG2_FORMAT_JPEG) {
 			found_jpeg = true;
-			ASSERT_NOT_NULL(img2_encoder_registry[i].name);
-			ASSERT_NOT_NULL(img2_encoder_registry[i].extension);
-			ASSERT_NOT_NULL(img2_encoder_registry[i].encode);
+			ASSERT_NOT_NULL(img2_encoder_info(i)->name);
+			ASSERT_NOT_NULL(img2_encoder_info(i)->extension);
+			ASSERT_NOT_NULL(img2_encoder_find(img2_encoder_info(i)->format)->encode);
 			break;
 		}
 	}
@@ -54,12 +55,12 @@ CTEST(encoder, registry_init)
 #ifdef IMG2_HAVE_LIBPNG
 	/* Verify PNG encoder exists in registry */
 	bool found_png = false;
-	for (size_t i = 0; i < img2_encoder_registry_size; i++) {
-		if (img2_encoder_registry[i].format == IMG2_FORMAT_PNG) {
+	for (size_t i = 0; i < img2_encoder_count(); i++) {
+		if (img2_encoder_info(i)->format == IMG2_FORMAT_PNG) {
 			found_png = true;
-			ASSERT_NOT_NULL(img2_encoder_registry[i].name);
-			ASSERT_NOT_NULL(img2_encoder_registry[i].extension);
-			ASSERT_NOT_NULL(img2_encoder_registry[i].encode);
+			ASSERT_NOT_NULL(img2_encoder_info(i)->name);
+			ASSERT_NOT_NULL(img2_encoder_info(i)->extension);
+			ASSERT_NOT_NULL(img2_encoder_find(img2_encoder_info(i)->format)->encode);
 			break;
 		}
 	}
@@ -79,9 +80,9 @@ CTEST(encoder, find_by_format_jpeg)
 #ifdef IMG2_HAVE_LIBJPEG
 	const img2_encoder_entry_t *encoder = img2_encoder_find(IMG2_FORMAT_JPEG);
 	ASSERT_NOT_NULL(encoder);
-	ASSERT_EQUAL(IMG2_FORMAT_JPEG, encoder->format);
-	ASSERT_NOT_NULL(encoder->name);
-	ASSERT_NOT_NULL(encoder->extension);
+	ASSERT_EQUAL(IMG2_FORMAT_JPEG, encoder->info.format);
+	ASSERT_NOT_NULL(encoder->info.name);
+	ASSERT_NOT_NULL(encoder->info.extension);
 	ASSERT_NOT_NULL(encoder->encode);
 #else
 	/* If JPEG not available, should return NULL */
@@ -102,9 +103,9 @@ CTEST(encoder, find_by_format_png)
 #ifdef IMG2_HAVE_LIBPNG
 	const img2_encoder_entry_t *encoder = img2_encoder_find(IMG2_FORMAT_PNG);
 	ASSERT_NOT_NULL(encoder);
-	ASSERT_EQUAL(IMG2_FORMAT_PNG, encoder->format);
-	ASSERT_NOT_NULL(encoder->name);
-	ASSERT_NOT_NULL(encoder->extension);
+	ASSERT_EQUAL(IMG2_FORMAT_PNG, encoder->info.format);
+	ASSERT_NOT_NULL(encoder->info.name);
+	ASSERT_NOT_NULL(encoder->info.extension);
 	ASSERT_NOT_NULL(encoder->encode);
 #else
 	/* If PNG not available, should return NULL */
@@ -144,49 +145,55 @@ CTEST(encoder, encode_null_checks)
 	ASSERT_NOT_NULL(img);
 
 	/* NULL image pointer */
-	int result = img2_encoder_dispatch(NULL, IMG2_FORMAT_JPEG, 80, &out_data, &out_size);
-	ASSERT_EQUAL(-1, result);
+	img2_status_t result = img2_encoder_dispatch(NULL, IMG2_FORMAT_JPEG, 80, &out_data, &out_size);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 	ASSERT_NULL(out_data);
 
 	/* NULL out_data pointer */
 	result = img2_encoder_dispatch(img, IMG2_FORMAT_JPEG, 80, NULL, &out_size);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	/* NULL out_size pointer */
 	result = img2_encoder_dispatch(img, IMG2_FORMAT_JPEG, 80, &out_data, NULL);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	/* IMG2_FORMAT_NONE should fail */
 	result = img2_encoder_dispatch(img, IMG2_FORMAT_NONE, 80, &out_data, &out_size);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 	ASSERT_NULL(out_data);
 
 	img2_image_destroy(img);
 }
 
 /**
- * @test Test img2_encoder_registry_init() is idempotent
+ * @test The const encoder table is stable across img2_encoder_registry_init() calls
  *
- * Verifies that calling img2_encoder_registry_init() multiple times is safe.
+ * The table is const; img2_encoder_registry_init() only logs it.
  */
 CTEST(encoder, registry_init_idempotent)
 {
-	/* Initialize multiple times */
 	img2_encoder_registry_init();
-	const img2_encoder_entry_t *first_registry = img2_encoder_registry;
-	size_t first_count = img2_encoder_registry_size;
+	size_t first_count = img2_encoder_count();
+	const img2_encoder_info_t *first = img2_encoder_info(0);
 
 	img2_encoder_registry_init();
-	const img2_encoder_entry_t *second_registry = img2_encoder_registry;
-	size_t second_count = img2_encoder_registry_size;
-
 	img2_encoder_registry_init();
-	const img2_encoder_entry_t *third_registry = img2_encoder_registry;
-	size_t third_count = img2_encoder_registry_size;
 
-	/* All pointers and counts should be the same */
-	ASSERT_TRUE(first_registry == second_registry);
-	ASSERT_TRUE(second_registry == third_registry);
-	ASSERT_EQUAL(first_count, second_count);
-	ASSERT_EQUAL(second_count, third_count);
+	ASSERT_EQUAL(first_count, img2_encoder_count());
+	ASSERT_TRUE(first == img2_encoder_info(0));
+	ASSERT_TRUE(img2_can_encode(IMG2_FORMAT_NONE) == false);
+}
+
+/**
+ * @test Unbuilt / invalid formats: silent finder, IMG2_E_UNSUPPORTED from the dispatcher
+ */
+CTEST(encoder, dispatch_unsupported)
+{
+	uint8_t *out_data = NULL;
+	size_t out_size = 0;
+	img2_image_t *img = img2_image_alloc(1, 1);
+	ASSERT_NOT_NULL(img);
+	ASSERT_EQUAL(IMG2_E_UNSUPPORTED, img2_encoder_dispatch(img, (img2_format_t)99, 80, &out_data, &out_size));
+	ASSERT_NULL(out_data);
+	img2_image_destroy(img);
 }

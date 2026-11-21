@@ -23,9 +23,6 @@
 #include "../metadata/exif_reader.h"
 #endif
 
-// Forward declaration for JPEG decoder (used for thumbnail extraction)
-extern img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_count);
-
 #ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Check if string has meaningful content (not just whitespace)
@@ -220,11 +217,11 @@ static img2_xmp_t *extract_raw_xmp(libraw_data_t *raw)
  * @note Output format is RGBA8888
  * @note Processing parameters: sRGB color space, camera white balance, AHD demosaicing
  */
-static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_raw_static");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -234,7 +231,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 	libraw_data_t *raw = libraw_init(0);
 	if (raw == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to initialize LibRAW");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Open buffer
@@ -243,7 +240,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 	if (ret != LIBRAW_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to open RAW buffer: %s", libraw_strerror(ret));
 		libraw_close(raw);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Check camera make/model for special handling
@@ -269,12 +266,12 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 			img2_image_t *output = NULL;
 			if (thumb->type == LIBRAW_IMAGE_JPEG) {
 				// Decode JPEG thumbnail
-				int tc = 0;
-				img2_image_t **tf = img2_decode_jpeg(thumb->data, thumb->data_size, &tc);
-				if (tf && tc > 0) {
-					output = tf[0];
-					free(tf);
+				img2_frames_t tf = { 0 };
+				if (img2_decode_jpeg(thumb->data, thumb->data_size, NULL, &tf) == IMG2_OK && tf.count > 0) {
+					output = tf.frames[0];
+					tf.frames[0] = NULL;
 				}
+				img2_frames_free(&tf);
 			} else if (thumb->type == LIBRAW_IMAGE_BITMAP) {
 				// Convert RGB bitmap thumbnail
 				output = img2_image_alloc(thumb->width, thumb->height);
@@ -306,7 +303,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 					return frames;
 				}
 				img2_image_destroy(output);
-				return NULL;
+				return img2_decode_fail(st, IMG2_E_CODEC);
 			}
 			libraw_dcraw_clear_mem(thumb);
 		}
@@ -332,7 +329,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 		// }
 
 		libraw_close(raw);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Configure processing parameters
@@ -351,7 +348,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 	if (ret != LIBRAW_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to process RAW data: %s", libraw_strerror(ret));
 		libraw_close(raw);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Get processed image
@@ -359,7 +356,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 	if (processed == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create memory image: %s", libraw_strerror(ret));
 		libraw_close(raw);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Create img2_image_t structure
@@ -368,7 +365,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		libraw_dcraw_clear_mem(processed);
 		libraw_close(raw);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Convert RGB to RGBA8888
@@ -400,7 +397,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(output);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = output;
@@ -417,8 +414,20 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
  * @param frame_count Output: number of frames decoded (always 1 for RAW)
  * @return Array of img2_image_t* pointers, or NULL on error
  */
-img2_image_t **img2_decode_raw(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_raw_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	// RAW files are always single images (no animation)
-	return decode_raw_static(data, len, frame_count);
+	return decode_raw_static(data, len, frame_count, st);
+}
+
+img2_status_t img2_decode_raw(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_raw_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

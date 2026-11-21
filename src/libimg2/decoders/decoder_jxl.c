@@ -45,7 +45,7 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
  * @param frame_count Output: number of frames decoded (always 1)
  * @return Array of 1 img2_image_t*, or NULL on error
  */
-static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count);
+static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st);
 
 /**
  * @brief Decode animated (multi-frame) JXL image
@@ -56,7 +56,7 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
  * @param num_frames Expected number of frames
  * @return Array of img2_image_t* frames, or NULL on error
  */
-static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames);
+static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames, img2_status_t *st);
 
 #ifdef IMG2_HAVE_EXIF_READER
 /**
@@ -173,11 +173,11 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 	return frame_count;
 }
 
-static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl_static");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -187,21 +187,21 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 	JxlDecoder *dec = JxlDecoderCreate(NULL);
 	if (dec == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL decoder");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Subscribe to events (NEED_IMAGE_OUT_BUFFER is a status, not an event to subscribe to)
 	if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to subscribe to JXL decoder events");
 		JxlDecoderDestroy(dec);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Set input data
 	if (JxlDecoderSetInput(dec, data, len) != JXL_DEC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL decoder input");
 		JxlDecoderDestroy(dec);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Close input
@@ -228,6 +228,7 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 			JxlBasicInfo info;
 			if (JxlDecoderGetBasicInfo(dec, &info) != JXL_DEC_SUCCESS) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to get JXL basic info");
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
@@ -237,11 +238,13 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 			// Validate dimensions
 			if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", width, height);
+				*st = IMG2_E_LIMIT;
 				goto cleanup_error;
 			}
 
 			if (width == 0 || height == 0) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL has invalid dimensions: %ux%u", width, height);
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
@@ -249,12 +252,14 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 			output = img2_image_alloc(width, height);
 			if (output == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
+				*st = IMG2_E_NOMEM;
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
 			// Ensure we have basic info first
 			if (output == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested before basic info");
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
@@ -262,18 +267,21 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 			size_t buffer_size;
 			if (JxlDecoderImageOutBufferSize(dec, &format, &buffer_size) != JXL_DEC_SUCCESS) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to query JXL buffer size");
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
 			// Verify buffer size matches our allocation
 			if (buffer_size != width * height * 4) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch: expected %zu, got %zu", (size_t)(width * height * 4), buffer_size);
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
 			// Set output buffer
 			if (JxlDecoderSetImageOutBuffer(dec, &format, output->pixels, buffer_size) != JXL_DEC_SUCCESS) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL output buffer");
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_FULL_IMAGE) {
@@ -284,9 +292,11 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 			break;
 		} else if (status == JXL_DEC_ERROR) {
 			img2_log(IMG2_LOG_ERROR, "Error: JXL decoder error");
+			*st = IMG2_E_CODEC;
 			goto cleanup_error;
 		} else {
 			img2_log(IMG2_LOG_ERROR, "Error: Unexpected JXL decoder status: %d", status);
+			*st = IMG2_E_CODEC;
 			goto cleanup_error;
 		}
 	}
@@ -299,7 +309,7 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(output);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = output;
@@ -312,14 +322,14 @@ cleanup_error:
 	if (output != NULL) {
 		img2_image_destroy(output);
 	}
-	return NULL;
+	return NULL; /* *st set at the goto */
 }
 
-static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames)
+static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL || num_frames <= 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl_animated");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -329,7 +339,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Initialize frames to NULL for cleanup
@@ -342,7 +352,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 	if (dec == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL decoder");
 		free(frames);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Subscribe to events (NEED_IMAGE_OUT_BUFFER is a status, not an event to subscribe to)
@@ -350,7 +360,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to subscribe to JXL decoder events");
 		JxlDecoderDestroy(dec);
 		free(frames);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Set input data
@@ -358,7 +368,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL decoder input");
 		JxlDecoderDestroy(dec);
 		free(frames);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Close input
@@ -386,6 +396,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			JxlBasicInfo info;
 			if (JxlDecoderGetBasicInfo(dec, &info) != JXL_DEC_SUCCESS) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to get JXL basic info");
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
@@ -395,11 +406,13 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			// Validate dimensions
 			if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", width, height);
+				*st = IMG2_E_LIMIT;
 				goto cleanup_error;
 			}
 
 			if (width == 0 || height == 0) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL has invalid dimensions: %ux%u", width, height);
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
@@ -408,12 +421,14 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			// Start of new frame
 			if (current_frame >= num_frames) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL frame count mismatch: expected %d, got more", num_frames);
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
 			// Ensure we have basic info
 			if (!basic_info_received) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested before basic info");
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
@@ -421,6 +436,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			frames[current_frame] = img2_image_alloc(width, height);
 			if (frames[current_frame] == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create frame %d", current_frame);
+				*st = IMG2_E_NOMEM;
 				goto cleanup_error;
 			}
 
@@ -428,18 +444,21 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			size_t buffer_size;
 			if (JxlDecoderImageOutBufferSize(dec, &format, &buffer_size) != JXL_DEC_SUCCESS) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to query JXL buffer size for frame %d", current_frame);
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
 			// Verify buffer size
 			if (buffer_size != width * height * 4) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu", current_frame, (size_t)(width * height * 4), buffer_size);
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 
 			// Set output buffer
 			if (JxlDecoderSetImageOutBuffer(dec, &format, frames[current_frame]->pixels, buffer_size) != JXL_DEC_SUCCESS) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL output buffer for frame %d", current_frame);
+				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_FULL_IMAGE) {
@@ -450,9 +469,11 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			break;
 		} else if (status == JXL_DEC_ERROR) {
 			img2_log(IMG2_LOG_ERROR, "Error: JXL decoder error");
+			*st = IMG2_E_CODEC;
 			goto cleanup_error;
 		} else {
 			img2_log(IMG2_LOG_ERROR, "Error: Unexpected JXL decoder status: %d", status);
+			*st = IMG2_E_CODEC;
 			goto cleanup_error;
 		}
 	}
@@ -470,7 +491,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			}
 		}
 		free(frames);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	*frame_count = num_frames;
@@ -486,7 +507,7 @@ cleanup_error:
 		}
 	}
 	free(frames);
-	return NULL;
+	return NULL; /* *st set at the goto */
 }
 
 #ifdef IMG2_HAVE_EXIF_READER
@@ -604,11 +625,11 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **
 }
 #endif
 
-img2_image_t **img2_decode_jxl(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_jxl_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -622,15 +643,15 @@ img2_image_t **img2_decode_jxl(const uint8_t *data, size_t len, int *frame_count
 	int result = jxl_get_info(data, len, &width, &height, &num_frames);
 	if (result == -1) {
 		// Error already printed by jxl_get_info
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Route to appropriate decoder
 	img2_image_t **frames = NULL;
 	if (num_frames == 1) {
-		frames = decode_jxl_static(data, len, frame_count);
+		frames = decode_jxl_static(data, len, frame_count, st);
 	} else {
-		frames = decode_jxl_animated(data, len, frame_count, num_frames);
+		frames = decode_jxl_animated(data, len, frame_count, num_frames, st);
 	}
 
 	// Extract EXIF/XMP metadata if decoding succeeded
@@ -660,4 +681,16 @@ img2_image_t **img2_decode_jxl(const uint8_t *data, size_t len, int *frame_count
 #endif
 
 	return frames;
+}
+
+img2_status_t img2_decode_jxl(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_jxl_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

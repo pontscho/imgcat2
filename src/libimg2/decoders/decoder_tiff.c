@@ -7,6 +7,7 @@
  */
 
 /* clang-format off */
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -137,6 +138,92 @@ static toff_t tiff_size_proc(thandle_t handle)
 	return (toff_t)mem->size;
 }
 
+#if defined(TIFFLIB_AT_LEAST)
+#if TIFFLIB_AT_LEAST(4, 5, 0)
+#define IMG2_TIFF_HANDLE_LOG 1
+#endif
+#endif
+
+#ifdef IMG2_TIFF_HANDLE_LOG
+/* [M1b] Reproduces unixErrorHandler/unixWarningHandler (vendor/libtiff/libtiff/tif_unix.c:367-385) byte for byte:
+ * "<module>: " (if module) + [ "Warning, " ] + vformatted + "." ; the default sink adds "\n". */
+static void tiff_log(img2_log_level_t lvl, const char *module, const char *prefix, const char *fmt, va_list ap)
+	__attribute__((format(printf, 4, 0)));
+static int log_tiff_error(TIFF *tif, void *user, const char *module, const char *fmt, va_list ap)
+	__attribute__((format(printf, 4, 0)));
+static int log_tiff_warning(TIFF *tif, void *user, const char *module, const char *fmt, va_list ap)
+	__attribute__((format(printf, 4, 0)));
+
+static void tiff_log(img2_log_level_t lvl, const char *module, const char *prefix, const char *fmt, va_list ap)
+{
+	char buf[512];
+	char *heap = NULL;
+	const char *text = buf;
+
+	va_list ap2;
+	va_copy(ap2, ap);
+	int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+	if (n < 0) {
+		buf[0] = '\0';
+	} else if ((size_t)n >= sizeof(buf)) {
+		heap = malloc((size_t)n + 1);
+		if (heap != NULL) {
+			vsnprintf(heap, (size_t)n + 1, fmt, ap2);
+			text = heap;
+		}
+		/* on malloc failure the truncated buf is delivered */
+	}
+	va_end(ap2);
+
+	if (module != NULL) {
+		img2_log(lvl, "%s: %s%s.", module, prefix, text);
+	} else {
+		img2_log(lvl, "%s%s.", prefix, text);
+	}
+	free(heap);
+}
+
+/* tif may be NULL (_TIFFErrorEarly during TIFFClientOpenExt): never dereferenced. Returning 1 stops libtiff
+ * from also calling the process-global default handler. */
+static int log_tiff_error(TIFF *tif, void *user, const char *module, const char *fmt, va_list ap)
+{
+	(void)tif;
+	(void)user;
+	tiff_log(IMG2_LOG_ERROR, module, "", fmt, ap);
+	return 1;
+}
+
+static int log_tiff_warning(TIFF *tif, void *user, const char *module, const char *fmt, va_list ap)
+{
+	(void)tif;
+	(void)user;
+	tiff_log(IMG2_LOG_WARN, module, "Warning, ", fmt, ap);
+	return 1;
+}
+#endif
+
+/**
+ * @brief Open an in-memory TIFF with per-handle error/warning handlers routed through img2_log
+ */
+static TIFF *tiff_open_memory(tiff_memory_t *mem)
+{
+#ifdef IMG2_TIFF_HANDLE_LOG
+	TIFFOpenOptions *o = TIFFOpenOptionsAlloc();
+	if (o == NULL) {
+		return NULL;
+	}
+	TIFFOpenOptionsSetErrorHandlerExtR(o, log_tiff_error, NULL);
+	TIFFOpenOptionsSetWarningHandlerExtR(o, log_tiff_warning, NULL);
+	TIFF *tif = TIFFClientOpenExt("memory", "r", (thandle_t)mem, tiff_read_proc, tiff_write_proc, tiff_seek_proc,
+	                              tiff_close_proc, tiff_size_proc, NULL, NULL, o);
+	TIFFOpenOptionsFree(o);
+	return tif;
+#else
+	return TIFFClientOpen("memory", "r", (thandle_t)mem, tiff_read_proc, tiff_write_proc, tiff_seek_proc,
+	                      tiff_close_proc, tiff_size_proc, NULL, NULL);   /* host libtiff < 4.5: default handlers */
+#endif
+}
+
 /**
  * @brief Check if TIFF has multiple pages
  *
@@ -159,7 +246,7 @@ static bool tiff_is_multipage(const uint8_t *data, size_t len)
 
 	tiff_memory_t mem = { data, len, 0 };
 
-	TIFF *tif = TIFFClientOpen("memory", "r", (thandle_t)&mem, tiff_read_proc, tiff_write_proc, tiff_seek_proc, tiff_close_proc, tiff_size_proc, NULL, NULL);
+	TIFF *tif = tiff_open_memory(&mem);
 	if (tif == NULL) {
 		return false;
 	}
@@ -185,21 +272,21 @@ static bool tiff_is_multipage(const uint8_t *data, size_t len)
  * @note Output format is RGBA8888
  * @note Handles all TIFF format variations (CMYK, YCbCr, palette, etc.)
  */
-static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_static");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	*frame_count = 0;
 
 	tiff_memory_t mem = { data, len, 0 };
 
-	TIFF *tif = TIFFClientOpen("memory", "r", (thandle_t)&mem, tiff_read_proc, tiff_write_proc, tiff_seek_proc, tiff_close_proc, tiff_size_proc, NULL, NULL);
+	TIFF *tif = tiff_open_memory(&mem);
 	if (tif == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to open TIFF");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	uint32_t width, height;
@@ -211,7 +298,7 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
 	if (raster == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate raster buffer");
 		TIFFClose(tif);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Read RGBA image (libtiff handles all format conversions)
@@ -219,7 +306,7 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to read TIFF image");
 		_TIFFfree(raster);
 		TIFFClose(tif);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Create img2_image_t
@@ -228,7 +315,7 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t");
 		_TIFFfree(raster);
 		TIFFClose(tif);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Convert ABGR to RGBA (libtiff returns ABGR packed in uint32_t)
@@ -266,7 +353,7 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = img;
@@ -289,28 +376,28 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
  * @note TIFF pages have no timing info - uniform frame rate
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_multipage");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	*frame_count = 0;
 
 	tiff_memory_t mem = { data, len, 0 };
 
-	TIFF *tif = TIFFClientOpen("memory", "r", (thandle_t)&mem, tiff_read_proc, tiff_write_proc, tiff_seek_proc, tiff_close_proc, tiff_size_proc, NULL, NULL);
+	TIFF *tif = tiff_open_memory(&mem);
 	if (tif == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to open TIFF");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	tdir_t num_dirs = TIFFNumberOfDirectories(tif);
 	if (num_dirs == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: TIFF has no pages");
 		TIFFClose(tif);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Enforce MAX_TIFF_FRAMES limit
@@ -325,7 +412,7 @@ static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		TIFFClose(tif);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Initialize to NULL for cleanup safety
@@ -337,6 +424,7 @@ static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int
 	for (int i = 0; i < num_frames; i++) {
 		if (!TIFFSetDirectory(tif, (tdir_t)i)) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to set TIFF directory %d", i);
+			*st = IMG2_E_CODEC;
 			goto cleanup_error;
 		}
 
@@ -347,12 +435,14 @@ static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int
 		uint32_t *raster = (uint32_t *)_TIFFmalloc(width * height * sizeof(uint32_t));
 		if (raster == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate raster for page %d", i);
+			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
 
 		if (!TIFFReadRGBAImageOriented(tif, width, height, raster, ORIENTATION_TOPLEFT, 0)) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to read TIFF page %d", i);
 			_TIFFfree(raster);
+			*st = IMG2_E_CODEC;
 			goto cleanup_error;
 		}
 
@@ -360,6 +450,7 @@ static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int
 		if (frames[i] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t for page %d", i);
 			_TIFFfree(raster);
+			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
 
@@ -408,7 +499,7 @@ cleanup_error:
 	}
 	free(frames);
 	TIFFClose(tif);
-	return NULL;
+	return NULL; /* *st set at the goto */
 }
 
 /**
@@ -427,18 +518,30 @@ cleanup_error:
  * @note For multi-page images, frame_count = N (max MAX_TIFF_FRAMES)
  * @note Output format is RGBA8888
  */
-img2_image_t **img2_decode_tiff(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_tiff_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	*frame_count = 0;
 
 	if (tiff_is_multipage(data, len)) {
-		return decode_tiff_multipage(data, len, frame_count);
+		return decode_tiff_multipage(data, len, frame_count, st);
 	} else {
-		return decode_tiff_static(data, len, frame_count);
+		return decode_tiff_static(data, len, frame_count, st);
 	}
+}
+
+img2_status_t img2_decode_tiff(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_tiff_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

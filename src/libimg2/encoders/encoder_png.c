@@ -134,11 +134,11 @@ static void png_warning_handler(png_structp png_ptr, png_const_charp warning_msg
  * @note PNG preserves alpha channel (supports transparency)
  * @note Caller must free *out_data with free() when done
  */
-int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+img2_status_t img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_png");
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Initialize outputs */
@@ -168,7 +168,7 @@ int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, si
 	png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, &jmpbuf, png_error_handler, png_warning_handler);
 	if (png_ptr == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG write struct");
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Create PNG info structure */
@@ -176,7 +176,7 @@ int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, si
 	if (info_ptr == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG info struct");
 		png_destroy_write_struct(&png_ptr, NULL);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Setup error handling with longjmp */
@@ -186,7 +186,7 @@ int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, si
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
 		}
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Set custom write function */
@@ -218,7 +218,7 @@ int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, si
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
 		}
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	/* Setup row pointers to point to each row in the image */
@@ -244,14 +244,14 @@ int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, si
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
 		}
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	*out_data = (uint8_t *)malloc(write_state.size);
 	if (*out_data == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%zu bytes)", write_state.size);
 		free(write_state.buffer);
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	memcpy(*out_data, write_state.buffer, write_state.size);
@@ -260,5 +260,5 @@ int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, si
 	/* Free write state buffer */
 	free(write_state.buffer);
 
-	return 0;
+	return IMG2_OK;
 }

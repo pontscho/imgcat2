@@ -35,11 +35,11 @@
  * @note WebP preserves alpha channel (supports transparency)
  * @note Caller must free *out_data with free() when done
  */
-int img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+img2_status_t img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_webp");
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Initialize outputs */
@@ -69,7 +69,7 @@ int img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, s
 
 	if (webp_size == 0 || webp_buffer == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to encode WebP image");
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Allocate and copy output data */
@@ -77,7 +77,7 @@ int img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, s
 	if (*out_data == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%zu bytes)", webp_size);
 		WebPFree(webp_buffer);
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	memcpy(*out_data, webp_buffer, webp_size);
@@ -86,5 +86,5 @@ int img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, s
 	/* Free WebP internal buffer */
 	WebPFree(webp_buffer);
 
-	return 0;
+	return IMG2_OK;
 }

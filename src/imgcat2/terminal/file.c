@@ -158,7 +158,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	uint8_t *encoded_data = NULL;
 	size_t encoded_size = 0;
 
-	if (img2_encoder_dispatch(img, opts->output_format, quality, &encoded_data, &encoded_size) != 0) {
+	if (img2_encoder_dispatch(img, opts->output_format, quality, &encoded_data, &encoded_size) != IMG2_OK) {
 		fprintf(stderr, "Error: Failed to encode image\n");
 		return -1;
 	}

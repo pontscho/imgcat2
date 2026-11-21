@@ -13,10 +13,9 @@
 #include <string.h>
 
 #include "../../libimg2/core/image.h"
+#include "../../libimg2/encoders/encoder.h"
 #include "../ctest.h"
 
-/* Forward declaration for WebP encoder function */
-extern int img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 
 /**
  * @test Test img2_encode_webp() with NULL parameters
@@ -34,17 +33,17 @@ CTEST(encoder_webp, null_inputs)
 
 	/* NULL image pointer */
 	int result = img2_encode_webp(NULL, 80, &out_data, &out_size);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 	ASSERT_NULL(out_data);
 	ASSERT_EQUAL(0, out_size);
 
 	/* NULL out_data pointer */
 	result = img2_encode_webp(img, 80, NULL, &out_size);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	/* NULL out_size pointer */
 	result = img2_encode_webp(img, 80, &out_data, NULL);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	img2_image_destroy(img);
 }

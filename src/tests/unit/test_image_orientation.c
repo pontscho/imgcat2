@@ -303,7 +303,7 @@ CTEST(image_orientation, invalid_orientation_value)
 
 	/* Test orientation=0 (invalid) */
 	int result = img2_image_orient(img, 0);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	/* Verify image unchanged */
 	ASSERT_EQUAL(4, img->width);
@@ -312,11 +312,11 @@ CTEST(image_orientation, invalid_orientation_value)
 
 	/* Test orientation=9 (invalid) */
 	result = img2_image_orient(img, 9);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	/* Test orientation=255 (invalid) */
 	result = img2_image_orient(img, 255);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 
 	img2_image_destroy(img);
 }
@@ -330,7 +330,7 @@ CTEST(image_orientation, null_image_pointer)
 {
 	/* Call with NULL image should return -1 */
 	int result = img2_image_orient(NULL, 6);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 }
 
 /**
@@ -344,11 +344,13 @@ CTEST(image_orientation, null_pixel_buffer)
 	img2_image_t img;
 	img.width = 4;
 	img.height = 4;
+	img.stride = 16;
+	img.delay_ms = 0;
 	img.pixels = NULL;
 	img.exif = NULL;
 	img.xmp = NULL;
 
 	/* Call should return -1 */
 	int result = img2_image_orient(&img, 6);
-	ASSERT_EQUAL(-1, result);
+	ASSERT_EQUAL(IMG2_E_ARG, result);
 }

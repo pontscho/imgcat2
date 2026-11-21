@@ -11,299 +11,275 @@
 #include "../core/log.h"
 
 /**
- * @brief Forward declarations for decoder functions
- *
- * These will be implemented in separate decoder implementation files
- * (decoder_png.c, decoder_jpeg.c, etc.). For now, we declare them
- * to satisfy the registry structure.
- */
-
-#ifdef IMG2_HAVE_LIBPNG
-extern img2_image_t **img2_decode_png(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-#ifdef IMG2_HAVE_LIBJPEG
-extern img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-#ifdef IMG2_HAVE_GIFLIB
-extern img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-#ifdef IMG2_HAVE_WEBP
-extern img2_image_t **img2_decode_webp(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-#ifdef IMG2_HAVE_HEIF
-extern img2_image_t **img2_decode_heif(const uint8_t *data, size_t len, int *frame_count);
-extern img2_image_t **img2_decode_avif(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-#ifdef IMG2_HAVE_TIFF
-extern img2_image_t **img2_decode_tiff(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-#ifdef IMG2_HAVE_RAW
-extern img2_image_t **img2_decode_raw(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-#ifdef IMG2_HAVE_JXL
-extern img2_image_t **img2_decode_jxl(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-/* SVG decoders */
-extern img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count);
-#ifdef IMG2_HAVE_RESVG
-extern img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count);
-#endif
-
-/* QOI decoder */
-extern img2_image_t **img2_decode_qoi(const uint8_t *data, size_t len, int *frame_count);
-
-/* ICO/CUR decoder */
-extern img2_image_t **img2_decode_ico(const uint8_t *data, size_t len, int *frame_count);
-
-/* Netpbm (PBM/PGM/PPM/PAM) decoder */
-extern img2_image_t **img2_decode_pnm(const uint8_t *data, size_t len, int *frame_count);
-
-/* STB fallback decoders */
-extern img2_image_t **img2_decode_stb(const uint8_t *data, size_t len, int *frame_count);
-
-/**
  * @brief SVG decoder dispatcher
  *
  * Tries resvg first if available, falls back to nanosvg on error.
  * This provides automatic fallback for better SVG compatibility.
- *
- * @param data Raw SVG file data
- * @param len Length of data in bytes
- * @param frame_count Output: always 1 (single frame)
- * @return Array with single img2_image_t*, or NULL on error
  */
-static img2_image_t **decode_svg(const uint8_t *data, size_t len, int *frame_count)
+static img2_status_t decode_svg(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
 {
 #ifdef IMG2_HAVE_RESVG
-	img2_image_t **result = img2_decode_svg_resvg(data, len, frame_count);
-	if (result != NULL) {
-		return result;
+	if (img2_decode_svg_resvg(data, len, opts, out) == IMG2_OK) {
+		return IMG2_OK;
 	}
 #endif
 
 	// Use nanosvg (always available)
-	return img2_decode_svg_nanosvg(data, len, frame_count);
+	return img2_decode_svg_nanosvg(data, len, opts, out);
 }
 
+#ifdef PNG_APNG_SUPPORTED
+#define IMG2_PNG_PROBE img2_png_is_animated
+#else
+#define IMG2_PNG_PROBE NULL
+#endif
+
 /**
- * @brief Static decoder registry array
+ * @brief Static decoder table
  *
- * Populated at compile-time based on HAVE_* preprocessor flags.
+ * Populated at compile-time based on IMG2_HAVE_* preprocessor flags.
  * Priority: native libraries > STB fallbacks.
  */
-static const img2_decoder_entry_t s_decoder_registry[] = {
+static const img2_decoder_entry_t s_decoders[] = {
 #ifdef IMG2_HAVE_LIBPNG
-	{ IMG2_MIME_PNG,  "PNG (libpng)",         img2_decode_png          },
+	{ { IMG2_MIME_PNG,  "PNG (libpng)"         }, img2_decode_png,          IMG2_PNG_PROBE        },
 #else
-	{ IMG2_MIME_PNG, "PNG (stb_image)", img2_decode_stb },
+	{ { IMG2_MIME_PNG,  "PNG (stb_image)"      }, img2_decode_stb,          NULL                  },
 #endif
 
 #ifdef IMG2_HAVE_LIBJPEG
-	{ IMG2_MIME_JPEG, "JPEG (libjpeg-turbo)", img2_decode_jpeg         },
+	{ { IMG2_MIME_JPEG, "JPEG (libjpeg-turbo)" }, img2_decode_jpeg,         NULL                  },
 #else
-	{ IMG2_MIME_JPEG, "JPEG (stb_image)", img2_decode_stb },
+	{ { IMG2_MIME_JPEG, "JPEG (stb_image)"     }, img2_decode_stb,          NULL                  },
 #endif
 
 #ifdef IMG2_HAVE_GIFLIB
-	{ IMG2_MIME_GIF,  "GIF (giflib)",         img2_decode_gif_animated },
+	{ { IMG2_MIME_GIF,  "GIF (giflib)"         }, img2_decode_gif_animated, img2_gif_is_animated  },
 #endif
 
 #ifdef IMG2_HAVE_WEBP
-	{ IMG2_MIME_WEBP, "WebP (libwebp)",       img2_decode_webp         },
+	{ { IMG2_MIME_WEBP, "WebP (libwebp)"       }, img2_decode_webp,         img2_webp_is_animated },
 #endif
 
 #ifdef IMG2_HAVE_HEIF
-	{ IMG2_MIME_HEIF, "HEIF (libheif)",       img2_decode_heif         },
-	{ IMG2_MIME_AVIF, "AVIF (libheif)",       img2_decode_avif         },
+	{ { IMG2_MIME_HEIF, "HEIF (libheif)"       }, img2_decode_heif,         img2_heif_is_animated },
+	{ { IMG2_MIME_AVIF, "AVIF (libheif)"       }, img2_decode_avif,         img2_heif_is_animated },
 #endif
 
 #ifdef IMG2_HAVE_TIFF
-	{ IMG2_MIME_TIFF, "TIFF (libtiff)",       img2_decode_tiff         },
+	{ { IMG2_MIME_TIFF, "TIFF (libtiff)"       }, img2_decode_tiff,         NULL                  },
 #endif
 
 #ifdef IMG2_HAVE_RAW
-	{ IMG2_MIME_RAW,  "RAW (libraw)",         img2_decode_raw          },
+	{ { IMG2_MIME_RAW,  "RAW (libraw)"         }, img2_decode_raw,          NULL                  },
 #endif
 
 #ifdef IMG2_HAVE_JXL
-	{ IMG2_MIME_JXL,  "JXL (libjxl)",         img2_decode_jxl          },
+	{ { IMG2_MIME_JXL,  "JXL (libjxl)"         }, img2_decode_jxl,          NULL                  },
 #endif
 
 /* SVG format */
 #ifdef IMG2_HAVE_RESVG
-	{ IMG2_MIME_SVG,  "SVG (resvg)",          decode_svg          },
+	{ { IMG2_MIME_SVG,  "SVG (resvg)"          }, decode_svg,               NULL                  },
 #else
-	{ IMG2_MIME_SVG, "SVG (nanosvg)",         decode_svg          },
+	{ { IMG2_MIME_SVG,  "SVG (nanosvg)"        }, decode_svg,               NULL                  },
 #endif
 
 	/* QOI format */
-	{ IMG2_MIME_QOI,  "QOI (header-only)",    img2_decode_qoi          },
+	{ { IMG2_MIME_QOI,  "QOI (header-only)"    }, img2_decode_qoi,          NULL                  },
 
 	/* ICO/CUR formats */
-	{ IMG2_MIME_ICO,  "ICO (custom)",         img2_decode_ico          },
-	{ IMG2_MIME_CUR,  "CUR (custom)",         img2_decode_ico          },
+	{ { IMG2_MIME_ICO,  "ICO (custom)"         }, img2_decode_ico,          NULL                  },
+	{ { IMG2_MIME_CUR,  "CUR (custom)"         }, img2_decode_ico,          NULL                  },
 
 	/* Netpbm formats (P1-P7) */
-	{ IMG2_MIME_PNM,  "PNM/PAM (native)",     img2_decode_pnm       },
+	{ { IMG2_MIME_PNM,  "PNM/PAM (native)"     }, img2_decode_pnm,          NULL                  },
 
 	/* STB-supported formats */
-	{ IMG2_MIME_BMP,  "BMP (stb_image)",      img2_decode_stb          },
-	{ IMG2_MIME_TGA,  "TGA (stb_image)",      img2_decode_stb          },
-	{ IMG2_MIME_PSD,  "PSD (stb_image)",      img2_decode_stb          },
-	{ IMG2_MIME_HDR,  "HDR (stb_image)",      img2_decode_stb          },
+	{ { IMG2_MIME_BMP,  "BMP (stb_image)"      }, img2_decode_stb,          NULL                  },
+	{ { IMG2_MIME_TGA,  "TGA (stb_image)"      }, img2_decode_stb,          NULL                  },
+	{ { IMG2_MIME_PSD,  "PSD (stb_image)"      }, img2_decode_stb,          NULL                  },
+	{ { IMG2_MIME_HDR,  "HDR (stb_image)"      }, img2_decode_stb,          NULL                  },
 };
 
-/**
- * @brief Global registry pointer and count
- */
-const img2_decoder_entry_t *img2_decoder_registry = NULL;
-size_t img2_decoder_registry_size = 0;
+#define DECODER_COUNT (sizeof(s_decoders) / sizeof(s_decoders[0]))
+
+size_t img2_decoder_count(void)
+{
+	return DECODER_COUNT;
+}
+
+const img2_decoder_info_t *img2_decoder_info(size_t index)
+{
+	return index < DECODER_COUNT ? &s_decoders[index].info : NULL;
+}
 
 /**
- * @brief Initialize decoder registry
- *
- * Sets up the global registry pointers. This function is idempotent
- * and safe to call multiple times.
+ * @brief Log the decoder table (the table is const; nothing to initialise)
  */
 void img2_decoder_registry_init(void)
 {
-	if (img2_decoder_registry != NULL) {
-		// Already initialized
-		return;
-	}
-
-	img2_decoder_registry = s_decoder_registry;
-	img2_decoder_registry_size = sizeof(s_decoder_registry) / sizeof(img2_decoder_entry_t);
-
-	img2_log(IMG2_LOG_INFO, "Decoder registry initialized with %zu decoders:", img2_decoder_registry_size);
-	for (size_t i = 0; i < img2_decoder_registry_size; i++) {
-		img2_log(IMG2_LOG_INFO, "  [%zu] %s", i, s_decoder_registry[i].name);
+	img2_log(IMG2_LOG_INFO, "Decoder registry initialized with %zu decoders:", DECODER_COUNT);
+	for (size_t i = 0; i < DECODER_COUNT; i++) {
+		img2_log(IMG2_LOG_INFO, "  [%zu] %s", i, s_decoders[i].info.name);
 	}
 }
 
 /**
- * @brief Find decoder by MIME type
- *
- * Performs linear search through the registry to find a decoder
- * that handles the specified MIME type.
+ * @brief Find decoder by MIME type ([R2] silent)
  */
 const img2_decoder_entry_t *img2_decoder_find(img2_mime_t mime)
 {
-	if (img2_decoder_registry == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Decoder registry not initialized (call decoder_registry_init())");
-		return NULL;
-	}
-
-	// Linear search through registry
-	for (size_t i = 0; i < img2_decoder_registry_size; i++) {
-		if (img2_decoder_registry[i].mime_type == mime) {
-			return &img2_decoder_registry[i];
+	for (size_t i = 0; i < DECODER_COUNT; i++) {
+		if (s_decoders[i].info.mime == mime) {
+			return &s_decoders[i];
 		}
 	}
-
-	// No decoder found
-	img2_log(IMG2_LOG_ERROR, "Error: No decoder found for MIME type: %s", img2_mime_name(mime));
 	return NULL;
 }
 
+bool img2_can_decode(img2_mime_t mime)
+{
+	return mime == IMG2_MIME_YUV || img2_decoder_find(mime) != NULL;
+}
+
+bool img2_is_animated(const uint8_t *data, size_t len)
+{
+	if (data == NULL || len == 0 || len > IMG2_MAX_FILE_SIZE) {
+		return false;
+	}
+	const img2_decoder_entry_t *dec = img2_decoder_find(img2_detect_mime(data, len));
+	if (dec == NULL || dec->is_animated == NULL) {
+		return false;
+	}
+	return dec->is_animated(data, len);
+}
+
+img2_status_t img2_frames_adopt(img2_frames_t *out, img2_image_t **frames, int count, img2_status_t fail)
+{
+	if (out == NULL) {
+		img2_decoder_free_frames(frames, count);
+		return IMG2_E_ARG;
+	}
+	out->frames = NULL;
+	out->count = 0;
+	out->loop_count = 0;
+	if (frames == NULL) {
+		return fail != IMG2_OK ? fail : IMG2_E_INTERNAL;
+	}
+	out->frames = frames;
+	out->count = count;
+	return IMG2_OK;
+}
+
+/* Validation failure: free everything, zero *out */
+static img2_status_t dispatch_fail(img2_frames_t *out, img2_status_t st)
+{
+	img2_frames_free(out);
+	return st;
+}
+
 /**
- * @brief Decode image data with automatic format detection
+ * @brief Decode image data
  *
  * Main decoding dispatcher with comprehensive error checking and validation.
  */
-img2_image_t **img2_decoder_dispatch(const img2_decode_opts_t *opts, const uint8_t *data, size_t len, img2_mime_t mime, int *frame_count)
+img2_status_t img2_decoder_dispatch(const img2_decode_opts_t *opts, const uint8_t *data, size_t len, img2_mime_t mime, img2_frames_t *out)
 {
-	// Validate inputs
-	if (data == NULL || len == 0 || frame_count == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decoder_decode");
-		return NULL;
+	if (out != NULL) {
+		out->frames = NULL;
+		out->count = 0;
+		out->loop_count = 0;
 	}
 
-	// Initialize output
-	*frame_count = 0;
+	// Validate inputs
+	if (data == NULL || len == 0 || out == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decoder_decode");
+		return IMG2_E_ARG;
+	}
 
-	img2_image_t **frames = NULL;
+	img2_status_t st;
 
 	if (mime == IMG2_MIME_YUV) {
 		// Raw YUV is headerless: it is not in the registry and needs the --yuv geometry
 		if (opts == NULL || opts->yuv == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Raw YUV input requires --yuv format:width:height");
-			return NULL;
+			return IMG2_E_ARG;
 		}
 
 		img2_log(IMG2_LOG_INFO, "Decoding %zu bytes with decoder: YUV raw (%s %ux%u)", len, img2_yuv_format_name(opts->yuv->format), opts->yuv->width, opts->yuv->height);
 
-		frames = img2_decode_yuv(data, len, opts->yuv, frame_count);
-		if (frames == NULL) {
+		st = img2_decode_yuv(data, len, opts, out);
+		if (st != IMG2_OK) {
 			img2_log(IMG2_LOG_ERROR, "Error: Decoder 'YUV raw' failed to decode image");
-			return NULL;
+			return dispatch_fail(out, st);
 		}
 
 	} else {
 		// Find appropriate decoder
 		const img2_decoder_entry_t *decoder = img2_decoder_find(mime);
 		if (decoder == NULL) {
+			/* [R2] legacy lines of the former finder + dispatcher, same order */
+			img2_log(IMG2_LOG_ERROR, "Error: No decoder found for MIME type: %s", img2_mime_name(mime));
 			img2_log(IMG2_LOG_ERROR, "Error: No decoder available for format: %s", img2_mime_name(mime));
-			return NULL;
+			return mime == IMG2_MIME_UNKNOWN ? IMG2_E_FORMAT : IMG2_E_UNSUPPORTED;
 		}
 
-		img2_log(IMG2_LOG_INFO, "Decoding %zu bytes with decoder: %s", len, decoder->name);
+		img2_log(IMG2_LOG_INFO, "Decoding %zu bytes with decoder: %s", len, decoder->info.name);
 
 		// Call decoder function
-		frames = decoder->decode(data, len, frame_count);
-		if (frames == NULL) {
-			img2_log(IMG2_LOG_ERROR, "Error: Decoder '%s' failed to decode image", decoder->name);
-			return NULL;
+		st = decoder->decode(data, len, opts, out);
+		if (st != IMG2_OK) {
+			img2_log(IMG2_LOG_ERROR, "Error: Decoder '%s' failed to decode image", decoder->info.name);
+			return dispatch_fail(out, st);
 		}
 	}
 
+	img2_image_t **frames = out->frames;
+
 	// Validate output
-	if (*frame_count <= 0) {
-		img2_log(IMG2_LOG_ERROR, "Error: Decoder returned invalid frame count: %d", *frame_count);
-		img2_decoder_free_frames(frames, *frame_count);
-		return NULL;
+	if (out->count <= 0 || frames == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Decoder returned invalid frame count: %d", out->count);
+		return dispatch_fail(out, IMG2_E_FORMAT);
 	}
 
 	// Validate each frame
-	for (int i = 0; i < *frame_count; i++) {
+	for (int i = 0; i < out->count; i++) {
 		if (frames[i] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Decoder returned NULL frame at index %d", i);
-			img2_decoder_free_frames(frames, *frame_count);
-			return NULL;
+			return dispatch_fail(out, IMG2_E_FORMAT);
 		}
 
 		// Check dimensions within limits
 		if (frames[i]->width == 0 || frames[i]->height == 0) {
 			img2_log(IMG2_LOG_ERROR, "Error: Frame %d has invalid dimensions: %ux%u", i, frames[i]->width, frames[i]->height);
-			img2_decoder_free_frames(frames, *frame_count);
-			return NULL;
+			return dispatch_fail(out, IMG2_E_FORMAT);
 		}
 
 		if (frames[i]->width > IMG2_MAX_DIMENSION || frames[i]->height > IMG2_MAX_DIMENSION) {
 			img2_log(IMG2_LOG_ERROR, "Error: Frame %d dimensions exceed maximum (%u): %ux%u", i, IMG2_MAX_DIMENSION, frames[i]->width, frames[i]->height);
-			img2_decoder_free_frames(frames, *frame_count);
-			return NULL;
+			return dispatch_fail(out, IMG2_E_LIMIT);
 		}
 
 		// Check pixel buffer allocated
 		if (frames[i]->pixels == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Frame %d has NULL pixel buffer", i);
-			img2_decoder_free_frames(frames, *frame_count);
-			return NULL;
+			return dispatch_fail(out, IMG2_E_FORMAT);
 		}
 	}
 
-	img2_log(IMG2_LOG_INFO, "Successfully decoded %d frame(s) with dimensions: %ux%u", *frame_count, frames[0]->width, frames[0]->height);
+	img2_log(IMG2_LOG_INFO, "Successfully decoded %d frame(s) with dimensions: %ux%u", out->count, frames[0]->width, frames[0]->height);
 
-	return frames;
+	// Optional frame limit
+	if (opts != NULL && opts->max_frames > 0 && out->count > opts->max_frames) {
+		for (int i = opts->max_frames; i < out->count; i++) {
+			img2_image_destroy(frames[i]);
+			frames[i] = NULL;
+		}
+		out->count = opts->max_frames;
+	}
+
+	return IMG2_OK;
 }
 
 /**

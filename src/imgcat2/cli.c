@@ -122,12 +122,9 @@ void print_version(void)
 	printf("\n");
 	printf("Supported image formats:\n");
 
-	/* Initialize decoder registry to get the list of supported formats */
-	img2_decoder_registry_init();
-
-	/* Print each supported format */
-	for (size_t i = 0; i < img2_decoder_registry_size; i++) {
-		printf("  - %s\n", img2_decoder_registry[i].name);
+	/* Print each supported format (const table, no init needed) */
+	for (size_t i = 0; i < img2_decoder_count(); i++) {
+		printf("  - %s\n", img2_decoder_info(i)->name);
 	}
 	printf("  - YUV raw (via --yuv)\n");
 }

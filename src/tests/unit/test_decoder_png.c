@@ -70,7 +70,7 @@ static img2_image_t **decode_fixture(const char *name, int *frame_count)
 		return NULL;
 	}
 
-	img2_image_t **frames = img2_decode_png(data, size, frame_count);
+	img2_image_t **frames = test_decode(img2_decode_png, data, size, frame_count);
 	free(data);
 	return frames;
 }
@@ -107,15 +107,15 @@ CTEST(decoder_png, null_parameters)
 	uint8_t dummy_data[10] = { 0 };
 
 	/* NULL data pointer */
-	img2_image_t **frames = img2_decode_png(NULL, 100, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_png, NULL, 100, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* Zero length */
-	frames = img2_decode_png(dummy_data, 0, &frame_count);
+	frames = test_decode(img2_decode_png, dummy_data, 0, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* NULL frame_count */
-	frames = img2_decode_png(dummy_data, 10, NULL);
+	frames = test_decode(img2_decode_png, dummy_data, 10, NULL);
 	ASSERT_NULL(frames);
 }
 
@@ -129,7 +129,7 @@ CTEST(decoder_png, invalid_data)
 	int frame_count;
 	uint8_t invalid_data[] = "This is not a PNG file";
 
-	img2_image_t **frames = img2_decode_png(invalid_data, sizeof(invalid_data), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_png, invalid_data, sizeof(invalid_data), &frame_count);
 	ASSERT_NULL(frames);
 	ASSERT_EQUAL(0, frame_count);
 }
@@ -152,7 +152,7 @@ CTEST(decoder_png, decode_minimal_1x1)
 		                                    0xAE, 0x42, 0x60, 0x82 };
 
 	int frame_count;
-	img2_image_t **frames = img2_decode_png(png_1x1_gray, sizeof(png_1x1_gray), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_png, png_1x1_gray, sizeof(png_1x1_gray), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -187,7 +187,7 @@ CTEST(decoder_png, decode_multiple_times)
 	/* Decode multiple times to ensure no state issues */
 	for (int i = 0; i < 3; i++) {
 		int frame_count;
-		img2_image_t **frames = img2_decode_png(png_1x1_gray, sizeof(png_1x1_gray), &frame_count);
+		img2_image_t **frames = test_decode(img2_decode_png, png_1x1_gray, sizeof(png_1x1_gray), &frame_count);
 
 		ASSERT_NOT_NULL(frames);
 		ASSERT_EQUAL(1, frame_count);
@@ -227,7 +227,7 @@ CTEST(decoder_png, decode_through_registry)
 		                                    0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0x60, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82 };
 
 	int frame_count;
-	img2_image_t **frames = img2_decoder_dispatch(NULL, png_1x1_gray, sizeof(png_1x1_gray), IMG2_MIME_PNG, &frame_count);
+	img2_image_t **frames = test_dispatch(NULL, png_1x1_gray, sizeof(png_1x1_gray), IMG2_MIME_PNG, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -249,8 +249,8 @@ CTEST(decoder_png, find_by_mime)
 
 	const img2_decoder_entry_t *decoder = img2_decoder_find(IMG2_MIME_PNG);
 	ASSERT_NOT_NULL(decoder);
-	ASSERT_EQUAL(IMG2_MIME_PNG, decoder->mime_type);
-	ASSERT_NOT_NULL(decoder->name);
+	ASSERT_EQUAL(IMG2_MIME_PNG, decoder->info.mime);
+	ASSERT_NOT_NULL(decoder->info.name);
 	ASSERT_NOT_NULL(decoder->decode);
 }
 
@@ -396,7 +396,7 @@ CTEST(decoder_png, truncated_and_corrupt)
 		/* Truncate before IEND's 12 bytes to cut into the image data */
 		for (size_t len = 1; len + 12 < size; len += 7) {
 			int frame_count = -1;
-			img2_image_t **frames = img2_decode_png(data, len, &frame_count);
+			img2_image_t **frames = test_decode(img2_decode_png, data, len, &frame_count);
 			if (frames != NULL) {
 				img2_decoder_free_frames(frames, frame_count);
 			}
@@ -415,7 +415,7 @@ CTEST(decoder_png, truncated_and_corrupt)
 		}
 
 		int frame_count = -1;
-		img2_image_t **frames = img2_decode_png(data, size, &frame_count);
+		img2_image_t **frames = test_decode(img2_decode_png, data, size, &frame_count);
 		ASSERT_NULL(frames);
 		ASSERT_EQUAL(0, frame_count);
 

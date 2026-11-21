@@ -35,11 +35,11 @@
  * @note JXL preserves alpha channel (supports transparency)
  * @note Caller must free *out_data with free() when done
  */
-int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_jxl");
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Initialize outputs */
@@ -68,7 +68,7 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 	JxlEncoder *encoder = JxlEncoderCreate(NULL);
 	if (encoder == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL encoder");
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Get frame settings */
@@ -76,7 +76,7 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 	if (settings == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL frame settings");
 		JxlEncoderDestroy(encoder);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Set basic info */
@@ -98,7 +98,7 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 	if (JxlEncoderSetBasicInfo(encoder, &basic_info) != JXL_ENC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL basic info");
 		JxlEncoderDestroy(encoder);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Set color encoding to sRGB */
@@ -107,7 +107,7 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 	if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL color encoding");
 		JxlEncoderDestroy(encoder);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Set lossless or distance */
@@ -115,13 +115,13 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 		if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL lossless mode");
 			JxlEncoderDestroy(encoder);
-			return -1;
+			return IMG2_E_CODEC;
 		}
 	} else {
 		if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL frame distance");
 			JxlEncoderDestroy(encoder);
-			return -1;
+			return IMG2_E_CODEC;
 		}
 	}
 
@@ -137,7 +137,7 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 	if (JxlEncoderAddImageFrame(settings, &format, img->pixels, pixel_size) != JXL_ENC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to add JXL image frame");
 		JxlEncoderDestroy(encoder);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	/* Close input */
@@ -149,7 +149,7 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 	if (buffer == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JXL output buffer");
 		JxlEncoderDestroy(encoder);
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	size_t buffer_size = 0;
@@ -170,7 +170,7 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to reallocate JXL output buffer");
 				free(buffer);
 				JxlEncoderDestroy(encoder);
-				return -1;
+				return IMG2_E_NOMEM;
 			}
 
 			buffer = new_buffer;
@@ -186,7 +186,7 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 			img2_log(IMG2_LOG_ERROR, "Error: JXL encoder failed during processing");
 			free(buffer);
 			JxlEncoderDestroy(encoder);
-			return -1;
+			return IMG2_E_CODEC;
 		}
 	}
 
@@ -197,14 +197,14 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 	if (buffer_size == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: JXL encoder produced no output");
 		free(buffer);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	*out_data = (uint8_t *)malloc(buffer_size);
 	if (*out_data == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%zu bytes)", buffer_size);
 		free(buffer);
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	memcpy(*out_data, buffer, buffer_size);
@@ -213,5 +213,5 @@ int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, si
 	/* Free encoder buffer */
 	free(buffer);
 
-	return 0;
+	return IMG2_OK;
 }

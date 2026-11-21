@@ -1,0 +1,42 @@
+# Mutable-state allow-list for the img2_symbols guard (cmake/scripts/img2_check_symbols.cmake).
+# One entry per line: <object-basename> <symbol> <reason...>
+# A trailing '*' on <symbol> matches by prefix (GCC suffixes function-local statics with .<n>).
+# Every object symbol of libimg2.a in .data*/.bss*/.tdata*/.tbss*/*COM* (not .data.rel.ro*) must match.
+
+log.c.o s_level atomic log level (_Atomic int)
+log.c.o s_lock mutex guarding s_fn/s_user
+log.c.o s_fn callback pointer, guarded by s_lock
+log.c.o s_user callback user pointer, guarded by s_lock
+
+init.c.o s_init_lock serialises img2_init/img2_shutdown bodies [R19]
+init.c.o s_refs init reference count, guarded by s_init_lock [R19]
+
+font_manager.c.o s_font_lock font cache mutex [M1a]
+font_manager.c.o g_font_cache font cache list, guarded by s_font_lock
+font_manager.c.o g_fallback_font interned fallback handle, guarded by s_font_lock
+font_manager.c.o g_initialized cache-initialised flag, guarded by s_font_lock
+
+# [R12] stb_image_resize2: non-const tables of function pointers / constants, initialised at load time, never written
+image.c.o stbir__* stb_image_resize2 dispatch/weight tables, read-only in practice
+image.c.o decode_simple* stb_image_resize2 function-local dispatch table, read-only in practice
+image.c.o decode_alphas* stb_image_resize2 function-local dispatch table, read-only in practice
+image.c.o encode_simple* stb_image_resize2 function-local dispatch table, read-only in practice
+image.c.o encode_alphas* stb_image_resize2 function-local dispatch table, read-only in practice
+
+# [R12] nanosvg colour lookup table (static via NSVG_DEF since S5), read-only lookup data
+decoder_nanosvg.c.o nsvg__colors nanosvg named-colour table, read-only lookup data
+
+# stb_image flag/gamma globals: written only by stbi_set_*/gamma/scale setters, which src/libimg2 never calls
+decoder_stb.c.o stbi__vertically_flip_on_load_global written only by stbi_set_* setters (never called)
+decoder_stb.c.o stbi__vertically_flip_on_load_local written only by stbi_set_*_thread setters (never called)
+decoder_stb.c.o stbi__vertically_flip_on_load_set written only by stbi_set_*_thread setters (never called)
+decoder_stb.c.o stbi__l2h_gamma written only by stbi_ldr_to_hdr_gamma (never called)
+decoder_stb.c.o stbi__l2h_scale written only by stbi_ldr_to_hdr_scale (never called)
+decoder_stb.c.o stbi__h2l_gamma_i written only by stbi_hdr_to_ldr_gamma (never called)
+decoder_stb.c.o stbi__h2l_scale_i written only by stbi_hdr_to_ldr_scale (never called)
+decoder_stb.c.o stbi__unpremultiply_on_load_global written only by stbi_set_* setters (never called)
+decoder_stb.c.o stbi__de_iphone_flag_global written only by stbi_convert_iphone_png_to_rgb (never called)
+decoder_stb.c.o stbi__unpremultiply_on_load_local written only by stbi_set_*_thread setters (never called)
+decoder_stb.c.o stbi__unpremultiply_on_load_set written only by stbi_set_*_thread setters (never called)
+decoder_stb.c.o stbi__de_iphone_flag_local written only by stbi_convert_iphone_png_to_rgb_thread (never called)
+decoder_stb.c.o stbi__de_iphone_flag_set written only by stbi_convert_iphone_png_to_rgb_thread (never called)

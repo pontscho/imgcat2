@@ -63,6 +63,20 @@ static void png_read_func(png_structp png_ptr, png_bytep data, size_t length)
 	reader->offset += length;
 }
 
+/* [M1b] Same text and newline as libpng's png_default_error/png_default_warning (vendor/libpng/pngerror.c:658-708),
+ * routed through img2_log so CLI stderr is byte-identical. */
+static void log_png_error(png_structp png_ptr, png_const_charp msg)
+{
+	img2_log(IMG2_LOG_ERROR, "libpng error: %s", msg != NULL ? msg : "undefined");
+	png_longjmp(png_ptr, 1);
+}
+
+static void log_png_warning(png_structp png_ptr, png_const_charp msg)
+{
+	(void)png_ptr;
+	img2_log(IMG2_LOG_WARN, "libpng warning: %s", msg != NULL ? msg : "(null)");
+}
+
 #ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Extract EXIF metadata from PNG using full libpng API
@@ -87,7 +101,7 @@ static img2_exif_t *extract_png_exif(const uint8_t *data, size_t len)
 	reader.offset = 0;
 
 	/* Create PNG read structures */
-	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, log_png_error, log_png_warning);
 	if (png_ptr == NULL) {
 		return NULL;
 	}
@@ -171,7 +185,7 @@ static int extract_png_text_to_exif(img2_exif_t *exif, const uint8_t *data, size
 	reader.offset = 0;
 
 	/* Create PNG read structures */
-	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, log_png_error, log_png_warning);
 	if (png_ptr == NULL) {
 		return -1;
 	}
@@ -259,7 +273,7 @@ static img2_xmp_t *extract_png_xmp(const uint8_t *data, size_t len)
 	reader.offset = 0;
 
 	/* Create PNG read structures */
-	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, log_png_error, log_png_warning);
 	if (png_ptr == NULL) {
 		return NULL;
 	}
@@ -351,7 +365,7 @@ bool img2_png_is_animated(const uint8_t *data, size_t size)
 	reader.offset = 0;
 
 	/* Create PNG read structures */
-	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, log_png_error, log_png_warning);
 	if (png_ptr == NULL) {
 		return false;
 	}
@@ -479,11 +493,11 @@ static void apng_composite_frame(img2_image_t *accumulator, uint8_t *frame_pixel
  * @note Output format is always RGBA8888
  * @note Frames are capped at MAX_PNG_FRAMES (200)
  */
-static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png_animated");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	/* Initialize output */
@@ -496,24 +510,24 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	reader.offset = 0;
 
 	/* Create PNG read structures */
-	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, log_png_error, log_png_warning);
 	if (png_ptr == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG read struct");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	png_infop info_ptr = png_create_info_struct(png_ptr);
 	if (info_ptr == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG info struct");
 		png_destroy_read_struct(&png_ptr, NULL, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	/* Set up error handling */
 	if (setjmp(png_jmpbuf(png_ptr))) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNG decoding error");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	/* Set custom read function */
@@ -528,7 +542,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	if (png_get_acTL(png_ptr, info_ptr, &num_frames, &num_plays) == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNG does not contain acTL chunk (not an APNG)");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	/* Apply frame limit (DoS protection) */
@@ -540,7 +554,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	if (num_frames == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: APNG has no frames");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	/* Get canvas dimensions */
@@ -572,7 +586,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	/* Initialize frames to NULL for cleanup */
@@ -586,7 +600,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
 		free(frames);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	/* Previous frame backup for DISPOSE_PREVIOUS */
@@ -617,6 +631,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		/* Validate frame dimensions and offsets */
 		if (x_offset + frame_width > canvas_width || y_offset + frame_height > canvas_height) {
 			img2_log(IMG2_LOG_ERROR, "Error: Frame %u dimensions exceed canvas bounds", frame_idx);
+			*st = IMG2_E_LIMIT;
 			goto cleanup_error;
 		}
 
@@ -625,6 +640,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 			previous = img2_image_alloc(canvas_width, canvas_height);
 			if (previous == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create previous frame backup");
+				*st = IMG2_E_NOMEM;
 				goto cleanup_error;
 			}
 		}
@@ -637,6 +653,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		png_bytep *row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * frame_height);
 		if (row_pointers == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
+			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
 
@@ -645,6 +662,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		if (frame_buffer == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frame buffer");
 			free(row_pointers);
+			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
 
@@ -665,6 +683,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %u", frame_idx);
 			free(frame_buffer);
 			free(row_pointers);
+			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
 
@@ -729,7 +748,7 @@ cleanup_error:
 	}
 	free(frames);
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-	return NULL;
+	return NULL; /* *st set at the goto */
 }
 #endif /* PNG_APNG_SUPPORTED */
 
@@ -798,11 +817,11 @@ static void png_static_warning_fn(png_structp png_ptr, png_const_charp message)
  * @note This function handles only static PNG files
  * @note Output format is always RGBA8888
  */
-static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -821,14 +840,14 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
 	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, &error_ctx, png_static_error_fn, png_static_warning_fn);
 	if (png_ptr == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG read struct");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	png_infop info_ptr = png_create_info_struct(png_ptr);
 	if (info_ptr == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG info struct");
 		png_destroy_read_struct(&png_ptr, NULL, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Assigned after setjmp and used in the error path: must be volatile
@@ -841,7 +860,7 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
 		free(row_pointers);
 		img2_image_destroy(img);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Same leniency as the simplified API: benign errors are warnings
@@ -886,7 +905,7 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
@@ -894,7 +913,7 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
 		img2_image_destroy(img);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	for (uint32_t y = 0; y < height; y++) {
@@ -937,7 +956,7 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = img;
@@ -961,11 +980,11 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
  * @note For APNG: returns N frames (capped at MAX_PNG_FRAMES)
  * @note Output format is always RGBA8888
  */
-img2_image_t **img2_decode_png(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_png_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	/* Initialize output */
@@ -974,9 +993,21 @@ img2_image_t **img2_decode_png(const uint8_t *data, size_t len, int *frame_count
 	/* Check if animated */
 #ifdef PNG_APNG_SUPPORTED
 	if (img2_png_is_animated(data, len)) {
-		return decode_png_animated(data, len, frame_count);
+		return decode_png_animated(data, len, frame_count, st);
 	}
 #endif /* PNG_APNG_SUPPORTED */
 
-	return decode_png_static(data, len, frame_count);
+	return decode_png_static(data, len, frame_count, st);
+}
+
+img2_status_t img2_decode_png(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_png_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

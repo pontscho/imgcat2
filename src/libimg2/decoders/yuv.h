@@ -88,9 +88,9 @@ const char *img2_yuv_format_name(img2_yuv_format_t fmt);
  * @param out     Output parameters (written only on success)
  * @param err     Optional buffer for a human-readable error message
  * @param err_len Size of @p err
- * @return 0 on success, -1 on error
+ * @return IMG2_OK on success, IMG2_E_ARG on error
  */
-int img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, size_t err_len);
+img2_status_t img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, size_t err_len);
 
 /**
  * @brief Number of bytes required for one frame (lenient: last row may be short)
@@ -101,17 +101,6 @@ int img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, siz
  */
 bool img2_yuv_frame_size(const img2_yuv_params_t *params, size_t *out_size);
 
-/**
- * @brief Decode the first raw YUV frame in @p data to RGBA8888
- *
- * Bytes beyond the first frame are ignored (frame_count is always 1).
- *
- * @param data        Raw frame data
- * @param len         Length of data in bytes
- * @param params      Frame geometry
- * @param frame_count Output: 1 on success, 0 on error
- * @return Array with one img2_image_t*, or NULL on error (short input, bad params)
- */
-img2_image_t **img2_decode_yuv(const uint8_t *data, size_t len, const img2_yuv_params_t *params, int *frame_count);
+/* img2_decode_yuv() is declared in decoder.h (it takes img2_decode_opts_t). */
 
 #endif /* IMG2_INTERNAL_DECODERS_YUV_H */

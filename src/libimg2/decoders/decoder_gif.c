@@ -153,11 +153,11 @@ static void frame_composition(img2_image_t *accumulator, const GifByteType *rast
  * @note Implements proper GIF frame composition with disposal methods
  * @note Output format is RGBA8888
  */
-img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_gif_animated");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -174,14 +174,14 @@ img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *fr
 	GifFileType *gif = DGifOpen(&reader, gif_read_func, &error_code);
 	if (gif == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to open GIF: %s", GifErrorString(error_code));
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Read GIF structure
 	if (DGifSlurp(gif) != GIF_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to read GIF structure: %s", GifErrorString(gif->Error));
 		DGifCloseFile(gif, &error_code);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Check frame count
@@ -189,7 +189,7 @@ img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *fr
 	if (num_frames == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: GIF has no images");
 		DGifCloseFile(gif, &error_code);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	if (num_frames > MAX_GIF_FRAMES) {
@@ -206,7 +206,7 @@ img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *fr
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		DGifCloseFile(gif, &error_code);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Initialize frames to NULL for cleanup
@@ -220,7 +220,7 @@ img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *fr
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
 		free(frames);
 		DGifCloseFile(gif, &error_code);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Previous frame backup for DISPOSE_PREVIOUS
@@ -239,6 +239,7 @@ img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *fr
 
 		if (color_map == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Frame %d has no color map", frame_idx);
+			*st = IMG2_E_CODEC;
 			goto cleanup_error;
 		}
 
@@ -259,6 +260,7 @@ img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *fr
 			previous = img2_image_alloc(canvas_width, canvas_height);
 			if (previous == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create previous frame backup");
+				*st = IMG2_E_NOMEM;
 				goto cleanup_error;
 			}
 		}
@@ -280,6 +282,7 @@ img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *fr
 		frames[frame_idx] = img2_image_alloc(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", frame_idx);
+			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
 
@@ -342,7 +345,7 @@ cleanup_error:
 	}
 	free(frames);
 	DGifCloseFile(gif, &error_code);
-	return NULL;
+	return NULL; /* *st set at the goto */
 }
 
 /**
@@ -391,4 +394,16 @@ bool img2_gif_is_animated(const uint8_t *data, size_t size)
 	DGifCloseFile(gif, &error_code);
 
 	return is_animated;
+}
+
+img2_status_t img2_decode_gif_animated(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_gif_animated_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

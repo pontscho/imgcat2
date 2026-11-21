@@ -40,11 +40,11 @@
  * @note STB only supports static images (no animation)
  * @note Returns RGBA8888 format (4 channels, 8 bits per channel)
  */
-img2_image_t **img2_decode_stb(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_stb_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_stb");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -55,14 +55,14 @@ img2_image_t **img2_decode_stb(const uint8_t *data, size_t len, int *frame_count
 	uint8_t *pixels = stbi_load_from_memory(data, (int)len, &width, &height, &channels, 4);
 	if (pixels == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: stb_image failed to decode: %s", stbi_failure_reason());
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Validate dimensions
 	if (width <= 0 || height <= 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: stb_image returned invalid dimensions: %dx%d", width, height);
 		stbi_image_free(pixels);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Create img2_image_t structure
@@ -70,7 +70,7 @@ img2_image_t **img2_decode_stb(const uint8_t *data, size_t len, int *frame_count
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		stbi_image_free(pixels);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Copy pixel data (stb_image returns RGBA8888 when we request 4 channels)
@@ -85,11 +85,23 @@ img2_image_t **img2_decode_stb(const uint8_t *data, size_t len, int *frame_count
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = img;
 	*frame_count = 1;
 
 	return frames;
+}
+
+img2_status_t img2_decode_stb(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_stb_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

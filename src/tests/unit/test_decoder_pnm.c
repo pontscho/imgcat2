@@ -18,7 +18,7 @@
 #include "../decoder_internal.h"
 
 /** Decode a string literal (excluding the implicit trailing NUL) */
-#define DECODE_LIT(lit, fc) img2_decode_pnm((const uint8_t *)(lit), sizeof(lit) - 1, (fc))
+#define DECODE_LIT(lit, fc) test_decode(img2_decode_pnm, (const uint8_t *)(lit), sizeof(lit) - 1, (fc))
 
 /** Assert RGBA value of pixel (x, y) */
 #define ASSERT_PX(img, x, y, r, g, b, a)                     \
@@ -39,9 +39,9 @@ CTEST(decoder_pnm, null_parameters)
 	int frame_count;
 	uint8_t dummy[10] = { 'P', '5', '\n' };
 
-	ASSERT_NULL(img2_decode_pnm(NULL, 100, &frame_count));
-	ASSERT_NULL(img2_decode_pnm(dummy, 0, &frame_count));
-	ASSERT_NULL(img2_decode_pnm(dummy, sizeof(dummy), NULL));
+	ASSERT_NULL(test_decode(img2_decode_pnm, NULL, 100, &frame_count));
+	ASSERT_NULL(test_decode(img2_decode_pnm, dummy, 0, &frame_count));
+	ASSERT_NULL(test_decode(img2_decode_pnm, dummy, sizeof(dummy), NULL));
 }
 
 /**
@@ -387,12 +387,12 @@ CTEST(decoder_pnm, decode_through_registry)
 
 	const img2_decoder_entry_t *decoder = img2_decoder_find(IMG2_MIME_PNM);
 	ASSERT_NOT_NULL(decoder);
-	ASSERT_EQUAL(IMG2_MIME_PNM, decoder->mime_type);
-	ASSERT_STR("PNM/PAM (native)", decoder->name);
+	ASSERT_EQUAL(IMG2_MIME_PNM, decoder->info.mime);
+	ASSERT_STR("PNM/PAM (native)", decoder->info.name);
 
 	static const char pgm[] = "P2\n2 1\n255\n10 200\n";
 	int frame_count;
-	img2_image_t **frames = img2_decoder_dispatch(NULL, (const uint8_t *)pgm, sizeof(pgm) - 1, IMG2_MIME_PNM, &frame_count);
+	img2_image_t **frames = test_dispatch(NULL, (const uint8_t *)pgm, sizeof(pgm) - 1, IMG2_MIME_PNM, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);

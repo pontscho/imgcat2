@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../core/status.h"
+
 /**
  * @brief EXIF metadata information
  *
@@ -143,9 +145,9 @@ void img2_xmp_init(img2_xmp_t *xmp);
  * @param exif Output structure for EXIF data
  * @param jpeg_data JPEG file data buffer
  * @param len Length of jpeg_data in bytes
- * @return 0 on success, -1 on error or no EXIF data found
+ * @return IMG2_OK on success; IMG2_E_ARG (NULL argument), IMG2_E_NOMEM, or IMG2_E_FORMAT on malformed data or no EXIF data found
  */
-int img2_exif_parse(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len);
+img2_status_t img2_exif_parse(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len);
 
 /**
  * @brief Parse EXIF metadata from JPEG data (format-specific)
@@ -158,9 +160,9 @@ int img2_exif_parse(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len);
  * @param exif Output structure for EXIF data
  * @param jpeg_data JPEG file data buffer
  * @param len Length of jpeg_data in bytes
- * @return 0 on success, -1 on error or no EXIF data found
+ * @return IMG2_OK on success; IMG2_E_ARG (NULL argument), IMG2_E_NOMEM, or IMG2_E_FORMAT on malformed data or no EXIF data found
  */
-int img2_exif_parse_jpeg(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len);
+img2_status_t img2_exif_parse_jpeg(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len);
 
 /**
  * @brief Parse EXIF metadata from raw TIFF/IFD data
@@ -173,9 +175,9 @@ int img2_exif_parse_jpeg(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len
  * @param exif Output structure for EXIF data
  * @param tiff_data Raw TIFF/IFD data buffer (starting with TIFF header)
  * @param len Length of tiff_data in bytes
- * @return 0 on success, -1 on error or invalid TIFF structure
+ * @return IMG2_OK on success; IMG2_E_ARG (NULL argument), IMG2_E_NOMEM, or IMG2_E_FORMAT on malformed data or invalid TIFF structure
  */
-int img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len);
+img2_status_t img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len);
 
 /**
  * @brief Parse XMP metadata from JPEG data
@@ -187,9 +189,9 @@ int img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len
  * @param xmp Output structure for XMP data
  * @param jpeg_data JPEG file data buffer
  * @param len Length of jpeg_data in bytes
- * @return 0 on success, -1 on error or no XMP data found
+ * @return IMG2_OK on success; IMG2_E_ARG (NULL argument), IMG2_E_NOMEM, or IMG2_E_FORMAT on malformed data or no XMP data found
  */
-int img2_xmp_parse(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len);
+img2_status_t img2_xmp_parse(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len);
 
 /**
  * @brief Parse XMP metadata from JPEG data (format-specific)
@@ -202,9 +204,9 @@ int img2_xmp_parse(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len);
  * @param xmp Output structure for XMP data
  * @param jpeg_data JPEG file data buffer
  * @param len Length of jpeg_data in bytes
- * @return 0 on success, -1 on error or no XMP data found
+ * @return IMG2_OK on success; IMG2_E_ARG (NULL argument), IMG2_E_NOMEM, or IMG2_E_FORMAT on malformed data or no XMP data found
  */
-int img2_xmp_parse_jpeg(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len);
+img2_status_t img2_xmp_parse_jpeg(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len);
 
 /**
  * @brief Parse XMP metadata from raw XML string
@@ -217,9 +219,9 @@ int img2_xmp_parse_jpeg(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len);
  * @param xmp Output structure for XMP data
  * @param xml_data Raw XML string buffer
  * @param len Length of xml_data in bytes
- * @return 0 on success, -1 on error or invalid XML structure
+ * @return IMG2_OK on success; IMG2_E_ARG (NULL argument), IMG2_E_NOMEM, or IMG2_E_FORMAT on malformed data or invalid XML structure
  */
-int img2_xmp_parse_xml(img2_xmp_t *xmp, const char *xml_data, size_t len);
+img2_status_t img2_xmp_parse_xml(img2_xmp_t *xmp, const char *xml_data, size_t len);
 
 /**
  * @brief Free dynamically allocated fields in EXIF info

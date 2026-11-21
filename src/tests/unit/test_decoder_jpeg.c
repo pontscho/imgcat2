@@ -28,15 +28,15 @@ CTEST(decoder_jpeg, null_parameters)
 	uint8_t dummy_data[10] = { 0 };
 
 	/* NULL data pointer */
-	img2_image_t **frames = img2_decode_jpeg(NULL, 100, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_jpeg, NULL, 100, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* Zero length */
-	frames = img2_decode_jpeg(dummy_data, 0, &frame_count);
+	frames = test_decode(img2_decode_jpeg, dummy_data, 0, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* NULL frame_count */
-	frames = img2_decode_jpeg(dummy_data, 10, NULL);
+	frames = test_decode(img2_decode_jpeg, dummy_data, 10, NULL);
 	ASSERT_NULL(frames);
 }
 
@@ -50,7 +50,7 @@ CTEST(decoder_jpeg, invalid_data)
 	int frame_count;
 	uint8_t invalid_data[] = "This is not a JPEG file";
 
-	img2_image_t **frames = img2_decode_jpeg(invalid_data, sizeof(invalid_data), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_jpeg, invalid_data, sizeof(invalid_data), &frame_count);
 	ASSERT_NULL(frames);
 	ASSERT_EQUAL(0, frame_count);
 }
@@ -76,7 +76,7 @@ CTEST(decoder_jpeg, decode_minimal_1x1)
 	};
 
 	int frame_count;
-	img2_image_t **frames = img2_decode_jpeg(jpeg_1x1, sizeof(jpeg_1x1), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_jpeg, jpeg_1x1, sizeof(jpeg_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -108,7 +108,7 @@ CTEST(decoder_jpeg, decode_2x2)
 		                                0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xD2, 0xFF, 0xD9 };
 
 	int frame_count;
-	img2_image_t **frames = img2_decode_jpeg(jpeg_2x2, sizeof(jpeg_2x2), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_jpeg, jpeg_2x2, sizeof(jpeg_2x2), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -159,7 +159,7 @@ CTEST(decoder_jpeg, decode_through_registry)
 		                                0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xD2, 0xFF, 0xD9 };
 
 	int frame_count;
-	img2_image_t **frames = img2_decoder_dispatch(NULL, jpeg_1x1, sizeof(jpeg_1x1), IMG2_MIME_JPEG, &frame_count);
+	img2_image_t **frames = test_dispatch(NULL, jpeg_1x1, sizeof(jpeg_1x1), IMG2_MIME_JPEG, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -181,8 +181,8 @@ CTEST(decoder_jpeg, find_by_mime)
 
 	const img2_decoder_entry_t *decoder = img2_decoder_find(IMG2_MIME_JPEG);
 	ASSERT_NOT_NULL(decoder);
-	ASSERT_EQUAL(IMG2_MIME_JPEG, decoder->mime_type);
-	ASSERT_NOT_NULL(decoder->name);
+	ASSERT_EQUAL(IMG2_MIME_JPEG, decoder->info.mime);
+	ASSERT_NOT_NULL(decoder->info.name);
 	ASSERT_NOT_NULL(decoder->decode);
 }
 
@@ -200,10 +200,47 @@ CTEST(decoder_jpeg, single_frame_only)
 		                                0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xD2, 0xFF, 0xD9 };
 
 	int frame_count = -1;
-	img2_image_t **frames = img2_decode_jpeg(jpeg_1x1, sizeof(jpeg_1x1), &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_jpeg, jpeg_1x1, sizeof(jpeg_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count); /* JPEG is always single-frame */
 
 	img2_decoder_free_frames(frames, frame_count);
+}
+
+/**
+ * @test S6 status codes: truncated JPEG -> IMG2_E_CODEC, NULL buffer -> IMG2_E_ARG,
+ *       IMG2_MIME_UNKNOWN through the dispatcher -> IMG2_E_FORMAT; *out zeroed on error
+ */
+CTEST(decoder_jpeg, status_codes)
+{
+	/* SOI + APP0 (JFIF) + the start of a DQT segment, then nothing */
+	static const uint8_t truncated[] = {
+		0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+		0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06,
+	};
+
+	img2_frames_t fr = { .frames = (img2_image_t **)1, .count = 7, .loop_count = 3 };
+	ASSERT_EQUAL(IMG2_E_CODEC, img2_decode_jpeg(truncated, sizeof(truncated), NULL, &fr));
+	ASSERT_NULL(fr.frames);
+	ASSERT_EQUAL(0, fr.count);
+	ASSERT_EQUAL(0, fr.loop_count);
+
+	ASSERT_EQUAL(IMG2_E_ARG, img2_decode_jpeg(NULL, 100, NULL, &fr));
+	ASSERT_EQUAL(IMG2_E_ARG, img2_decoder_dispatch(NULL, NULL, 100, IMG2_MIME_JPEG, &fr));
+	ASSERT_EQUAL(IMG2_E_FORMAT, img2_decoder_dispatch(NULL, truncated, sizeof(truncated), IMG2_MIME_UNKNOWN, &fr));
+	ASSERT_NULL(fr.frames);
+
+	/* const table: no init needed */
+	ASSERT_TRUE(img2_decoder_count() > 0);
+	ASSERT_NOT_NULL(img2_decoder_info(0));
+	ASSERT_NULL(img2_decoder_info(img2_decoder_count()));
+	ASSERT_TRUE(img2_can_decode(IMG2_MIME_YUV));
+	ASSERT_FALSE(img2_can_decode(IMG2_MIME_UNKNOWN));
+	ASSERT_FALSE(img2_is_animated(NULL, 10));
+	ASSERT_FALSE(img2_is_animated(truncated, sizeof(truncated)));
+
+	/* jpeg_deblock = 0 (plain libjpeg) still decodes */
+	img2_decode_opts_t opts = { .force_mime = IMG2_MIME_UNKNOWN, .yuv = NULL, .max_frames = 0, .jpeg_deblock = 0 };
+	ASSERT_EQUAL(IMG2_E_CODEC, img2_decode_jpeg(truncated, sizeof(truncated), &opts, &fr));
 }

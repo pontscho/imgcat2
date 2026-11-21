@@ -474,17 +474,17 @@ static bool pnm_decode_ascii(pnm_reader_t *r, const pnm_header_t *hdr, img2_imag
  * @note Output format is RGBA8888
  * @note Only the first image of a multi-image stream is decoded
  */
-img2_image_t **img2_decode_pnm(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_pnm_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	*frame_count = 0;
 
 	if (len < 3 || data[0] != 'P' || data[1] < '1' || data[1] > '7') {
 		img2_log(IMG2_LOG_ERROR, "Error: Not a Netpbm (PNM/PAM) image");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	pnm_reader_t r = { .data = data, .len = len, .pos = 2 };
@@ -493,26 +493,26 @@ img2_image_t **img2_decode_pnm(const uint8_t *data, size_t len, int *frame_count
 	// Magic must be followed by whitespace (or a comment for P1-P6)
 	if (!pnm_is_space(data[2]) && !(hdr.format != '7' && data[2] == '#')) {
 		img2_log(IMG2_LOG_ERROR, "Error: Not a Netpbm (PNM/PAM) image");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	bool ok = (hdr.format == '7') ? pnm_parse_pam_header(&r, &hdr) : pnm_parse_header(&r, &hdr);
 	if (!ok) {
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Validate header values before any size arithmetic
 	if (hdr.width == 0 || hdr.height == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: invalid dimensions %ux%u", hdr.width, hdr.height);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 	if (hdr.width > IMG2_MAX_DIMENSION || hdr.height > IMG2_MAX_DIMENSION) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: dimensions %ux%u exceed limit", hdr.width, hdr.height);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_LIMIT);
 	}
 	if (hdr.maxval < 1 || hdr.maxval > PNM_MAXVAL_LIMIT) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: invalid maxval %u", hdr.maxval);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Minimum number of raster bytes required (exact for binary formats,
@@ -522,7 +522,7 @@ img2_image_t **img2_decode_pnm(const uint8_t *data, size_t len, int *frame_count
 	size_t remaining = len - r.pos;
 	if (!pnm_mul_size(hdr.width, hdr.height, &pixel_count)) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: image size overflow");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	bool size_ok;
@@ -535,17 +535,17 @@ img2_image_t **img2_decode_pnm(const uint8_t *data, size_t len, int *frame_count
 	}
 	if (!size_ok) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: image size overflow");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 	if (remaining < needed) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: truncated raster data (need %zu bytes, have %zu)", needed, remaining);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	img2_image_t *img = img2_image_alloc(hdr.width, hdr.height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	switch (hdr.format) {
@@ -567,18 +567,30 @@ img2_image_t **img2_decode_pnm(const uint8_t *data, size_t len, int *frame_count
 	if (!ok) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: truncated or malformed raster data");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = img;
 	*frame_count = 1;
 
 	return frames;
+}
+
+img2_status_t img2_decode_pnm(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_pnm_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

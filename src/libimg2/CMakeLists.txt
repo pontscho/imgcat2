@@ -18,11 +18,12 @@ add_custom_target(embed_fonts DEPENDS "${IMG2_GENERATED_DIR}/embedded_fonts.c" "
 add_library(img2 STATIC)
 add_library(img2::img2 ALIAS img2)
 target_sources(img2 PRIVATE
-	core/image.c core/log.c
+	core/image.c core/log.c core/status.c core/init.c
 	decoders/decoder.c decoders/magic.c decoders/decoder_stb.c decoders/decoder_png.c decoders/decoder_jpeg.c
 	decoders/decoder_qoi.c decoders/decoder_ico.c decoders/decoder_pnm.c decoders/decoder_yuv.c decoders/decoder_nanosvg.c
 	encoders/encoder.c encoders/encoder_jpeg.c encoders/encoder_png.c
-	text/font_manager.c "${IMG2_GENERATED_DIR}/embedded_fonts.c")
+	text/font_manager.c "${IMG2_GENERATED_DIR}/embedded_fonts.c"
+	metadata/xml_parser.c metadata/exif_reader.c)   # always compiled: exif/xmp are part of the image model
 
 # Optional codecs
 if(IMG2_HAVE_GIFLIB)
@@ -46,10 +47,17 @@ endif()
 if(IMG2_HAVE_RESVG)
 	target_sources(img2 PRIVATE decoders/decoder_resvg.c)
 endif()
-if(IMG2_HAVE_EXIF_READER)
-	target_sources(img2 PRIVATE metadata/xml_parser.c metadata/exif_reader.c)
-endif()
 add_dependencies(img2 embed_fonts)
+
+# [SL1] secure_getenv for the font manager's ~ expansion (only IMG2_HAVE_SECURE_GETENV is passed:
+# font_manager.c defines _GNU_SOURCE itself)
+include(CheckSymbolExists)
+set(CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
+check_symbol_exists(secure_getenv "stdlib.h" IMG2_HAVE_SECURE_GETENV)
+unset(CMAKE_REQUIRED_DEFINITIONS)
+if(IMG2_HAVE_SECURE_GETENV)
+	set_source_files_properties(text/font_manager.c PROPERTIES COMPILE_DEFINITIONS IMG2_HAVE_SECURE_GETENV)
+endif()
 
 # Compile definitions and include directories (the former global add_definitions / include_directories).
 # The nanosvg dir comes first, as on master (Img2VendorHeaderOnly.cmake used to add it globally before the
@@ -87,6 +95,28 @@ elseif(APPLE AND DYNAMIC_LIBCXX_LIBS)
 endif()
 target_link_libraries(img2 PRIVATE Threads::Threads)
 img2_apply_project_settings(img2)
+
+# [S6 item 11 / R13] -UNDEBUG object variant of img2's own sources for the no-terminate guard (img2_symbols):
+# same sources, include dirs and definitions as img2, assert() live. Lives here because source-file
+# properties (secure_getenv definition, generated embedded_fonts.c) are directory-scoped.
+get_target_property(_img2_srcs img2 SOURCES)
+set(IMG2_LIB_SOURCES "")
+foreach(_s IN LISTS _img2_srcs)
+	if(IS_ABSOLUTE "${_s}")
+		list(APPEND IMG2_LIB_SOURCES "${_s}")
+	else()
+		list(APPEND IMG2_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/${_s}")
+	endif()
+endforeach()
+add_library(img2_assertcheck OBJECT EXCLUDE_FROM_ALL ${IMG2_LIB_SOURCES})
+target_include_directories(img2_assertcheck PRIVATE $<TARGET_PROPERTY:img2,INCLUDE_DIRECTORIES>)
+target_compile_definitions(img2_assertcheck PRIVATE $<TARGET_PROPERTY:img2,COMPILE_DEFINITIONS>)
+target_compile_options(img2_assertcheck PRIVATE $<TARGET_PROPERTY:img2,COMPILE_OPTIONS> -UNDEBUG)
+add_dependencies(img2_assertcheck embed_fonts)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/img2_objects_debug.txt"
+     CONTENT "$<JOIN:$<TARGET_OBJECTS:img2_assertcheck>,;>")
+add_custom_target(img2_assertcheck_build ALL)
+add_dependencies(img2_assertcheck_build img2_assertcheck)
 
 # [SM4] Format-string hardening for img2's own sources only (not vendors, not the CLI)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")

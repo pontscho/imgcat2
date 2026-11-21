@@ -51,9 +51,6 @@ typedef struct {
 } bmp_info_header_t;
 #pragma pack(pop)
 
-/* Forward declarations for PNG decoder (external) */
-extern img2_image_t **img2_decode_png(const uint8_t *data, size_t len, int *frame_count);
-
 /* Static helper functions */
 static int find_best_ico_entry(const ico_dir_entry_t *entries, int count);
 static img2_image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_cursor);
@@ -476,15 +473,16 @@ static img2_image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_c
 	const uint8_t png_sig[8] = { 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n' };
 	if (len >= 8 && memcmp(data, png_sig, 8) == 0) {
 		// PNG format - use existing decoder
-		int frame_count = 0;
-		img2_image_t **frames = img2_decode_png(data, len, &frame_count);
-		if (frames == NULL || frame_count < 1) {
+		img2_frames_t fr = { 0 };
+		if (img2_decode_png(data, len, NULL, &fr) != IMG2_OK || fr.count < 1) {
+			img2_frames_free(&fr);
 			return NULL;
 		}
 
 		// Extract first frame
-		img2_image_t *img = frames[0];
-		free(frames);
+		img2_image_t *img = fr.frames[0];
+		fr.frames[0] = NULL;
+		img2_frames_free(&fr);
 		return img;
 	}
 
@@ -500,11 +498,11 @@ static img2_image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_c
  * @param frame_count Output: always 1 (single frame)
  * @return Array with single img2_image_t*, or NULL on error
  */
-img2_image_t **img2_decode_ico(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_ico_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_ico");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -513,7 +511,7 @@ img2_image_t **img2_decode_ico(const uint8_t *data, size_t len, int *frame_count
 	// Validate minimum size (6 byte header + 16 byte entry)
 	if (len < 22) {
 		img2_log(IMG2_LOG_ERROR, "Error: ICO file too small");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Parse ICO header
@@ -523,22 +521,22 @@ img2_image_t **img2_decode_ico(const uint8_t *data, size_t len, int *frame_count
 	// Validate header
 	if (header.reserved != 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO reserved field");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 	if (header.type != 1 && header.type != 2) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO type field");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 	if (header.count == 0 || header.count > 255) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO image count");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Validate entries array size
 	size_t entries_size = (size_t)header.count * sizeof(ico_dir_entry_t);
 	if (len < 6 + entries_size) {
 		img2_log(IMG2_LOG_ERROR, "Error: ICO file too small for entries");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Parse entries array
@@ -551,11 +549,11 @@ img2_image_t **img2_decode_ico(const uint8_t *data, size_t len, int *frame_count
 	const ico_dir_entry_t *entry = &entries[best_idx];
 	if (entry->image_offset >= len || entry->bytes_in_res == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO entry offset or size");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 	if (entry->image_offset + entry->bytes_in_res > len) {
 		img2_log(IMG2_LOG_ERROR, "Error: ICO entry extends beyond file");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Decode selected entry
@@ -566,7 +564,7 @@ img2_image_t **img2_decode_ico(const uint8_t *data, size_t len, int *frame_count
 	img2_image_t *img = decode_ico_entry(entry_data, entry_size, is_cursor);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to decode ICO entry");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
 	// Allocate frames array (single frame)
@@ -574,11 +572,23 @@ img2_image_t **img2_decode_ico(const uint8_t *data, size_t len, int *frame_count
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = img;
 	*frame_count = 1;
 
 	return frames;
+}
+
+img2_status_t img2_decode_ico(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_ico_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

@@ -19,10 +19,8 @@
 #pragma GCC diagnostic pop
 #include "log.h"
 
-/* EXIF/XMP metadata support */
-#ifdef IMG2_HAVE_EXIF_READER
+/* EXIF/XMP metadata (always compiled; freed unconditionally) */
 #include "../metadata/exif_reader.h"
-#endif
 
 bool img2_image_calc_size(uint32_t width, uint32_t height, size_t *out_size)
 {
@@ -72,6 +70,8 @@ img2_image_t *img2_image_alloc(uint32_t width, uint32_t height)
 	/* Initialize fields */
 	img->width = width;
 	img->height = height;
+	img->stride = width * 4;
+	img->delay_ms = 0;
 	img->exif = NULL;
 	img->xmp = NULL;
 
@@ -90,7 +90,6 @@ void img2_image_destroy(img2_image_t *img)
 		img->pixels = NULL;
 	}
 
-#ifdef IMG2_HAVE_EXIF_READER
 	/* Free EXIF metadata */
 	if (img->exif != NULL) {
 		img2_exif_clear(img->exif);
@@ -104,45 +103,62 @@ void img2_image_destroy(img2_image_t *img)
 		free(img->xmp);
 		img->xmp = NULL;
 	}
-#endif
 
 	/* Free image structure */
 	free(img);
 }
 
-img2_image_t *img2_image_scale_fit(const img2_image_t *src, uint32_t target_width, uint32_t target_height)
+void img2_frames_free(img2_frames_t *f)
 {
-	if (src == NULL || src->pixels == NULL) {
-		img2_log(IMG2_LOG_ERROR, "image_scale_fit: invalid source image");
-		return NULL;
+	if (f == NULL) {
+		return;
+	}
+	if (f->frames != NULL) {
+		for (int i = 0; i < f->count; i++) {
+			img2_image_destroy(f->frames[i]);
+		}
+		free(f->frames);
+	}
+	f->frames = NULL;
+	f->count = 0;
+	f->loop_count = 0;
+}
 
-	} else if (target_width == 0 || target_height == 0) {
-		img2_log(IMG2_LOG_ERROR, "image_scale_fit: invalid target dimensions %u×%u", target_width, target_height);
-		return NULL;
+img2_status_t img2_fit_size(uint32_t src_w, uint32_t src_h, uint32_t max_w, uint32_t max_h, uint32_t *out_w, uint32_t *out_h)
+{
+	if (out_w == NULL || out_h == NULL) {
+		return IMG2_E_ARG;
+	}
+	*out_w = 0;
+	*out_h = 0;
+
+	/* [SM2] zero arguments are rejected before the division (the fit wrappers log the legacy line) */
+	if (src_w == 0 || src_h == 0 || max_w == 0 || max_h == 0) {
+		return IMG2_E_ARG;
 	}
 
 	/* Calculate aspect ratio */
-	float src_aspect = (float)src->width / (float)src->height;
-	float target_aspect = (float)target_width / (float)target_height;
+	float src_aspect = (float)src_w / (float)src_h;
+	float target_aspect = (float)max_w / (float)max_h;
 
 	/* Calculate fit dimensions (maintain aspect ratio) */
 	uint32_t new_width, new_height;
 
 	if (src_aspect > target_aspect) {
 		/* Source is wider - fit to width */
-		new_width = target_width;
+		new_width = max_w;
 		new_height = (uint32_t)roundf((float)new_width / src_aspect);
-		if (new_height > target_height) {
-			new_height = target_height;
+		if (new_height > max_h) {
+			new_height = max_h;
 			new_width = (uint32_t)roundf((float)new_height * src_aspect);
 		}
 
 	} else {
 		/* Source is taller - fit to height */
-		new_height = target_height;
+		new_height = max_h;
 		new_width = (uint32_t)roundf((float)new_height * src_aspect);
-		if (new_width > target_width) {
-			new_width = target_width;
+		if (new_width > max_w) {
+			new_width = max_w;
 			new_height = (uint32_t)roundf((float)new_width / src_aspect);
 		}
 	}
@@ -150,67 +166,125 @@ img2_image_t *img2_image_scale_fit(const img2_image_t *src, uint32_t target_widt
 	/* Validate new dimensions */
 	if (new_width == 0 || new_height == 0) {
 		img2_log(IMG2_LOG_ERROR, "image_scale_fit: calculated dimensions are invalid %u×%u", new_width, new_height);
-		return NULL;
+		return IMG2_E_ARG;
 	}
 
+	/* Post-condition clamp (only reachable through roundf) */
+	if (new_width > max_w) {
+		new_width = max_w;
+	}
+	if (new_height > max_h) {
+		new_height = max_h;
+	}
+
+	*out_w = new_width;
+	*out_h = new_height;
+	return IMG2_OK;
+}
+
+/* [R6] tag is "image_scale_fit" or "image_scale_resize"; all texts are the legacy ones. */
+static img2_status_t scale_impl(const char *tag, const img2_image_t *src, uint32_t w, uint32_t h, img2_filter_t filter, img2_image_t **out)
+{
+	*out = NULL;
+
+	if (src == NULL || src->pixels == NULL) {
+		img2_log(IMG2_LOG_ERROR, "%s: invalid source image", tag);
+		return IMG2_E_ARG;
+	}
+
+	if (w == 0 || h == 0) {
+		img2_log(IMG2_LOG_ERROR, "%s: invalid target dimensions %u×%u", tag, w, h);
+		return IMG2_E_ARG;
+	}
+
+	size_t byte_count;
+	bool size_ok = img2_image_calc_size(w, h, &byte_count);
+
 	/* Create output image */
-	img2_image_t *dst = img2_image_alloc(new_width, new_height);
+	img2_image_t *dst = img2_image_alloc(w, h);
 	if (dst == NULL) {
-		img2_log(IMG2_LOG_ERROR, "image_scale_fit: failed to create output image");
-		return NULL;
+		img2_log(IMG2_LOG_ERROR, "%s: failed to create output image", tag);
+		return size_ok ? IMG2_E_NOMEM : IMG2_E_LIMIT;
 	}
 
 	/* Resize using stb_image_resize2 (SRGB colorspace for natural results) */
-	if (!stbir_resize_uint8_srgb(src->pixels, src->width, src->height, 0, dst->pixels, new_width, new_height, 0, STBIR_RGBA)) {
-		img2_log(IMG2_LOG_ERROR, "image_scale_fit: stbir_resize failed");
+	int ok;
+	if (filter == IMG2_FILTER_DEFAULT) {
+		ok = stbir_resize_uint8_srgb(src->pixels, src->width, src->height, 0, dst->pixels, w, h, 0, STBIR_RGBA) != NULL;
+	} else {
+		static const stbir_filter map[] = {
+			[IMG2_FILTER_POINT] = STBIR_FILTER_POINT_SAMPLE, [IMG2_FILTER_BOX] = STBIR_FILTER_BOX,
+			[IMG2_FILTER_TRIANGLE] = STBIR_FILTER_TRIANGLE, [IMG2_FILTER_CUBIC] = STBIR_FILTER_CUBICBSPLINE,
+			[IMG2_FILTER_MITCHELL] = STBIR_FILTER_MITCHELL,
+		};
+		if ((unsigned)filter >= sizeof(map) / sizeof(map[0])) {
+			img2_image_destroy(dst);
+			return IMG2_E_ARG;
+		}
+		ok = stbir_resize(src->pixels, (int)src->width, (int)src->height, (int)src->stride, dst->pixels, (int)w, (int)h, 0, STBIR_RGBA, STBIR_TYPE_UINT8_SRGB, STBIR_EDGE_CLAMP, map[filter]) != NULL;
+	}
+	if (!ok) {
+		img2_log(IMG2_LOG_ERROR, "%s: stbir_resize failed", tag);
 		img2_image_destroy(dst);
-		return NULL;
+		return IMG2_E_CODEC;
 	}
 
-	return dst;
+	*out = dst;
+	return IMG2_OK;
 }
 
-img2_image_t *img2_image_scale_resize(const img2_image_t *src, uint32_t target_width, uint32_t target_height)
+img2_status_t img2_image_scale_fit(const img2_image_t *src, uint32_t target_width, uint32_t target_height, img2_image_t **out)
 {
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	*out = NULL;
+
 	if (src == NULL || src->pixels == NULL) {
-		img2_log(IMG2_LOG_ERROR, "image_scale_resize: invalid source image");
-		return NULL;
+		img2_log(IMG2_LOG_ERROR, "image_scale_fit: invalid source image");
+		return IMG2_E_ARG;
+
+	} else if (target_width == 0 || target_height == 0) {
+		img2_log(IMG2_LOG_ERROR, "image_scale_fit: invalid target dimensions %u×%u", target_width, target_height);
+		return IMG2_E_ARG;
 	}
 
-	if (target_width == 0 || target_height == 0) {
-		img2_log(IMG2_LOG_ERROR, "image_scale_resize: invalid target dimensions %u×%u", target_width, target_height);
-		return NULL;
+	uint32_t new_width, new_height;
+	img2_status_t st = img2_fit_size(src->width, src->height, target_width, target_height, &new_width, &new_height);
+	if (st != IMG2_OK) {
+		return st;
 	}
 
-	/* Create output image with exact dimensions (no aspect ratio preservation) */
-	img2_image_t *dst = img2_image_alloc(target_width, target_height);
-	if (dst == NULL) {
-		img2_log(IMG2_LOG_ERROR, "image_scale_resize: failed to create output image");
-		return NULL;
-	}
-
-	/* Resize using stb_image_resize2 (SRGB colorspace) */
-	if (!stbir_resize_uint8_srgb(src->pixels, src->width, src->height, 0, dst->pixels, target_width, target_height, 0, STBIR_RGBA)) {
-		img2_log(IMG2_LOG_ERROR, "image_scale_resize: stbir_resize failed");
-		img2_image_destroy(dst);
-		return NULL;
-	}
-
-	return dst;
+	return scale_impl("image_scale_fit", src, new_width, new_height, IMG2_FILTER_DEFAULT, out);
 }
 
-img2_image_t *img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height)
+img2_status_t img2_image_scale_resize(const img2_image_t *src, uint32_t target_width, uint32_t target_height, img2_image_t **out)
 {
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	return scale_impl("image_scale_resize", src, target_width, target_height, IMG2_FILTER_DEFAULT, out);
+}
+
+img2_status_t img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height, img2_image_t **out)
+{
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	*out = NULL;
+
 	if (rgb == NULL) {
 		img2_log(IMG2_LOG_ERROR, "convert_rgb_to_rgba: invalid RGB data");
-		return NULL;
+		return IMG2_E_ARG;
 	}
 
 	/* Create RGBA image */
+	size_t byte_count;
+	bool size_ok = img2_image_calc_size(width, height, &byte_count);
 	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "convert_rgb_to_rgba: failed to create image");
-		return NULL;
+		return size_ok ? IMG2_E_NOMEM : IMG2_E_LIMIT;
 	}
 
 	/* Convert RGB to RGBA (add alpha=255) */
@@ -222,21 +296,29 @@ img2_image_t *img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint3
 		img->pixels[i * 4 + 3] = 255; /* A (opaque) */
 	}
 
-	return img;
+	*out = img;
+	return IMG2_OK;
 }
 
-img2_image_t *img2_convert_gray_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height)
+img2_status_t img2_convert_gray_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height, img2_image_t **out)
 {
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	*out = NULL;
+
 	if (gray == NULL) {
 		img2_log(IMG2_LOG_ERROR, "convert_grayscale_to_rgba: invalid grayscale data");
-		return NULL;
+		return IMG2_E_ARG;
 	}
 
 	/* Create RGBA image */
+	size_t byte_count;
+	bool size_ok = img2_image_calc_size(width, height, &byte_count);
 	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "convert_grayscale_to_rgba: failed to create image");
-		return NULL;
+		return size_ok ? IMG2_E_NOMEM : IMG2_E_LIMIT;
 	}
 
 	/* Convert grayscale to RGBA (replicate gray to R,G,B; alpha=255) */
@@ -249,7 +331,8 @@ img2_image_t *img2_convert_gray_to_rgba(const uint8_t *gray, uint32_t width, uin
 		img->pixels[i * 4 + 3] = 255; /* A (opaque) */
 	}
 
-	return img;
+	*out = img;
+	return IMG2_OK;
 }
 
 /**
@@ -456,28 +539,28 @@ static uint8_t *transform_rotate_270cw(const uint8_t *src, uint32_t width, uint3
 	return dest;
 }
 
-int img2_image_orient(img2_image_t *img, uint16_t orientation)
+img2_status_t img2_image_orient(img2_image_t *img, uint16_t orientation)
 {
 	/* Validate input parameters */
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "image_apply_orientation: NULL image pointer");
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	if (img->pixels == NULL) {
 		img2_log(IMG2_LOG_ERROR, "image_apply_orientation: NULL pixel buffer");
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Validate orientation range */
 	if (orientation < 1 || orientation > 8) {
 		img2_log(IMG2_LOG_ERROR, "image_apply_orientation: invalid orientation %u (must be 1-8)", orientation);
-		return -1;
+		return IMG2_E_ARG;
 	}
 
 	/* Orientation 1 = normal, no transformation needed */
 	if (orientation == 1) {
-		return 0;
+		return IMG2_OK;
 	}
 
 	/* Apply transformation based on orientation value */
@@ -508,7 +591,7 @@ int img2_image_orient(img2_image_t *img, uint16_t orientation)
 				uint8_t *temp = transform_flip_horizontal(img->pixels, img->width, img->height);
 				if (temp == NULL) {
 					img2_log(IMG2_LOG_ERROR, "image_apply_orientation: failed to flip horizontal for orientation 5");
-					return -1;
+					return IMG2_E_NOMEM;
 				}
 				new_pixels = transform_rotate_270cw(temp, img->width, img->height);
 				free(temp);
@@ -528,7 +611,7 @@ int img2_image_orient(img2_image_t *img, uint16_t orientation)
 				uint8_t *temp = transform_flip_horizontal(img->pixels, img->width, img->height);
 				if (temp == NULL) {
 					img2_log(IMG2_LOG_ERROR, "image_apply_orientation: failed to flip horizontal for orientation 7");
-					return -1;
+					return IMG2_E_NOMEM;
 				}
 				new_pixels = transform_rotate_90cw(temp, img->width, img->height);
 				free(temp);
@@ -542,13 +625,13 @@ int img2_image_orient(img2_image_t *img, uint16_t orientation)
 			dimensions_swapped = true;
 			break;
 
-		default: img2_log(IMG2_LOG_ERROR, "image_apply_orientation: unhandled orientation %u", orientation); return -1;
+		default: img2_log(IMG2_LOG_ERROR, "image_apply_orientation: unhandled orientation %u", orientation); return IMG2_E_ARG;
 	}
 
 	/* Check if transformation succeeded */
 	if (new_pixels == NULL) {
 		img2_log(IMG2_LOG_ERROR, "image_apply_orientation: transformation failed for orientation %u", orientation);
-		return -1;
+		return IMG2_E_NOMEM;
 	}
 
 	/* Replace old pixel buffer with new one */
@@ -561,7 +644,8 @@ int img2_image_orient(img2_image_t *img, uint16_t orientation)
 		new_height = img->width;
 		img->width = new_width;
 		img->height = new_height;
+		img->stride = new_width * 4;
 	}
 
-	return 0;
+	return IMG2_OK;
 }

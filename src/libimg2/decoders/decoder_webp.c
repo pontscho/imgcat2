@@ -188,11 +188,11 @@ static img2_xmp_t *extract_webp_xmp(const uint8_t *data, size_t len)
  *
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp_static");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -204,7 +204,7 @@ static img2_image_t **decode_webp_static(const uint8_t *data, size_t len, int *f
 	uint8_t *pixels = WebPDecodeRGBA(data, len, &width, &height);
 	if (pixels == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to decode WebP image");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Create img2_image_t structure
@@ -212,7 +212,7 @@ static img2_image_t **decode_webp_static(const uint8_t *data, size_t len, int *f
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		WebPFree(pixels);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Copy pixels to img2_image_t (WebP returns RGBA8888, same as our format)
@@ -240,7 +240,7 @@ static img2_image_t **decode_webp_static(const uint8_t *data, size_t len, int *f
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		img2_image_destroy(img);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	frames[0] = img;
@@ -294,11 +294,11 @@ bool img2_webp_is_animated(const uint8_t *data, size_t len)
  * @note WebP decoder returns fully composited frames automatically
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp_animated");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -313,7 +313,7 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 	WebPAnimDecoderOptions dec_options;
 	if (!WebPAnimDecoderOptionsInit(&dec_options)) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to initialize WebP decoder options");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	dec_options.color_mode = MODE_RGBA;
@@ -323,7 +323,7 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 	WebPAnimDecoder *dec = WebPAnimDecoderNew(&webp_data, &dec_options);
 	if (dec == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create WebP animation decoder");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Get animation info
@@ -331,7 +331,7 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 	if (!WebPAnimDecoderGetInfo(dec, &anim_info)) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to get WebP animation info");
 		WebPAnimDecoderDelete(dec);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	// Check frame count
@@ -339,7 +339,7 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 	if (num_frames == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: WebP animation has no frames");
 		WebPAnimDecoderDelete(dec);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
 	if (num_frames > MAX_WEBP_FRAMES) {
@@ -356,7 +356,7 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		WebPAnimDecoderDelete(dec);
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_NOMEM);
 	}
 
 	// Initialize frames to NULL for cleanup
@@ -372,6 +372,7 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 
 		if (!WebPAnimDecoderGetNext(dec, &frame_buf, &timestamp)) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to decode WebP frame %d", frame_idx);
+			*st = IMG2_E_CODEC;
 			goto cleanup_error;
 		}
 
@@ -379,6 +380,7 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 		frames[frame_idx] = img2_image_alloc(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", frame_idx);
+			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
 
@@ -406,7 +408,7 @@ cleanup_error:
 	}
 	free(frames);
 	WebPAnimDecoderDelete(dec);
-	return NULL;
+	return NULL; /* *st set at the goto */
 }
 
 /**
@@ -425,11 +427,11 @@ cleanup_error:
  * @note For animated images, frame_count = N (max MAX_WEBP_FRAMES)
  * @note Output format is RGBA8888
  */
-img2_image_t **img2_decode_webp(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_webp_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp");
-		return NULL;
+		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
@@ -437,8 +439,20 @@ img2_image_t **img2_decode_webp(const uint8_t *data, size_t len, int *frame_coun
 
 	// Check if animated
 	if (img2_webp_is_animated(data, len)) {
-		return decode_webp_animated(data, len, frame_count);
+		return decode_webp_animated(data, len, frame_count, st);
 	}
 
-	return decode_webp_static(data, len, frame_count);
+	return decode_webp_static(data, len, frame_count, st);
+}
+
+img2_status_t img2_decode_webp(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
+{
+	(void)opts;
+	if (out == NULL) {
+		return IMG2_E_ARG;
+	}
+	img2_status_t st = IMG2_E_INTERNAL;
+	int count = 0;
+	img2_image_t **frames = decode_webp_frames(data, len, &count, &st);
+	return img2_frames_adopt(out, frames, count, st);
 }

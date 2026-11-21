@@ -18,10 +18,10 @@
 
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
+#include "../decoder_internal.h"
 #endif
 
 /* Forward declaration of img2_decode_raw from decoder */
-img2_image_t **img2_decode_raw(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Helper function to load test file
@@ -52,7 +52,7 @@ CTEST(raw_exif_integration, decode_dng_canon)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	img2_image_t **frames = img2_decode_raw(data, file_size, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_raw, data, file_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -91,7 +91,7 @@ CTEST(raw_exif_integration, decode_nef_nikon)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	img2_image_t **frames = img2_decode_raw(data, file_size, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_raw, data, file_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -131,7 +131,7 @@ CTEST(raw_exif_integration, decode_arw_sony)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	img2_image_t **frames = img2_decode_raw(data, file_size, &frame_count);
+	img2_image_t **frames = test_decode(img2_decode_raw, data, file_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
