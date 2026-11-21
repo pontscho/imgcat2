@@ -1,6 +1,7 @@
 # Purpose: Helpers for vendored subprojects (test/install isolation, host ldflag stripping).
 # Inputs:  BUILD_TESTING, vendored targets (ZLIB::ZLIB, png_static, webp, ...) at call time.
-# Outputs: macros imgcat2_vendor_begin/imgcat2_vendor_end, function imgcat2_strip_vendored_ldflags().
+# Outputs: macros imgcat2_vendor_begin/imgcat2_vendor_end, img2_vendor_section_begin/end,
+#          function imgcat2_strip_vendored_ldflags().
 
 # Helper for vendored add_subdirectory() projects: their own tests/tools must never
 # register with our CTest or build by default.
@@ -44,3 +45,16 @@ function(imgcat2_strip_vendored_ldflags _var)
 	endforeach()
 	set(${_var} "${_out}" PARENT_SCOPE)
 endfunction()
+
+# Vendor section: everything configured between begin and end (vendor subdirectories, try_compile probes)
+# sees the executable link flags (-static, stack size) in CMAKE_EXE_LINKER_FLAGS, exactly as before the
+# flags moved onto the executables. Subdirectories capture the value at add_subdirectory() time; the
+# top-level targets created after img2_vendor_section_end() see the restored value.
+macro(img2_vendor_section_begin)
+	set(_IMG2_SAVED_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+	string(JOIN " " _img2_lf ${IMG2_EXE_LINK_FLAGS})
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_img2_lf}")   # vendors see today's -static/stack flags
+endmacro()
+macro(img2_vendor_section_end)
+	set(CMAKE_EXE_LINKER_FLAGS "${_IMG2_SAVED_EXE_LINKER_FLAGS}")
+endmacro()

@@ -1,6 +1,6 @@
 # Purpose: libwebp (optional): vendored or host.
 # Inputs:  IMG2_ENABLE_WEBP, IMG2_USE_SYSTEM_WEBP.
-# Outputs: WEBP_FOUND, WEBP_LIBRARIES, WEBP_INCLUDE_DIRS, WEBP_LIB_TYPE, HAVE_WEBP.
+# Outputs: WEBP_FOUND, WEBP_LIBRARIES, WEBP_INCLUDE_DIRS, WEBP_LIB_TYPE, img2_feature(WEBP).
 
 # WebP (optional)
 if(IMG2_ENABLE_WEBP AND NOT IMG2_USE_SYSTEM_WEBP)
@@ -24,7 +24,7 @@ if(IMG2_ENABLE_WEBP AND NOT IMG2_USE_SYSTEM_WEBP)
 	set(WEBP_LIBRARIES webpdemux webp sharpyuv)
 	set(WEBP_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/vendor/libwebp/src")
 	set(WEBP_LIB_TYPE "vendored libwebp 1.6.0")
-	add_definitions(-DHAVE_WEBP)
+	img2_feature(WEBP LIBS ${WEBP_LIBRARIES} INCLUDE_DIRS ${WEBP_INCLUDE_DIRS})
 
 elseif(IMG2_ENABLE_WEBP)
 	set(WEBP_LIB_TYPE "host")
@@ -44,7 +44,7 @@ elseif(IMG2_ENABLE_WEBP)
 	endif()
 
 	if(WEBP_FOUND)
-		add_definitions(-DHAVE_WEBP)
+		img2_feature(WEBP LIBS ${WEBP_LIBRARIES} INCLUDE_DIRS ${WEBP_INCLUDE_DIRS})
 
 	else()
 		message(WARNING "libwebp not found, WebP support disabled")

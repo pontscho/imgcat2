@@ -1,6 +1,6 @@
 # Purpose: jpeg-quantsmooth (optional JPEG decode enhancement, SIMD dispatch + OpenMP).
 # Inputs:  IMG2_ENABLE_JPEGQS, JPEG_INCLUDE_DIRS.
-# Outputs: jpegqs* targets, JPEGQS_FOUND, JPEGQS_OPENMP, HAVE_JPEGQS.
+# Outputs: jpegqs* targets, JPEGQS_FOUND, JPEGQS_OPENMP, img2_feature(JPEGQS).
 
 # jpeg-quantsmooth (optional, enhances JPEG decoding quality)
 if(IMG2_ENABLE_JPEGQS AND JPEG_FOUND)
@@ -105,7 +105,7 @@ if(IMG2_ENABLE_JPEGQS AND JPEG_FOUND)
 		endforeach()
 	endif()
 
-	add_definitions(-DHAVE_JPEGQS)
+	img2_feature(JPEGQS LIBS jpegqs INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/vendor/jpeg-quantsmooth)
 	set(JPEGQS_FOUND TRUE)
 	message(STATUS "jpeg-quantsmooth: enabled (quality=6, niter=5, ${JPEGQS_OPENMP})")
 endif()

@@ -1,6 +1,6 @@
 # Purpose: HEIF / AVIF (optional): vendored libheif + libde265/kvazaar/aom/openjpeg, or host.
 # Inputs:  IMG2_ENABLE_HEIF, IMG2_USE_SYSTEM_HEIF, JPEG/WebP/brotli results.
-# Outputs: HEIF_FOUND, HEIF_LIBRARIES, HEIF_INCLUDE_DIRS, HEIF_LIB_TYPE, HEIF_CODECS, AOM::aom, HAVE_HEIF.
+# Outputs: HEIF_FOUND, HEIF_LIBRARIES, HEIF_INCLUDE_DIRS, HEIF_LIB_TYPE, HEIF_CODECS, AOM::aom, img2_feature(HEIF).
 
 # HEIF / AVIF (optional)
 if(IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF)
@@ -224,7 +224,7 @@ if(IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF)
 	if(TARGET sharpyuv)
 		list(APPEND HEIF_CODECS "sharpyuv")
 	endif()
-	add_definitions(-DHAVE_HEIF)
+	img2_feature(HEIF LIBS ${HEIF_CUSTOM_LIBS} INCLUDE_DIRS ${HEIF_INCLUDE_DIRS})
 
 elseif(IMG2_ENABLE_HEIF)
 	set(HEIF_LIB_TYPE "host")
@@ -373,7 +373,7 @@ elseif(IMG2_ENABLE_HEIF)
 			endif()
 		endif()
 
-		add_definitions(-DHAVE_HEIF)
+		img2_feature(HEIF LIBS ${HEIF_CUSTOM_LIBS} INCLUDE_DIRS ${HEIF_INCLUDE_DIRS})
 
 	else()
 		message(WARNING "libheif not found, HEIF support disabled")

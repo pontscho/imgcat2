@@ -1,6 +1,6 @@
 # Purpose: libpng (required): vendored + APNG patch, or host.
 # Inputs:  IMG2_USE_SYSTEM_PNG, ZLIB_*.
-# Outputs: PNG_FOUND, PNG_LIBRARIES, PNG_INCLUDE_DIRS, PNG_LIB_TYPE, PNG_APNG_SUPPORTED_CHECK, HAVE_LIBPNG.
+# Outputs: PNG_FOUND, PNG_LIBRARIES, PNG_INCLUDE_DIRS, PNG_LIB_TYPE, PNG_APNG_SUPPORTED_CHECK, img2_feature(LIBPNG).
 
 # libpng (REQUIRED)
 include(CheckCSourceCompiles)
@@ -131,7 +131,7 @@ else()
 	endif()
 	set(PNG_LIB_TYPE "vendored libpng 1.6.59 + APNG patch")
 endif()
-add_definitions(-DHAVE_LIBPNG)
+img2_feature(LIBPNG LIBS ${PNG_LIBRARIES} INCLUDE_DIRS ${PNG_INCLUDE_DIRS})
 
 if(PNG_APNG_SUPPORTED_CHECK)
 	# PNG_APNG_SUPPORTED is already defined in png.h when APNG support is available

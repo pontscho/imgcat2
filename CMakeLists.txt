@@ -21,8 +21,8 @@ include(Img2Tooling)
 
 # Compiler flags
 # Optimization flags apply to everything (vendored dependencies included).
-# Warning flags (-Werror) are project-only: see IMGCAT2_WARNING_FLAGS, applied after
-# the vendored dependencies are declared (COMPILE_OPTIONS is captured at target creation).
+# Warning flags (-Werror) are project-only: IMGCAT2_WARNING_FLAGS, applied per target by
+# img2_apply_project_settings() (cmake/Img2ProjectSettings.cmake).
 add_compile_options(-O3 -g)
 set(IMGCAT2_WARNING_FLAGS -Wall -Wextra -Werror -Wno-error=unused-but-set-variable)
 
@@ -30,6 +30,8 @@ set(IMGCAT2_WARNING_FLAGS -Wall -Wextra -Werror -Wno-error=unused-but-set-variab
 find_package(PkgConfig REQUIRED)
 
 include(Img2VendorHelpers)
+include(Img2Features)
+img2_vendor_section_begin()   # vendors see the executable link flags (-static, stack size) as before
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorZlib.cmake")
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorJpeg.cmake")
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorJpegqs.cmake")
@@ -45,288 +47,21 @@ include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorJxl.cmake")
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorHeaderOnly.cmake")
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorResvg.cmake")
 
-include(Img2LinkOrder)
-include(Img2ProjectSettings)
-
-# Generated sources (embedded fonts) live in the build tree
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-set(IMG2_GENERATED_DIR "${PROJECT_BINARY_DIR}/generated")
-
-# Add include directories
-include_directories(
-	${PROJECT_SOURCE_DIR}/src
-	${PROJECT_SOURCE_DIR}/src/libimg2
-	${IMG2_GENERATED_DIR}
-	${NANOSVG_INCLUDE_DIR}
-	${STB_INCLUDE_DIR}
-	${QOI_INCLUDE_DIR}
-	${PNG_INCLUDE_DIRS}
-	${ZLIB_INCLUDE_DIRS}
-	${JPEG_INCLUDE_DIRS}
-)
-
-if(GIF_FOUND)
-	include_directories(${GIF_INCLUDE_DIR})
-endif()
-
-if(WEBP_FOUND)
-	include_directories(${WEBP_INCLUDE_DIRS})
-endif()
-
-if(HEIF_FOUND)
-	include_directories(${HEIF_INCLUDE_DIRS})
-endif()
-
-if(TIFF_FOUND)
-	include_directories(${TIFF_INCLUDE_DIRS})
-endif()
-
-if(RAW_FOUND)
-	include_directories(${RAW_INCLUDE_DIRS})
-endif()
-
-if(JXL_FOUND)
-	include_directories(${JXL_INCLUDE_DIRS})
-endif()
-
-if(RESVG_FOUND)
-	include_directories(${RESVG_INCLUDE_DIRS})
-endif()
-
-if(JPEGQS_FOUND)
-	include_directories(${PROJECT_SOURCE_DIR}/vendor/jpeg-quantsmooth)
-endif()
-
-set(IMGCAT2_SOURCES
-	# Core module
-	src/libimg2/core/image.c
-	src/imgcat2/pipeline.c
-	src/imgcat2/cli.c
-	src/imgcat2/base64.c
-	src/imgcat2/metadata.c
-
-	# Decoders module
-	src/libimg2/decoders/decoder.c
-	src/libimg2/decoders/magic.c
-	src/libimg2/decoders/decoder_stb.c
-	src/libimg2/decoders/decoder_png.c
-	src/libimg2/decoders/decoder_jpeg.c
-	src/libimg2/decoders/decoder_qoi.c
-	src/libimg2/decoders/decoder_ico.c
-	src/libimg2/decoders/decoder_pnm.c
-	src/libimg2/decoders/decoder_yuv.c
-	src/libimg2/decoders/decoder_nanosvg.c
-
-	# Encoders module
-	src/libimg2/encoders/encoder.c
-	src/libimg2/encoders/encoder_jpeg.c
-	src/libimg2/encoders/encoder_png.c
-
-	# Terminal module - file renderer
-	src/imgcat2/terminal/file.c
-
-	# Text/Font module
-	src/libimg2/text/font_manager.c
-	${IMG2_GENERATED_DIR}/embedded_fonts.c
-
-	# ANSI module
-	src/imgcat2/ansi/ansi.c
-	src/imgcat2/ansi/escape.c
-)
-
-if(GIF_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_gif.c)
-endif()
-
-if(WEBP_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_webp.c)
-endif()
-
-if(HEIF_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_heif.c)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_avif.c)
-endif()
-
-if(TIFF_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_tiff.c)
-endif()
-
-if(RAW_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_raw.c)
-endif()
-
-if(JXL_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_jxl.c)
-endif()
-
-if(RESVG_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_resvg.c)
-endif()
-
-# Conditional encoder sources
-if(WEBP_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/encoders/encoder_webp.c)
-endif()
-
-if(HEIF_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/encoders/encoder_heif.c)
-endif()
-
-if(JXL_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/encoders/encoder_jxl.c)
-endif()
-
+# Built-in EXIF/XMP metadata parser (no external library)
 if(IMG2_ENABLE_EXIF_READER)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/metadata/xml_parser.c)
-	list(APPEND IMGCAT2_SOURCES src/libimg2/metadata/exif_reader.c)
-	add_definitions(-DHAVE_EXIF_READER)
+	img2_feature(EXIF_READER)
 endif()
 
-# Platform-specific terminal module (PHASE 8)
-if(WIN32)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_windows.c)
+include(Img2LinkOrder)
+img2_vendor_section_end()
+include(Img2ProjectSettings)
+include(Img2Testing)
 
-else()
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/terminal_unix.c)
-
-	# iTerm2 inline images protocol module
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/iterm2.c)
-
-	# Kitty graphics protocol module
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/kitty.c)
+# Library, command line tool
+add_subdirectory(src/libimg2)
+if(IMG2_BUILD_CLI OR IMG2_BUILD_TESTS)
+	add_subdirectory(src/imgcat2)
 endif()
-
-# Font embedding (generated into the build tree; IMG2_GENERATED_DIR is set above)
-set(_img2_font_dir "${PROJECT_SOURCE_DIR}/src/libimg2/font")
-add_custom_command(
-	OUTPUT "${IMG2_GENERATED_DIR}/embedded_fonts.c" "${IMG2_GENERATED_DIR}/embedded_fonts.h"
-	COMMAND ${CMAKE_COMMAND} -E make_directory "${IMG2_GENERATED_DIR}"
-	COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/embed_font.py"
-	        "${_img2_font_dir}" "${IMG2_GENERATED_DIR}/embedded_fonts"
-	DEPENDS "${_img2_font_dir}/dejavu-sans-mono.book.ttf" "${_img2_font_dir}/dejavu-sans-mono.bold.ttf"
-	        "${_img2_font_dir}/dejavu-sans-mono.oblique.ttf" "${_img2_font_dir}/dejavu-sans-mono.bold-oblique.ttf"
-	        "${PROJECT_SOURCE_DIR}/tools/embed_font.py"
-	COMMENT "Embedding DejaVu Sans Mono font family" VERBATIM)
-add_custom_target(embed_fonts DEPENDS "${IMG2_GENERATED_DIR}/embedded_fonts.c" "${IMG2_GENERATED_DIR}/embedded_fonts.h")
-
-# Main executable
-add_executable(imgcat2 ${IMGCAT2_SOURCES} src/imgcat2/main.c)
-add_dependencies(imgcat2 embed_fonts)
-
-# Library for tests (without main.c)
-add_library(imgcat2_lib STATIC ${IMGCAT2_SOURCES})
-add_dependencies(imgcat2_lib embed_fonts)
-
-# Link libraries for executable
-target_link_libraries(imgcat2 PRIVATE
-	${PNG_LIBRARIES}
-	${ZLIB_LIBRARIES}
-	$<$<BOOL:${JPEGQS_FOUND}>:jpegqs>
-	${JPEG_LIBRARIES}
-)
-
-# Link libraries for library
-target_link_libraries(imgcat2_lib PUBLIC
-	${PNG_LIBRARIES}
-	${ZLIB_LIBRARIES}
-	$<$<BOOL:${JPEGQS_FOUND}>:jpegqs>
-	${JPEG_LIBRARIES}
-)
-
-if(GIF_FOUND)
-	target_link_libraries(imgcat2 PUBLIC ${GIF_LIBRARY})
-	target_link_libraries(imgcat2_lib PUBLIC ${GIF_LIBRARY})
-endif()
-
-if(WEBP_FOUND)
-	target_link_libraries(imgcat2 PRIVATE ${WEBP_LIBRARIES})
-	target_link_libraries(imgcat2_lib PUBLIC ${WEBP_LIBRARIES})
-endif()
-
-if(HEIF_FOUND)
-	# Use custom libs for static linking on both Linux and macOS
-	target_link_libraries(imgcat2 PRIVATE ${HEIF_CUSTOM_LIBS})
-	target_link_libraries(imgcat2_lib PUBLIC ${HEIF_CUSTOM_LIBS})
-endif()
-
-if(TIFF_FOUND)
-	if(NOT IMG2_USE_SYSTEM_TIFF)
-		# Vendored libtiff target (carries zlib-ng/jpeg/webp as link dependencies)
-		target_link_libraries(imgcat2 PRIVATE ${TIFF_LIBRARIES})
-		target_link_libraries(imgcat2_lib PUBLIC ${TIFF_LIBRARIES})
-	elseif(APPLE)
-		# Use custom libs on macOS for static linking
-		target_link_libraries(imgcat2 PRIVATE ${TIFF_CUSTOM_LIBS})
-		target_link_libraries(imgcat2_lib PUBLIC ${TIFF_CUSTOM_LIBS})
-	else()
-		# Use STATIC_LDFLAGS on Linux for full static linking with all dependencies
-		target_link_libraries(imgcat2 PRIVATE ${TIFF_STATIC_LDFLAGS})
-		target_link_libraries(imgcat2_lib PUBLIC ${TIFF_STATIC_LDFLAGS})
-	endif()
-endif()
-
-if(RAW_FOUND)
-	if(NOT IMG2_USE_SYSTEM_RAW)
-		# Vendored LibRaw target (carries lcms2/jpeg/zlib/OpenMP as link dependencies)
-		target_link_libraries(imgcat2 PRIVATE ${RAW_LIBRARIES})
-		target_link_libraries(imgcat2_lib PUBLIC ${RAW_LIBRARIES})
-	elseif(APPLE)
-		# Use custom libs on macOS for static linking
-		target_link_libraries(imgcat2 PRIVATE ${RAW_CUSTOM_LIBS})
-		target_link_libraries(imgcat2_lib PUBLIC ${RAW_CUSTOM_LIBS})
-	else()
-		# Use STATIC_LDFLAGS on Linux for full static linking with all dependencies
-		target_link_libraries(imgcat2 PRIVATE ${RAW_STATIC_LDFLAGS})
-		target_link_libraries(imgcat2_lib PUBLIC ${RAW_STATIC_LDFLAGS})
-	endif()
-endif()
-
-if(JXL_FOUND)
-	if(NOT IMG2_USE_SYSTEM_JXL)
-		# Vendored libjxl targets (carry highway/brotli/lcms2 as link dependencies)
-		target_link_libraries(imgcat2 PRIVATE ${JXL_LIBRARIES})
-		target_link_libraries(imgcat2_lib PUBLIC ${JXL_LIBRARIES})
-	elseif(APPLE)
-		# Use custom libs on macOS for static linking
-		target_link_libraries(imgcat2 PRIVATE ${JXL_CUSTOM_LIBS})
-		target_link_libraries(imgcat2_lib PUBLIC ${JXL_CUSTOM_LIBS})
-	else()
-		# Use STATIC_LDFLAGS on Linux for static linking
-		target_link_libraries(imgcat2 PRIVATE ${JXL_STATIC_LDFLAGS})
-		target_link_libraries(imgcat2_lib PUBLIC ${JXL_STATIC_LDFLAGS})
-	endif()
-endif()
-
-if(RESVG_FOUND)
-	target_link_libraries(imgcat2 PRIVATE ${RESVG_LIBRARIES})
-	target_link_libraries(imgcat2_lib PUBLIC ${RESVG_LIBRARIES})
-endif()
-
-# Vendored providers last (see IMGCAT2_VENDORED_TRAILING_LIBS)
-target_link_libraries(imgcat2 PRIVATE ${IMGCAT2_VENDORED_TRAILING_LIBS})
-target_link_libraries(imgcat2_lib PUBLIC ${IMGCAT2_VENDORED_TRAILING_LIBS})
-
-# Platform-specific libraries
-if(UNIX AND NOT APPLE)
-	target_link_libraries(imgcat2 PUBLIC m)  # Math library
-	target_link_libraries(imgcat2_lib PUBLIC m)  # Math library
-endif()
-
-# C++ standard library on macOS (static or dynamic)
-if(APPLE)
-	if(STATIC_LIBCXX_LIBS)
-		# Use static libc++
-		target_link_libraries(imgcat2 PRIVATE ${STATIC_LIBCXX_LIBS})
-		target_link_libraries(imgcat2_lib PUBLIC ${STATIC_LIBCXX_LIBS})
-	elseif(DYNAMIC_LIBCXX_LIBS)
-		# Use dynamic libc++
-		target_link_libraries(imgcat2 PRIVATE ${DYNAMIC_LIBCXX_LIBS})
-		target_link_libraries(imgcat2_lib PUBLIC ${DYNAMIC_LIBCXX_LIBS})
-	endif()
-endif()
-
-# Install target
-install(TARGETS imgcat2 DESTINATION bin)
 
 # clang-format target
 img2_add_format_target()

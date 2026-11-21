@@ -1,6 +1,6 @@
 # Purpose: Vendored zlib-ng (zlib-compat mode): single point of truth for zlib.
 # Inputs:  vendor/zlib-ng.
-# Outputs: ZLIB::ZLIB, ZLIB_LIBRARIES, ZLIB_INCLUDE_DIRS, ZLIB_INCLUDE_DIR/ZLIB_LIBRARY cache, COMPRESSION_LIB_TYPE.
+# Outputs: ZLIB::ZLIB, ZLIB_LIBRARIES, ZLIB_INCLUDE_DIRS, ZLIB_INCLUDE_DIR/ZLIB_LIBRARY cache, COMPRESSION_LIB_TYPE, img2_feature(ZLIB).
 
 # Compression library: vendored zlib-ng (zlib-compat mode)
 set(ZLIB_COMPAT ON CACHE BOOL "zlib-ng: zlib-compatible API")
@@ -26,3 +26,4 @@ set(ZLIB_INCLUDE_DIRS "${PROJECT_BINARY_DIR}/vendor/zlib-ng" "${PROJECT_SOURCE_D
 set(ZLIB_INCLUDE_DIR "${PROJECT_BINARY_DIR}/vendor/zlib-ng" CACHE PATH "zlib include dir (vendored zlib-ng)" FORCE)
 set(ZLIB_LIBRARY ZLIB::ZLIB CACHE STRING "zlib library (vendored zlib-ng target)" FORCE)
 set(COMPRESSION_LIB_TYPE "zlib-ng (vendored)")
+img2_feature(ZLIB LIBS ${ZLIB_LIBRARIES} INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS})

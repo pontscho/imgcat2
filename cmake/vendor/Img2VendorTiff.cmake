@@ -1,6 +1,6 @@
 # Purpose: libtiff (optional): vendored or host.
 # Inputs:  IMG2_ENABLE_TIFF, IMG2_USE_SYSTEM_TIFF, IMG2_USE_SYSTEM_JPEG, JPEG/WebP/zlib results.
-# Outputs: TIFF_FOUND, TIFF_LIBRARIES, TIFF_INCLUDE_DIRS, TIFF_LIB_TYPE, HAVE_TIFF.
+# Outputs: TIFF_FOUND, TIFF_LIBRARIES, TIFF_INCLUDE_DIRS, TIFF_LIB_TYPE, img2_feature(TIFF).
 
 # TIFF (optional)
 if(IMG2_ENABLE_TIFF AND NOT IMG2_USE_SYSTEM_TIFF)
@@ -74,7 +74,7 @@ if(IMG2_ENABLE_TIFF AND NOT IMG2_USE_SYSTEM_TIFF)
 	set(TIFF_LIBRARIES TIFF::tiff)
 	set(TIFF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/vendor/libtiff/libtiff" "${PROJECT_BINARY_DIR}/vendor/libtiff/libtiff")
 	set(TIFF_LIB_TYPE "vendored libtiff 4.7.2")
-	add_definitions(-DHAVE_TIFF)
+	img2_feature(TIFF LIBS ${TIFF_LIBRARIES} INCLUDE_DIRS ${TIFF_INCLUDE_DIRS})
 
 elseif(IMG2_ENABLE_TIFF)
 	set(TIFF_LIB_TYPE "host")
@@ -100,7 +100,11 @@ elseif(IMG2_ENABLE_TIFF)
 		else()
 			imgcat2_strip_vendored_ldflags(TIFF_STATIC_LDFLAGS)
 		endif()
-		add_definitions(-DHAVE_TIFF)
+		if(APPLE)
+			img2_feature(TIFF LIBS ${TIFF_CUSTOM_LIBS} INCLUDE_DIRS ${TIFF_INCLUDE_DIRS})
+		else()
+			img2_feature(TIFF LIBS ${TIFF_STATIC_LDFLAGS} INCLUDE_DIRS ${TIFF_INCLUDE_DIRS})
+		endif()
 	else()
 		message(WARNING "libtiff not found, TIFF support disabled")
 		set(IMG2_ENABLE_TIFF OFF)

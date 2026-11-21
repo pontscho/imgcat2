@@ -1,6 +1,6 @@
 # Purpose: libjpeg-turbo (required): vendored via ExternalProject or host.
 # Inputs:  IMG2_USE_SYSTEM_JPEG.
-# Outputs: JPEG::JPEG, JPEG_FOUND, JPEG_LIBRARIES, JPEG_INCLUDE_DIRS, JPEG_LIB_TYPE, LIBJPEG_TURBO_LIBRARY, HAVE_LIBJPEG.
+# Outputs: JPEG::JPEG, JPEG_FOUND, JPEG_LIBRARIES, JPEG_INCLUDE_DIRS, JPEG_LIB_TYPE, LIBJPEG_TURBO_LIBRARY, img2_feature(LIBJPEG).
 
 # libjpeg-turbo (REQUIRED)
 if(IMG2_USE_SYSTEM_JPEG)
@@ -72,4 +72,4 @@ else()
 	set(JPEG_LIBRARY "${LIBJPEG_TURBO_LIBRARY}" CACHE FILEPATH "libjpeg library (vendored libjpeg-turbo)" FORCE)
 	set(JPEG_LIB_TYPE "vendored libjpeg-turbo 3.2.1, jpeg8 ABI")
 endif()
-add_definitions(-DHAVE_LIBJPEG)
+img2_feature(LIBJPEG LIBS ${JPEG_LIBRARIES} INCLUDE_DIRS ${JPEG_INCLUDE_DIRS})

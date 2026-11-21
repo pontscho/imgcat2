@@ -1,6 +1,6 @@
 # Purpose: giflib (optional): vendored or host.
 # Inputs:  IMG2_ENABLE_GIF, IMG2_USE_SYSTEM_GIF.
-# Outputs: vendor_giflib, GIF_FOUND, GIF_LIBRARY, GIF_INCLUDE_DIR, GIF_LIB_TYPE, HAVE_GIFLIB.
+# Outputs: vendor_giflib, GIF_FOUND, GIF_LIBRARY, GIF_INCLUDE_DIR, GIF_LIB_TYPE, img2_feature(GIFLIB).
 
 # giflib (optional)
 if(IMG2_ENABLE_GIF)
@@ -35,7 +35,7 @@ if(IMG2_ENABLE_GIF)
 	endif()
 
 	if(GIF_LIBRARY AND GIF_INCLUDE_DIR)
-		add_definitions(-DHAVE_GIFLIB)
+		img2_feature(GIFLIB LIBS ${GIF_LIBRARY} INCLUDE_DIRS ${GIF_INCLUDE_DIR})
 		set(GIF_FOUND TRUE)
 
 	else()

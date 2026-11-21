@@ -1,6 +1,6 @@
 # Purpose: Header-only vendors: nanosvg, stb, qoi.
 # Inputs:  vendor/{nanosvg,stb,qoi}.
-# Outputs: NANOSVG_HEADER, NANOSVG_INCLUDE_DIR, STB_INCLUDE_DIR, QOI_INCLUDE_DIR (+ include_directories).
+# Outputs: NANOSVG_HEADER, NANOSVG_INCLUDE_DIR, STB_INCLUDE_DIR, QOI_INCLUDE_DIR (img2 adds them to its own include list).
 
 # NanoSVG (optional, header-only library in vendor/)
 # Check if nanosvg submodule exists
@@ -19,4 +19,3 @@ set(QOI_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/vendor/qoi)
 
 # NanoSVG headers (vendored, header-only)
 set(NANOSVG_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/vendor/nanosvg/src)
-include_directories(${NANOSVG_INCLUDE_DIR})

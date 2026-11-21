@@ -1,6 +1,10 @@
 # Purpose: Platform link settings: static linking, macOS libc++ selection, stack size.
 # Inputs:  IMG2_ENABLE_STATIC_LIBCXX, UNIX/APPLE/WIN32.
-# Outputs: BUILD_SHARED_LIBS, CMAKE_FIND_LIBRARY_SUFFIXES, CMAKE_EXE_LINKER_FLAGS, STATIC_LIBCXX_LIBS, DYNAMIC_LIBCXX_LIBS.
+# Outputs: BUILD_SHARED_LIBS, CMAKE_FIND_LIBRARY_SUFFIXES, IMG2_EXE_LINK_FLAGS, STATIC_LIBCXX_LIBS, DYNAMIC_LIBCXX_LIBS.
+#          IMG2_EXE_LINK_FLAGS (-static, stack size) go only on executables (img2_static_executable) and, during
+#          the vendor section, into CMAKE_EXE_LINKER_FLAGS (img2_vendor_section_begin/end).
+
+set(IMG2_EXE_LINK_FLAGS "")
 
 # Static linking preference
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
@@ -11,7 +15,7 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
 if(UNIX AND NOT APPLE)
 	# Linux: Full static linking
 	set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
-	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+	list(APPEND IMG2_EXE_LINK_FLAGS -static)
 
 elseif(APPLE)
 	# macOS: Static link third-party libs
@@ -29,7 +33,7 @@ elseif(APPLE)
 
 		if(LIBCXX_STATIC AND LIBCXXABI_STATIC)
 			# Statically link libc++ and libc++abi
-			set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -nostdlib++")
+			list(APPEND IMG2_EXE_LINK_FLAGS -nostdlib++)
 			set(STATIC_LIBCXX_LIBS ${LIBCXX_STATIC} ${LIBCXXABI_STATIC})
 			message(STATUS "Using static libc++: ${LIBCXX_STATIC}")
 			message(STATUS "Using static libc++abi: ${LIBCXXABI_STATIC}")
@@ -49,13 +53,13 @@ endif()
 # Stack size linker flags
 if(UNIX AND NOT APPLE)
 	# Linux
-	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,stack-size=8388608")
+	list(APPEND IMG2_EXE_LINK_FLAGS -Wl,-z,stack-size=8388608)
 
 elseif(APPLE)
 	# macOS
-	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-stack_size,0x800000")
+	list(APPEND IMG2_EXE_LINK_FLAGS -Wl,-stack_size,0x800000)
 
 elseif(WIN32)
 	# Windows
-	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8388608")
+	list(APPEND IMG2_EXE_LINK_FLAGS /STACK:8388608)
 endif()

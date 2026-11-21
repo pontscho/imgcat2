@@ -1,6 +1,6 @@
 # Purpose: Build options of libimg2 / imgcat2 (codec switches, vendored vs host deps).
 # Inputs:  PROJECT_IS_TOP_LEVEL.
-# Outputs: IMG2_ENABLE_*, IMG2_USE_SYSTEM_*, IMG2_BUILD_TESTS cache options.
+# Outputs: IMG2_ENABLE_*, IMG2_USE_SYSTEM_*, IMG2_BUILD_TESTS, IMG2_BUILD_CLI cache options.
 
 # Build options
 option(IMG2_ENABLE_GIF "Enable GIF support (giflib)" ON)
@@ -12,6 +12,7 @@ option(IMG2_ENABLE_JXL "Enable JPEG XL support (libjxl)" ON)
 option(IMG2_ENABLE_RESVG "Enable resvg SVG renderer (preferred over nanosvg)" OFF)
 option(IMG2_ENABLE_EXIF_READER "Enable EXIF/XMP metadata parsing (built-in)" ON)
 option(IMG2_BUILD_TESTS "Build img2 tests" ${PROJECT_IS_TOP_LEVEL})
+option(IMG2_BUILD_CLI "Build the imgcat2 command line tool" ${PROJECT_IS_TOP_LEVEL})
 option(IMG2_ENABLE_JPEGQS "Enable JPEG quantsmooth (enhances JPEG decoding quality)" ON)
 option(IMG2_ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" OFF)
 option(IMG2_ENABLE_CLANG_FORMAT "Enable clang-format code formatting" ON)

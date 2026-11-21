@@ -1,6 +1,6 @@
 # Purpose: libjxl (optional): vendored libjxl + highway, or host.
 # Inputs:  IMG2_ENABLE_JXL, IMG2_USE_SYSTEM_JXL, brotli/lcms2 results.
-# Outputs: JXL_FOUND, JXL_LIBRARIES, JXL_INCLUDE_DIRS, JXL_LIB_TYPE, JXL_VERSION, HAVE_JXL.
+# Outputs: JXL_FOUND, JXL_LIBRARIES, JXL_INCLUDE_DIRS, JXL_LIB_TYPE, JXL_VERSION, img2_feature(JXL).
 
 # libjxl (optional)
 if(IMG2_ENABLE_JXL AND NOT IMG2_USE_SYSTEM_JXL)
@@ -80,7 +80,7 @@ if(IMG2_ENABLE_JXL AND NOT IMG2_USE_SYSTEM_JXL)
 	set(JXL_INCLUDE_DIRS "${PROJECT_BINARY_DIR}/vendor/libjxl/lib/include")
 	set(JXL_VERSION "0.13.0")
 	set(JXL_LIB_TYPE "vendored libjxl ${JXL_VERSION}; highway ${IMGCAT2_VENDORED_HWY_VERSION}, ${BROTLI_LIB_TYPE}, lcms2: ${LCMS2_LIB_TYPE}")
-	add_definitions(-DHAVE_JXL)
+	img2_feature(JXL LIBS ${JXL_LIBRARIES} INCLUDE_DIRS ${JXL_INCLUDE_DIRS})
 
 elseif(IMG2_ENABLE_JXL)
 	set(JXL_LIB_TYPE "host")
@@ -144,7 +144,11 @@ elseif(IMG2_ENABLE_JXL)
 			endif()
 		endif()
 
-		add_definitions(-DHAVE_JXL)
+		if(APPLE)
+			img2_feature(JXL LIBS ${JXL_CUSTOM_LIBS} INCLUDE_DIRS ${JXL_INCLUDE_DIRS})
+		else()
+			img2_feature(JXL LIBS ${JXL_STATIC_LDFLAGS} INCLUDE_DIRS ${JXL_INCLUDE_DIRS})
+		endif()
 		message(STATUS "libjxl found: ${JXL_VERSION}")
 
 	else()

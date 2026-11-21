@@ -1,6 +1,6 @@
 # Purpose: resvg (optional, preferred SVG decoder; host library).
 # Inputs:  IMG2_ENABLE_RESVG.
-# Outputs: RESVG_FOUND, RESVG_LIBRARIES, RESVG_INCLUDE_DIRS, HAVE_RESVG.
+# Outputs: RESVG_FOUND, RESVG_LIBRARIES, RESVG_INCLUDE_DIRS, img2_feature(RESVG).
 
 # resvg (optional, preferred SVG decoder)
 if(IMG2_ENABLE_RESVG)
@@ -24,7 +24,7 @@ if(IMG2_ENABLE_RESVG)
 	endif()
 
 	if(RESVG_FOUND)
-		add_definitions(-DHAVE_RESVG)
+		img2_feature(RESVG LIBS ${RESVG_LIBRARIES} INCLUDE_DIRS ${RESVG_INCLUDE_DIRS})
 		message(STATUS "resvg found: ${RESVG_VERSION} (preferred SVG decoder)")
 
 	else()

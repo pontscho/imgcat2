@@ -1,6 +1,6 @@
 # Purpose: LibRaw (optional): vendored or host.
 # Inputs:  IMG2_ENABLE_RAW, IMG2_USE_SYSTEM_RAW, LCMS2_TARGET, JPEG/zlib results.
-# Outputs: vendor_libraw, RAW_FOUND, RAW_LIBRARIES, RAW_INCLUDE_DIRS, RAW_LIB_TYPE, HAVE_RAW.
+# Outputs: vendor_libraw, RAW_FOUND, RAW_LIBRARIES, RAW_INCLUDE_DIRS, RAW_LIB_TYPE, img2_feature(RAW).
 
 # RAW (optional)
 if(IMG2_ENABLE_RAW AND NOT IMG2_USE_SYSTEM_RAW)
@@ -20,6 +20,8 @@ if(IMG2_ENABLE_RAW AND NOT IMG2_USE_SYSTEM_RAW)
 	list(FILTER LIBRAW_SOURCES EXCLUDE REGEX "_ph\\.cpp$")
 	add_library(vendor_libraw STATIC ${LIBRAW_SOURCES})
 	target_include_directories(vendor_libraw PUBLIC ${LIBRAW_SRC_DIR})
+	# kept for byte identity; was a global include_directories(): zlib-ng dirs before lcms2's (-I order as before)
+	target_include_directories(vendor_libraw PRIVATE ${ZLIB_INCLUDE_DIRS})
 	# USE_LCMS2 is PUBLIC: libraw_types.h includes lcms2.h under it (header consistency)
 	target_compile_definitions(vendor_libraw
 		PUBLIC USE_LCMS2
@@ -59,7 +61,7 @@ if(IMG2_ENABLE_RAW AND NOT IMG2_USE_SYSTEM_RAW)
 	set(RAW_CUSTOM_LIBS vendor_libraw)
 	set(RAW_INCLUDE_DIRS ${LIBRAW_SRC_DIR})
 	set(RAW_LIB_TYPE "vendored LibRaw 0.22.3, ${RAW_OPENMP}; lcms2: ${LCMS2_LIB_TYPE}")
-	add_definitions(-DHAVE_RAW)
+	img2_feature(RAW LIBS ${RAW_LIBRARIES} INCLUDE_DIRS ${RAW_INCLUDE_DIRS})
 
 elseif(IMG2_ENABLE_RAW)
 	set(RAW_LIB_TYPE "host")
@@ -102,7 +104,11 @@ elseif(IMG2_ENABLE_RAW)
 	endif()
 
 	if(RAW_FOUND)
-		add_definitions(-DHAVE_RAW)
+		if(APPLE)
+			img2_feature(RAW LIBS ${RAW_CUSTOM_LIBS} INCLUDE_DIRS ${RAW_INCLUDE_DIRS})
+		else()
+			img2_feature(RAW LIBS ${RAW_STATIC_LDFLAGS} INCLUDE_DIRS ${RAW_INCLUDE_DIRS})
+		endif()
 
 	else()
 		message(WARNING "libraw not found, RAW support disabled")

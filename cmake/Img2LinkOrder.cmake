@@ -6,7 +6,7 @@
 # libtiff/libraw when USE_SYSTEM_*): those reference jpeg/webp/lcms2/zlib symbols, and with
 # static linking the provider must come after its user on the link line.
 # Archive paths (not target names) on purpose: CMake de-duplicates targets in the
-# transitive link closure (imgcat2_lib -> tests) and would drop the trailing copy, while
+# transitive link closure (img2 -> imgcat2_cli -> tests) and would drop the trailing copy, while
 # raw items are kept in place. Build order is already ensured by the target links above.
 set(IMGCAT2_VENDORED_TRAILING_LIBS "")
 if(TARGET libjpeg-turbo-ext)
