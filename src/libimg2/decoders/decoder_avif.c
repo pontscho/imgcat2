@@ -327,6 +327,10 @@ static img2_image_t **decode_avif_static(const uint8_t *data, size_t len, int *f
  * @note Maximum MAX_AVIF_FRAMES frames (200) to prevent DoS
  * @note AVIF sequences may have timing info in metadata
  * @note Output format is RGBA8888
+ *
+ * TODO: delay_ms / loop_count stay 0 (unknown). The frames come from the top-level
+ * image list, not from the libheif sequence (track) API, which is where per-sample
+ * durations would come from; see docs/libimg2.md "Known limitations".
  */
 static img2_image_t **decode_avif_animated(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {

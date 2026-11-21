@@ -8,6 +8,7 @@
  */
 
 #include <png.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -493,15 +494,16 @@ static void apng_composite_frame(img2_image_t *accumulator, uint8_t *frame_pixel
  * @note Output format is always RGBA8888
  * @note Frames are capped at MAX_PNG_FRAMES (200)
  */
-static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
+static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame_count, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png_animated");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	/* Initialize output */
 	*frame_count = 0;
+	*loop_count = 0;
 
 	/* Setup memory reader */
 	png_mem_reader reader;
@@ -613,11 +615,14 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		png_uint_32 x_offset, y_offset;
 		png_uint_16 delay_num, delay_den;
 		png_byte dispose_op, blend_op;
+		uint32_t delay_ms = 0;
 
 		png_read_frame_head(png_ptr, info_ptr);
 
 		if (png_get_valid(png_ptr, info_ptr, PNG_INFO_fcTL)) {
 			png_get_next_frame_fcTL(png_ptr, info_ptr, &frame_width, &frame_height, &x_offset, &y_offset, &delay_num, &delay_den, &dispose_op, &blend_op);
+			/* den 0 means 1/100 s; rounded to the nearest ms */
+			delay_ms = delay_den == 0 ? (uint32_t)delay_num * 10u : (uint32_t)(((uint32_t)delay_num * 1000u + delay_den / 2u) / delay_den);
 		} else {
 			/* First frame might not have fcTL, use canvas dimensions */
 			frame_width = canvas_width;
@@ -688,6 +693,9 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		}
 
 		memcpy(frames[frame_idx]->pixels, accumulator->pixels, canvas_width * canvas_height * 4);
+		if (num_frames > 1) {
+			frames[frame_idx]->delay_ms = delay_ms;
+		}
 
 		/* Free temporary buffers */
 		free(frame_buffer);
@@ -733,6 +741,10 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 
 	*frame_count = num_frames;
+	if (num_frames > 1) {
+		/* acTL num_plays: 0 = forever */
+		*loop_count = num_plays > (png_uint_32)INT_MAX ? INT_MAX : (int)num_plays;
+	}
 	return frames;
 
 cleanup_error:
@@ -980,20 +992,21 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
  * @note For APNG: returns N frames (capped at MAX_PNG_FRAMES)
  * @note Output format is always RGBA8888
  */
-static img2_image_t **decode_png_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
+static img2_image_t **decode_png_frames(const uint8_t *data, size_t len, int *frame_count, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	/* Initialize output */
 	*frame_count = 0;
+	*loop_count = 0;
 
 	/* Check if animated */
 #ifdef PNG_APNG_SUPPORTED
 	if (img2_png_is_animated(data, len)) {
-		return decode_png_animated(data, len, frame_count, st);
+		return decode_png_animated(data, len, frame_count, loop_count, st);
 	}
 #endif /* PNG_APNG_SUPPORTED */
 
@@ -1008,6 +1021,11 @@ img2_status_t img2_decode_png(const uint8_t *data, size_t len, const img2_decode
 	}
 	img2_status_t st = IMG2_E_INTERNAL;
 	int count = 0;
-	img2_image_t **frames = decode_png_frames(data, len, &count, &st);
-	return img2_frames_adopt(out, frames, count, st);
+	int loop_count = 0;
+	img2_image_t **frames = decode_png_frames(data, len, &count, &loop_count, &st);
+	st = img2_frames_adopt(out, frames, count, st);
+	if (st == IMG2_OK) {
+		out->loop_count = loop_count;
+	}
+	return st;
 }

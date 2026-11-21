@@ -7,8 +7,10 @@
  */
 
 /* clang-format off */
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,9 +56,12 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
  * @param num_frames Expected number of frames
+ * @param loop_count Output: JxlAnimationHeader.num_loops (0 = forever)
  * @return Array of img2_image_t* frames, or NULL on error
+ *
+ * Each frame's delay_ms = duration * 1000 * tps_denominator / tps_numerator.
  */
-static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames, img2_status_t *st);
+static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames, int *loop_count, img2_status_t *st);
 
 #ifdef IMG2_HAVE_EXIF_READER
 /**
@@ -325,15 +330,16 @@ cleanup_error:
 	return NULL; /* *st set at the goto */
 }
 
-static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames, img2_status_t *st)
+static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL || num_frames <= 0) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL || num_frames <= 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl_animated");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
 	*frame_count = 0;
+	*loop_count = 0;
 
 	// Allocate frames array
 	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
@@ -386,6 +392,11 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 	uint32_t height = 0;
 	int current_frame = 0;
 	bool basic_info_received = false;
+	// Animation timing (ticks per second) and the pending frame's duration
+	uint32_t tps_num = 0;
+	uint32_t tps_den = 0;
+	uint32_t num_loops = 0;
+	uint32_t frame_delay_ms = 0;
 
 	// Event loop
 	while (true) {
@@ -416,6 +427,12 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 				goto cleanup_error;
 			}
 
+			if (info.have_animation) {
+				tps_num = info.animation.tps_numerator;
+				tps_den = info.animation.tps_denominator;
+				num_loops = info.animation.num_loops;
+			}
+
 			basic_info_received = true;
 		} else if (status == JXL_DEC_FRAME) {
 			// Start of new frame
@@ -423,6 +440,13 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 				img2_log(IMG2_LOG_ERROR, "Error: JXL frame count mismatch: expected %d, got more", num_frames);
 				*st = IMG2_E_CODEC;
 				goto cleanup_error;
+			}
+
+			frame_delay_ms = 0;
+			JxlFrameHeader frame_header;
+			if (tps_num != 0 && JxlDecoderGetFrameHeader(dec, &frame_header) == JXL_DEC_SUCCESS) {
+				uint64_t ms = (uint64_t)frame_header.duration * 1000u * tps_den / tps_num;
+				frame_delay_ms = ms > UINT32_MAX ? UINT32_MAX : (uint32_t)ms;
 			}
 		} else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
 			// Ensure we have basic info
@@ -439,6 +463,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 				*st = IMG2_E_NOMEM;
 				goto cleanup_error;
 			}
+			frames[current_frame]->delay_ms = frame_delay_ms;
 
 			// Query buffer size
 			size_t buffer_size;
@@ -495,6 +520,7 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 	}
 
 	*frame_count = num_frames;
+	*loop_count = num_loops > (uint32_t)INT_MAX ? INT_MAX : (int)num_loops;
 
 	return frames;
 
@@ -625,15 +651,16 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **
 }
 #endif
 
-static img2_image_t **decode_jxl_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
+static img2_image_t **decode_jxl_frames(const uint8_t *data, size_t len, int *frame_count, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
 	*frame_count = 0;
+	*loop_count = 0;
 
 	// Get basic info (dimensions and frame count)
 	uint32_t width = 0;
@@ -651,7 +678,7 @@ static img2_image_t **decode_jxl_frames(const uint8_t *data, size_t len, int *fr
 	if (num_frames == 1) {
 		frames = decode_jxl_static(data, len, frame_count, st);
 	} else {
-		frames = decode_jxl_animated(data, len, frame_count, num_frames, st);
+		frames = decode_jxl_animated(data, len, frame_count, num_frames, loop_count, st);
 	}
 
 	// Extract EXIF/XMP metadata if decoding succeeded
@@ -691,6 +718,11 @@ img2_status_t img2_decode_jxl(const uint8_t *data, size_t len, const img2_decode
 	}
 	img2_status_t st = IMG2_E_INTERNAL;
 	int count = 0;
-	img2_image_t **frames = decode_jxl_frames(data, len, &count, &st);
-	return img2_frames_adopt(out, frames, count, st);
+	int loop_count = 0;
+	img2_image_t **frames = decode_jxl_frames(data, len, &count, &loop_count, &st);
+	st = img2_frames_adopt(out, frames, count, st);
+	if (st == IMG2_OK) {
+		out->loop_count = loop_count;
+	}
+	return st;
 }

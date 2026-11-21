@@ -194,6 +194,25 @@ recommended around library use; see [Threading model](#threading-model).
 
 A value outside the enum returns `IMG2_E_ARG`; a resampler failure returns `IMG2_E_CODEC`.
 
+### Animation timing
+
+`img2_decode` reports the frame timing of animated inputs:
+
+- `img2_image_t.delay_ms`: how long the frame is shown, in ms; `0` = unknown or not animated.
+- `img2_frames_t.loop_count`: `0` = loop forever or unknown, `N > 0` = play the animation N times.
+- Single-frame images (also a one-frame GIF/APNG/WebP/JXL) always report `delay_ms = 0` and `loop_count = 0`.
+
+| Format | `delay_ms` | `loop_count` |
+|---|---|---|
+| GIF | Graphic Control Extension `DelayTime * 10` (0 without a GCE) | `NETSCAPE2.0` application extension count (0 = forever); `1` when the extension is absent (plays once) |
+| APNG | `fcTL` `delay_num/delay_den` in ms, rounded (`delay_den == 0` means 1/100 s) | `acTL` `num_plays` (0 = forever) |
+| WebP | difference of consecutive `WebPAnimDecoderGetNext` timestamps (first frame: its timestamp) | `WebPAnimInfo.loop_count` (0 = forever) |
+| JPEG XL | frame `duration * 1000 * tps_denominator / tps_numerator` (64-bit) | `num_loops` (0 = forever) |
+| HEIF / AVIF | always 0 (see [Known limitations](#known-limitations--cli-deltas)) | always 0 |
+
+`img2_frames_t.loop_count` survives `max_frames` trimming. The imgcat2 CLI does not use the timing (it
+animates with `--fps`), so its output is unchanged.
+
 ## Ownership and memory
 
 Everything the library allocates is released by an `img2_*` function, never by `free()`:
@@ -389,6 +408,10 @@ TIFF, HEIF and AVIF frames arrive already oriented by their codecs; their EXIF o
   names but always used the default filter, so their output changes); `box` and `mitchell` are new; `lanczos`
   (default) output is unchanged. See [Scaling filters](#scaling-filters).
 - Only frame 0 is encoded (no animated output).
+- HEIF/AVIF image sequences report no timing (`delay_ms = 0`, `loop_count = 0`): the decoders read the
+  top-level image list, not the libheif sequence (track) API that carries per-sample durations (TODO in
+  `decoder_heif.c`/`decoder_avif.c`). There is no HEIF/AVIF or JPEG XL animation fixture, so only GIF, APNG and
+  WebP timing are covered by `test_animation_timing`.
 - The macOS fat archive path (`libtool -static`) is written but untested.
 - Host-library packages: with any `IMG2_USE_SYSTEM_*` (or resvg) the installed package links those host
   libraries (configure warns), and with a static link they must come after the fat archive, which cannot

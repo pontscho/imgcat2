@@ -7,6 +7,7 @@
  */
 
 /* clang-format off */
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -294,15 +295,16 @@ bool img2_webp_is_animated(const uint8_t *data, size_t len)
  * @note WebP decoder returns fully composited frames automatically
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
+static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int *frame_count, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp_animated");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
 	*frame_count = 0;
+	*loop_count = 0;
 
 	// Setup WebPData
 	WebPData webp_data;
@@ -364,8 +366,9 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 		frames[i] = NULL;
 	}
 
-	// Decode each frame
+	// Decode each frame; timestamps are the end time of each frame in ms
 	int frame_idx = 0;
+	int prev_timestamp = 0;
 	while (WebPAnimDecoderHasMoreFrames(dec) && frame_idx < num_frames) {
 		uint8_t *frame_buf;
 		int timestamp;
@@ -388,6 +391,8 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 		// WebP decoder returns fully composited RGBA frames
 		size_t pixel_size = (size_t)canvas_width * (size_t)canvas_height * 4;
 		memcpy(frames[frame_idx]->pixels, frame_buf, pixel_size);
+		frames[frame_idx]->delay_ms = timestamp > prev_timestamp ? (uint32_t)(timestamp - prev_timestamp) : 0;
+		prev_timestamp = timestamp;
 
 		frame_idx++;
 	}
@@ -396,6 +401,12 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 	WebPAnimDecoderDelete(dec);
 
 	*frame_count = frame_idx;
+	if (frame_idx > 1) {
+		// WebPAnimInfo.loop_count: 0 = forever
+		*loop_count = anim_info.loop_count > (uint32_t)INT_MAX ? INT_MAX : (int)anim_info.loop_count;
+	} else if (frame_idx == 1) {
+		frames[0]->delay_ms = 0; // single frame: not animated
+	}
 
 	return frames;
 
@@ -427,19 +438,20 @@ cleanup_error:
  * @note For animated images, frame_count = N (max MAX_WEBP_FRAMES)
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_webp_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
+static img2_image_t **decode_webp_frames(const uint8_t *data, size_t len, int *frame_count, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
 	*frame_count = 0;
+	*loop_count = 0;
 
 	// Check if animated
 	if (img2_webp_is_animated(data, len)) {
-		return decode_webp_animated(data, len, frame_count, st);
+		return decode_webp_animated(data, len, frame_count, loop_count, st);
 	}
 
 	return decode_webp_static(data, len, frame_count, st);
@@ -453,6 +465,11 @@ img2_status_t img2_decode_webp(const uint8_t *data, size_t len, const img2_decod
 	}
 	img2_status_t st = IMG2_E_INTERNAL;
 	int count = 0;
-	img2_image_t **frames = decode_webp_frames(data, len, &count, &st);
-	return img2_frames_adopt(out, frames, count, st);
+	int loop_count = 0;
+	img2_image_t **frames = decode_webp_frames(data, len, &count, &loop_count, &st);
+	st = img2_frames_adopt(out, frames, count, st);
+	if (st == IMG2_OK) {
+		out->loop_count = loop_count;
+	}
+	return st;
 }

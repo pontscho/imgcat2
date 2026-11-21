@@ -139,29 +139,77 @@ static void frame_composition(img2_image_t *accumulator, const GifByteType *rast
 }
 
 /**
+ * @brief Find the NETSCAPE2.0 loop count in one extension block list
+ *
+ * @param blocks Extension blocks (giflib DGifSlurp output)
+ * @param count Number of blocks
+ * @param loop_out Output: 16-bit loop count (0 = forever)
+ * @return true if a NETSCAPE2.0 looping sub-block was found
+ */
+static bool gif_find_netscape_loop(const ExtensionBlock *blocks, int count, int *loop_out)
+{
+	if (blocks == NULL) {
+		return false;
+	}
+	for (int i = 0; i + 1 < count; i++) {
+		const ExtensionBlock *app = &blocks[i];
+		if (app->Function != APPLICATION_EXT_FUNC_CODE || app->ByteCount < 11 || app->Bytes == NULL || memcmp(app->Bytes, "NETSCAPE2.0", 11) != 0) {
+			continue;
+		}
+		const ExtensionBlock *sub = &blocks[i + 1];
+		if (sub->Function == CONTINUE_EXT_FUNC_CODE && sub->ByteCount >= 3 && sub->Bytes != NULL && sub->Bytes[0] == 1) {
+			*loop_out = (int)sub->Bytes[1] | ((int)sub->Bytes[2] << 8);
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * @brief GIF loop count: NETSCAPE2.0 count (0 = forever), 1 without the extension
+ */
+static int gif_loop_count(const GifFileType *gif)
+{
+	int loop = 0;
+	for (int i = 0; i < gif->ImageCount; i++) {
+		if (gif_find_netscape_loop(gif->SavedImages[i].ExtensionBlocks, gif->SavedImages[i].ExtensionBlockCount, &loop)) {
+			return loop;
+		}
+	}
+	if (gif_find_netscape_loop(gif->ExtensionBlocks, gif->ExtensionBlockCount, &loop)) {
+		return loop;
+	}
+	return 1;
+}
+
+/**
  * @brief Decode animated GIF with all frames
  *
  * Decodes all frames of an animated GIF with proper frame composition.
  * Handles disposal methods (DISPOSE_DO_NOT, DISPOSE_BACKGROUND, DISPOSE_PREVIOUS).
+ * Multi-frame GIFs get per-frame delay_ms (GCB DelayTime * 10) and a loop count;
+ * single-frame GIFs report delay_ms = 0 and loop_count = 0.
  *
  * @param data Raw GIF file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
+ * @param loop_count Output: loop count (0 = forever / not animated)
  * @return Array of img2_image_t* frames, or NULL on error
  *
  * @note Maximum MAX_GIF_FRAMES frames (200) to prevent DoS
  * @note Implements proper GIF frame composition with disposal methods
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
+static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len, int *frame_count, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_gif_animated");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
 	*frame_count = 0;
+	*loop_count = 0;
 
 	// Setup memory reader
 	gif_mem_reader reader;
@@ -247,9 +295,13 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 		GraphicsControlBlock gcb;
 		int transparent_color = -1;
 		int disposal_mode = DISPOSE_DO_NOT;
+		uint32_t delay_ms = 0;
 
 		if (DGifSavedExtensionToGCB(gif, frame_idx, &gcb) == GIF_OK) {
 			disposal_mode = gcb.DisposalMode;
+			if (gcb.DelayTime > 0) {
+				delay_ms = (uint32_t)gcb.DelayTime * 10u;
+			}
 			if (gcb.TransparentColor != NO_TRANSPARENT_COLOR) {
 				transparent_color = gcb.TransparentColor;
 			}
@@ -287,6 +339,9 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 		}
 
 		memcpy(frames[frame_idx]->pixels, accumulator->pixels, canvas_width * canvas_height * 4);
+		if (num_frames > 1) {
+			frames[frame_idx]->delay_ms = delay_ms;
+		}
 
 		// Apply disposal method for next frame
 		switch (disposal_mode) {
@@ -324,6 +379,9 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 	img2_image_destroy(accumulator);
 	if (previous != NULL) {
 		img2_image_destroy(previous);
+	}
+	if (num_frames > 1) {
+		*loop_count = gif_loop_count(gif);
 	}
 	DGifCloseFile(gif, &error_code);
 
@@ -404,6 +462,11 @@ img2_status_t img2_decode_gif_animated(const uint8_t *data, size_t len, const im
 	}
 	img2_status_t st = IMG2_E_INTERNAL;
 	int count = 0;
-	img2_image_t **frames = decode_gif_animated_frames(data, len, &count, &st);
-	return img2_frames_adopt(out, frames, count, st);
+	int loop_count = 0;
+	img2_image_t **frames = decode_gif_animated_frames(data, len, &count, &loop_count, &st);
+	st = img2_frames_adopt(out, frames, count, st);
+	if (st == IMG2_OK) {
+		out->loop_count = loop_count;
+	}
+	return st;
 }

@@ -42,6 +42,11 @@ if(TARGET test_threads)
 	target_link_libraries(test_threads PRIVATE Threads::Threads)
 	target_compile_definitions(test_threads PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
 endif()
+# S11: delay_ms / loop_count of the anim/* fixtures (public API only)
+img2_add_test(test_animation_timing SOURCES unit/test_animation_timing.c LINK lib)
+if(TARGET test_animation_timing)
+	target_compile_definitions(test_animation_timing PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
+endif()
 
 # [L4] Public API test: links img2 only (the fat archive if built; no img2_testing, no internal include dirs);
 # includes only <img2/img2.h>
