@@ -19,12 +19,13 @@ if(IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF)
 	find_package(Threads REQUIRED)
 	set(IMGCAT2_VENDORED_FIND_DIR "${PROJECT_SOURCE_DIR}/cmake/vendored-find")
 
-	# --- libde265 (HEVC decoding): upstream CMake, library only
-	set(ENABLE_SDL OFF CACHE BOOL "libde265: no SDL")
-	set(ENABLE_DECODER OFF CACHE BOOL "libde265: no dec265 tool")
-	set(ENABLE_ENCODER OFF CACHE BOOL "libde265: no experimental encoder")
-	set(ENABLE_SHERLOCK265 OFF CACHE BOOL "libde265: no sherlock265")
-	set(ENABLE_INTERNAL_DEVELOPMENT_TOOLS OFF CACHE BOOL "libde265: no dev tools")
+	# --- libde265 (HEVC decoding): upstream CMake, library only. Vendor knobs here and below are normal
+	# variables (vendor section: CMAKE_POLICY_DEFAULT_CMP0077 NEW), never cache entries.
+	set(ENABLE_SDL OFF)                          # no SDL
+	set(ENABLE_DECODER OFF)                      # no dec265 tool
+	set(ENABLE_ENCODER OFF)                      # no experimental encoder
+	set(ENABLE_SHERLOCK265 OFF)                  # no sherlock265
+	set(ENABLE_INTERNAL_DEVELOPMENT_TOOLS OFF)   # no dev tools
 	imgcat2_vendor_begin(NO_INSTALL)
 	add_subdirectory(vendor/libde265 EXCLUDE_FROM_ALL)
 	imgcat2_vendor_end()
@@ -107,7 +108,7 @@ if(IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF)
 		-DCMAKE_INSTALL_PREFIX:PATH=${AOM_PREFIX}
 		-DCMAKE_INSTALL_LIBDIR:PATH=lib
 		-DCMAKE_INSTALL_INCLUDEDIR:PATH=include
-		-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+		-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=${IMG2_POSITION_INDEPENDENT_CODE}
 		-DBUILD_SHARED_LIBS:BOOL=OFF
 		-DENABLE_APPS:BOOL=OFF
 		-DENABLE_DOCS:BOOL=OFF
@@ -142,22 +143,24 @@ if(IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF)
 	)
 	# Headers are installed at build time; the directory must exist at generate time
 	file(MAKE_DIRECTORY "${AOM_PREFIX}/include")
-	add_library(AOM::aom STATIC IMPORTED GLOBAL)
-	set_target_properties(AOM::aom PROPERTIES
-		IMPORTED_LOCATION "${AOM_LIBRARY}"
-		INTERFACE_INCLUDE_DIRECTORIES "${AOM_PREFIX}/include"
-		INTERFACE_LINK_LIBRARIES "Threads::Threads;$<$<PLATFORM_ID:Linux>:m>")
-	add_dependencies(AOM::aom aom-ext)
+	if(NOT TARGET AOM::aom)
+		add_library(AOM::aom STATIC IMPORTED GLOBAL)
+		set_target_properties(AOM::aom PROPERTIES
+			IMPORTED_LOCATION "${AOM_LIBRARY}"
+			INTERFACE_INCLUDE_DIRECTORIES "${AOM_PREFIX}/include"
+			INTERFACE_LINK_LIBRARIES "Threads::Threads;$<$<PLATFORM_ID:Linux>:m>")
+		add_dependencies(AOM::aom aom-ext)
+	endif()
 	set(IMGCAT2_VENDORED_AOM_LIBRARIES AOM::aom)
 	set(IMGCAT2_VENDORED_AOM_INCLUDE_DIRS "${AOM_PREFIX}/include")
 
 	# --- OpenJPEG (JPEG 2000 in HEIF, as the host libheif had): upstream CMake, openjp2 only
-	set(BUILD_CODEC OFF CACHE BOOL "openjpeg: no opj_* tools")
-	set(BUILD_STATIC_LIBS ON CACHE BOOL "openjpeg: static library")
-	set(BUILD_JPIP OFF CACHE BOOL "openjpeg: no JPIP")
-	set(BUILD_DOC OFF CACHE BOOL "openjpeg: no docs")
-	set(BUILD_LUTS_GENERATOR OFF CACHE BOOL "openjpeg: no LUT generator")
-	set(BUILD_UNIT_TESTS OFF CACHE BOOL "openjpeg: no unit tests")
+	set(BUILD_CODEC OFF)            # no opj_* tools
+	set(BUILD_STATIC_LIBS ON)       # static library
+	set(BUILD_JPIP OFF)             # no JPIP
+	set(BUILD_DOC OFF)              # no docs
+	set(BUILD_LUTS_GENERATOR OFF)   # no LUT generator
+	set(BUILD_UNIT_TESTS OFF)       # no unit tests
 	imgcat2_vendor_begin(NO_INSTALL)
 	add_subdirectory(vendor/openjpeg EXCLUDE_FROM_ALL)
 	imgcat2_vendor_end()
@@ -177,9 +180,9 @@ if(IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF)
 	if(TARGET sharpyuv)
 		set(IMGCAT2_VENDORED_LIBSHARPYUV_LIBRARIES sharpyuv)
 		set(IMGCAT2_VENDORED_LIBSHARPYUV_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/vendor/libwebp")
-		set(WITH_LIBSHARPYUV ON CACHE BOOL "libheif: sharpyuv from vendored libwebp" FORCE)
+		set(WITH_LIBSHARPYUV ON)    # libheif: sharpyuv from vendored libwebp
 	else()
-		set(WITH_LIBSHARPYUV OFF CACHE BOOL "libheif: no sharpyuv (WebP disabled or host)" FORCE)
+		set(WITH_LIBSHARPYUV OFF)   # libheif: no sharpyuv (WebP disabled or host)
 	endif()
 	if(TARGET libjpeg-turbo-ext)
 		set(IMGCAT2_VENDORED_JPEG_LIBRARIES JPEG::JPEG)
@@ -187,27 +190,27 @@ if(IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF)
 	endif()
 
 	# --- libheif: static, codecs built in, no plugin loading / examples / tests / docs
-	set(ENABLE_PLUGIN_LOADING OFF CACHE BOOL "libheif: no dynamic codec plugins")
+	set(ENABLE_PLUGIN_LOADING OFF)   # no dynamic codec plugins
 	foreach(_codec LIBDE265 KVAZAAR AOM_DECODER AOM_ENCODER JPEG_DECODER JPEG_ENCODER
 			OpenJPEG_DECODER OpenJPEG_ENCODER)
-		set(WITH_${_codec} ON CACHE BOOL "libheif: built-in ${_codec}")
-		set(WITH_${_codec}_PLUGIN OFF CACHE BOOL "libheif: ${_codec} not as plugin")
+		set(WITH_${_codec} ON)            # built-in codec
+		set(WITH_${_codec}_PLUGIN OFF)    # not as plugin
 	endforeach()
 	foreach(_codec X265 X264 DAV1D SvtEnc RAV1E FFMPEG_DECODER OPENJPH_ENCODER UVG266
 			VVDEC VVENC OpenH264_DECODER)
-		set(WITH_${_codec} OFF CACHE BOOL "libheif: ${_codec} not used")
+		set(WITH_${_codec} OFF)           # codec not used
 	endforeach()
-	set(WITH_UNCOMPRESSED_CODEC ON CACHE BOOL "libheif: ISO/IEC 23001-17 (zlib-ng + brotli)")
-	set(WITH_WEBCODECS OFF CACHE BOOL "libheif: no web codecs")
-	set(WITH_LIBSHARPYUV_INTERNAL OFF CACHE BOOL "libheif: no third-party/ libsharpyuv")
-	set(WITH_EXAMPLES OFF CACHE BOOL "libheif: no examples")
-	set(WITH_EXAMPLE_HEIF_THUMB OFF CACHE BOOL "libheif: no heif-thumbnailer")
-	set(WITH_EXAMPLE_HEIF_VIEW OFF CACHE BOOL "libheif: no heif-view")
-	set(WITH_GDK_PIXBUF OFF CACHE BOOL "libheif: no gdk-pixbuf loader")
-	set(WITH_FUZZERS OFF CACHE BOOL "libheif: no fuzzers")
-	set(BUILD_DOCUMENTATION OFF CACHE BOOL "libheif: no doxygen docs")
-	set(BUILD_DEVELOPMENT_TOOLS OFF CACHE BOOL "libheif: no development tools")
-	set(ENABLE_EXPERIMENTAL_FEATURES OFF CACHE BOOL "libheif: stable API only")
+	set(WITH_UNCOMPRESSED_CODEC ON)       # ISO/IEC 23001-17 (zlib-ng + brotli)
+	set(WITH_WEBCODECS OFF)               # no web codecs
+	set(WITH_LIBSHARPYUV_INTERNAL OFF)    # no third-party/ libsharpyuv
+	set(WITH_EXAMPLES OFF)                # no examples
+	set(WITH_EXAMPLE_HEIF_THUMB OFF)      # no heif-thumbnailer
+	set(WITH_EXAMPLE_HEIF_VIEW OFF)       # no heif-view
+	set(WITH_GDK_PIXBUF OFF)              # no gdk-pixbuf loader
+	set(WITH_FUZZERS OFF)                 # no fuzzers
+	set(BUILD_DOCUMENTATION OFF)          # no doxygen docs
+	set(BUILD_DEVELOPMENT_TOOLS OFF)      # no development tools
+	set(ENABLE_EXPERIMENTAL_FEATURES OFF) # stable API only
 	list(PREPEND CMAKE_MODULE_PATH "${IMGCAT2_VENDORED_FIND_DIR}")
 	imgcat2_vendor_begin(NO_INSTALL)
 	add_subdirectory(vendor/libheif EXCLUDE_FROM_ALL)

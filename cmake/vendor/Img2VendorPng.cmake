@@ -108,12 +108,13 @@ else()
 	if(_png_prefix_type STREQUAL "INTERNAL")
 		unset(PNG_PREFIX CACHE)
 	endif()
-	set(PNG_SHARED OFF CACHE BOOL "libpng: no shared library")
-	set(PNG_STATIC ON CACHE BOOL "libpng: static library")
-	set(PNG_TESTS OFF CACHE BOOL "libpng: no tests")
-	set(PNG_TOOLS OFF CACHE BOOL "libpng: no tools")
-	set(PNG_FRAMEWORK OFF CACHE BOOL "libpng: no framework bundle")
-	set(SKIP_INSTALL_ALL ON CACHE BOOL "libpng: skip install rules")
+	# Knobs as normal variables (vendor section: CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+	set(PNG_SHARED OFF)         # no shared library
+	set(PNG_STATIC ON)          # static library
+	set(PNG_TESTS OFF)          # no tests
+	set(PNG_TOOLS OFF)          # no tools
+	set(PNG_FRAMEWORK OFF)      # no framework bundle
+	set(SKIP_INSTALL_ALL ON)    # skip install rules
 	imgcat2_vendor_begin()
 	add_subdirectory("${LIBPNG_PATCHED_DIR}" "${PROJECT_BINARY_DIR}/_deps/libpng-build" EXCLUDE_FROM_ALL)
 	imgcat2_vendor_end()

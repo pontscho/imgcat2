@@ -17,6 +17,8 @@ add_custom_target(embed_fonts DEPENDS "${IMG2_GENERATED_DIR}/embedded_fonts.c" "
 
 add_library(img2 STATIC)
 add_library(img2::img2 ALIAS img2)
+# PIC (default ON): PIE executables and shared objects can link the static library
+set_target_properties(img2 PROPERTIES POSITION_INDEPENDENT_CODE ${IMG2_POSITION_INDEPENDENT_CODE})
 target_sources(img2 PRIVATE
 	core/image.c core/log.c core/status.c core/init.c core/api.c
 	decoders/decoder.c decoders/magic.c decoders/decoder_stb.c decoders/decoder_png.c decoders/decoder_jpeg.c
@@ -81,7 +83,7 @@ if(IMG2_HAVE_SECURE_GETENV)
 	set_source_files_properties(text/font_manager.c PROPERTIES COMPILE_DEFINITIONS IMG2_HAVE_SECURE_GETENV)
 endif()
 
-# Compile definitions and include directories (the former global add_definitions / include_directories).
+# Compile definitions and include directories (formerly directory-global definitions / include dirs).
 # The nanosvg dir comes first, as on master (Img2VendorHeaderOnly.cmake used to add it globally before the
 # main include list); then src/, the two S2 directories, stb, qoi, and the codec dirs in IMG2_INCLUDE_ORDER.
 set(_img2_defs "")
@@ -135,6 +137,9 @@ target_include_directories(img2_assertcheck PRIVATE $<TARGET_PROPERTY:img2,INCLU
 target_compile_definitions(img2_assertcheck PRIVATE $<TARGET_PROPERTY:img2,COMPILE_DEFINITIONS>)
 target_compile_options(img2_assertcheck PRIVATE $<TARGET_PROPERTY:img2,COMPILE_OPTIONS> -UNDEBUG)
 add_dependencies(img2_assertcheck embed_fonts)
+# Build-time generated vendor headers (libjpeg-turbo install, pnglibconf.h, ...) come with img2's link
+# dependencies; without this ordering a fresh parallel build may compile against the host's jpeglib.h.
+add_dependencies(img2_assertcheck img2)
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/img2_objects_debug.txt"
      CONTENT "$<JOIN:$<TARGET_OBJECTS:img2_assertcheck>,;>")
 add_custom_target(img2_assertcheck_build ALL)

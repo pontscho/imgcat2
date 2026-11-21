@@ -6,37 +6,38 @@
 if(IMG2_ENABLE_TIFF AND NOT IMG2_USE_SYSTEM_TIFF)
 	# Vendored libtiff: codecs = built-ins + zlib (zlib-ng) + JPEG (vendored libjpeg-turbo)
 	# + WebP (vendored libwebp when enabled). jbig (GPL), lerc, lzma, zstd, libdeflate,
-	# C++ API, tools, tests, docs: OFF. libtiff pins cmake_policy(VERSION 3.10), so its
-	# options are pre-seeded as CACHE entries (CMP0077 OLD ignores normal variables).
-	set(tiff-static ON CACHE BOOL "libtiff: static")
-	set(tiff-tools OFF CACHE BOOL "libtiff: no tools")
-	set(tiff-tests OFF CACHE BOOL "libtiff: no tests")
-	set(tiff-contrib OFF CACHE BOOL "libtiff: no contrib")
-	set(tiff-docs OFF CACHE BOOL "libtiff: no docs")
-	set(tiff-install OFF CACHE BOOL "libtiff: no install rules")
-	set(tiff-cxx OFF CACHE BOOL "libtiff: no C++ stream API")
-	set(tiff-opengl OFF CACHE BOOL "libtiff: no OpenGL viewer")
-	set(sphinx OFF CACHE BOOL "libtiff: no sphinx docs")
-	set(zlib ON CACHE BOOL "libtiff: Deflate via zlib-ng")
-	set(pixarlog ON CACHE BOOL "libtiff: PixarLog (zlib)")
-	set(libdeflate OFF CACHE BOOL "libtiff: no libdeflate")
-	set(jpeg ON CACHE BOOL "libtiff: JPEG via vendored libjpeg-turbo")
-	set(old-jpeg ON CACHE BOOL "libtiff: Old JPEG (read-only)")
-	set(jpeg12 OFF CACHE BOOL "libtiff: no separate 12-bit libjpeg")
-	set(jbig OFF CACHE BOOL "libtiff: no JBIG (GPL)")
-	set(lerc OFF CACHE BOOL "libtiff: no LERC")
-	set(lzma OFF CACHE BOOL "libtiff: no LZMA")
-	set(zstd OFF CACHE BOOL "libtiff: no ZSTD")
+	# C++ API, tools, tests, docs: OFF. libtiff pins cmake_policy(VERSION 3.10), so CMP0077 is unset there
+	# and the vendor section's CMAKE_POLICY_DEFAULT_CMP0077 NEW makes its option() honour these normal variables.
+	set(tiff-static ON)      # static
+	set(tiff-tools OFF)      # no tools
+	set(tiff-tests OFF)      # no tests
+	set(tiff-contrib OFF)    # no contrib
+	set(tiff-docs OFF)       # no docs
+	set(tiff-install OFF)    # no install rules
+	set(tiff-cxx OFF)        # no C++ stream API
+	set(tiff-opengl OFF)     # no OpenGL viewer
+	set(sphinx OFF)          # no sphinx docs
+	set(zlib ON)             # Deflate via zlib-ng
+	set(pixarlog ON)         # PixarLog (zlib)
+	set(libdeflate OFF)      # no libdeflate
+	set(jpeg ON)             # JPEG via vendored libjpeg-turbo
+	set(old-jpeg ON)         # Old JPEG (read-only)
+	set(jpeg12 OFF)          # no separate 12-bit libjpeg
+	set(jbig OFF)            # no JBIG (GPL)
+	set(lerc OFF)            # no LERC
+	set(lzma OFF)            # no LZMA
+	set(zstd OFF)            # no ZSTD
 	if(WEBP_FOUND AND TARGET webp)
-		set(webp ON CACHE BOOL "libtiff: WebP via vendored libwebp")
+		set(webp ON)         # WebP via vendored libwebp
 		# libtiff's own FindWebP: resolve to the vendored target, not a host libwebp
-		set(WebP_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/vendor/libwebp/src" CACHE PATH "libwebp include dir (vendored)" FORCE)
-		set(WebP_LIBRARY webp CACHE STRING "libwebp library (vendored target)" FORCE)
+		# (normal variables, CMP0125 NEW: its find_* keep them)
+		set(WebP_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/vendor/libwebp/src")
+		set(WebP_LIBRARY webp)
 		if(NOT TARGET WebP::webp)
 			add_library(WebP::webp ALIAS webp)
 		endif()
 	else()
-		set(webp OFF CACHE BOOL "libtiff: no WebP")
+		set(webp OFF)        # no WebP
 	endif()
 
 	# libtiff links JPEG::JPEG by name; the host pkg-config path (IMG2_USE_SYSTEM_JPEG) has none
@@ -53,10 +54,18 @@ if(IMG2_ENABLE_TIFF AND NOT IMG2_USE_SYSTEM_TIFF)
 	endif()
 
 	# libjpeg-turbo >= 3.0 always provides the 8/12-bit dual-mode API; the probe cannot
-	# link at configure time because the vendored library is built later
+	# link at configure time because the vendored library is built later. A normal variable counts as
+	# DEFINED, so libtiff's check_* macros skip the probe exactly as with a cache entry.
 	if(TARGET libjpeg-turbo-ext)
-		set(HAVE_JPEGTURBO_DUAL_MODE_8 1 CACHE INTERNAL "vendored libjpeg-turbo: jpeg_read_scanlines")
-		set(HAVE_JPEGTURBO_DUAL_MODE_12 1 CACHE INTERNAL "vendored libjpeg-turbo: jpeg12_read_scanlines")
+		set(HAVE_JPEGTURBO_DUAL_MODE_8 1)    # jpeg_read_scanlines
+		set(HAVE_JPEGTURBO_DUAL_MODE_12 1)   # jpeg12_read_scanlines
+	endif()
+
+	# libtiff's FindCMath would find_library(m) -> /usr/lib/.../libm.a (CMAKE_FIND_LIBRARY_SUFFIXES .a) and bake
+	# that absolute static path into TIFF::tiff's link interface, which breaks dynamic (PIE) consumers. The plain
+	# name links the same archive under -static and libm.so otherwise (normal variable, CMP0125 NEW).
+	if(UNIX AND NOT APPLE)
+		set(CMath_LIBRARY m)
 	endif()
 
 	# Keep libtiff's optional find_package() probes away from host libraries

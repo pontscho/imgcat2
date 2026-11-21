@@ -43,7 +43,7 @@ function(img2_add_test name)
 	endif()
 	target_compile_definitions(${name} PRIVATE IMGCAT2_TEST_TMPDIR="${PROJECT_BINARY_DIR}/test-tmp")
 	img2_apply_project_settings(${name})
-	img2_static_executable(${name})          # explicit: tests link -static exactly as today (switched in S8)
+	# Tests link dynamically (toolchain default, PIE on Linux): the first in-tree PIE consumers of img2
 	add_test(NAME ${name} COMMAND ${name})
 	if(NOT T_LABELS)
 		set(T_LABELS ${T_KIND} ${T_LINK})

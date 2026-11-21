@@ -5,18 +5,19 @@
 # WebP (optional)
 if(IMG2_ENABLE_WEBP AND NOT IMG2_USE_SYSTEM_WEBP)
 	# Vendored libwebp: only the libraries (webp, webpdemux, sharpyuv), no tools/extras
-	set(WEBP_LINK_STATIC ON CACHE BOOL "libwebp: static")
-	set(WEBP_BUILD_ANIM_UTILS OFF CACHE BOOL "libwebp: no anim utils")
-	set(WEBP_BUILD_CWEBP OFF CACHE BOOL "libwebp: no cwebp")
-	set(WEBP_BUILD_DWEBP OFF CACHE BOOL "libwebp: no dwebp")
-	set(WEBP_BUILD_GIF2WEBP OFF CACHE BOOL "libwebp: no gif2webp")
-	set(WEBP_BUILD_IMG2WEBP OFF CACHE BOOL "libwebp: no img2webp")
-	set(WEBP_BUILD_VWEBP OFF CACHE BOOL "libwebp: no vwebp")
-	set(WEBP_BUILD_WEBPINFO OFF CACHE BOOL "libwebp: no webpinfo")
-	set(WEBP_BUILD_LIBWEBPMUX OFF CACHE BOOL "libwebp: no libwebpmux")
-	set(WEBP_BUILD_WEBPMUX OFF CACHE BOOL "libwebp: no webpmux")
-	set(WEBP_BUILD_EXTRAS OFF CACHE BOOL "libwebp: no extras")
-	set(WEBP_BUILD_FUZZTEST OFF CACHE BOOL "libwebp: no fuzztest")
+	# Knobs as normal variables (vendor section: CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+	set(WEBP_LINK_STATIC ON)          # static
+	set(WEBP_BUILD_ANIM_UTILS OFF)    # no anim utils
+	set(WEBP_BUILD_CWEBP OFF)         # no cwebp
+	set(WEBP_BUILD_DWEBP OFF)         # no dwebp
+	set(WEBP_BUILD_GIF2WEBP OFF)      # no gif2webp
+	set(WEBP_BUILD_IMG2WEBP OFF)      # no img2webp
+	set(WEBP_BUILD_VWEBP OFF)         # no vwebp
+	set(WEBP_BUILD_WEBPINFO OFF)      # no webpinfo
+	set(WEBP_BUILD_LIBWEBPMUX OFF)    # no libwebpmux
+	set(WEBP_BUILD_WEBPMUX OFF)       # no webpmux
+	set(WEBP_BUILD_EXTRAS OFF)        # no extras
+	set(WEBP_BUILD_FUZZTEST OFF)      # no fuzztest
 	imgcat2_vendor_begin()
 	add_subdirectory(vendor/libwebp EXCLUDE_FROM_ALL)
 	imgcat2_vendor_end()

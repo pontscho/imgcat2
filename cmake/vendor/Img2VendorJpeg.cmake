@@ -31,7 +31,7 @@ else()
 		-DCMAKE_INSTALL_PREFIX:PATH=${LIBJPEG_TURBO_PREFIX}
 		-DCMAKE_INSTALL_LIBDIR:PATH=lib
 		-DCMAKE_INSTALL_INCLUDEDIR:PATH=include
-		-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+		-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=${IMG2_POSITION_INDEPENDENT_CODE}
 		-DENABLE_SHARED:BOOL=OFF
 		-DENABLE_STATIC:BOOL=ON
 		-DWITH_JPEG8:BOOL=ON
@@ -56,20 +56,21 @@ else()
 	)
 	# Headers are installed at build time; the directory must exist at generate time
 	file(MAKE_DIRECTORY "${LIBJPEG_TURBO_PREFIX}/include")
-	if(NOT TARGET JPEG::JPEG)
+	if(NOT TARGET JPEG::JPEG)   # never overwrite the properties of an existing JPEG::JPEG
 		add_library(JPEG::JPEG STATIC IMPORTED GLOBAL)
+		set_target_properties(JPEG::JPEG PROPERTIES
+			IMPORTED_LOCATION "${LIBJPEG_TURBO_LIBRARY}"
+			INTERFACE_INCLUDE_DIRECTORIES "${LIBJPEG_TURBO_PREFIX}/include")
+		add_dependencies(JPEG::JPEG libjpeg-turbo-ext)
 	endif()
-	set_target_properties(JPEG::JPEG PROPERTIES
-		IMPORTED_LOCATION "${LIBJPEG_TURBO_LIBRARY}"
-		INTERFACE_INCLUDE_DIRECTORIES "${LIBJPEG_TURBO_PREFIX}/include")
-	add_dependencies(JPEG::JPEG libjpeg-turbo-ext)
 
 	set(JPEG_FOUND TRUE)
 	set(JPEG_LIBRARIES JPEG::JPEG)
 	set(JPEG_INCLUDE_DIRS "${LIBJPEG_TURBO_PREFIX}/include")
 	# Pre-seed FindJPEG for vendored consumers (libtiff) calling find_package(JPEG)
-	set(JPEG_INCLUDE_DIR "${LIBJPEG_TURBO_PREFIX}/include" CACHE PATH "libjpeg include dir (vendored libjpeg-turbo)" FORCE)
-	set(JPEG_LIBRARY "${LIBJPEG_TURBO_LIBRARY}" CACHE FILEPATH "libjpeg library (vendored libjpeg-turbo)" FORCE)
+	# (normal variables, CMP0125 NEW: FindJPEG's find_* keep them)
+	set(JPEG_INCLUDE_DIR "${LIBJPEG_TURBO_PREFIX}/include")
+	set(JPEG_LIBRARY "${LIBJPEG_TURBO_LIBRARY}")
 	set(JPEG_LIB_TYPE "vendored libjpeg-turbo 3.2.1, jpeg8 ABI")
 endif()
 img2_feature(LIBJPEG LIBS ${JPEG_LIBRARIES} INCLUDE_DIRS ${JPEG_INCLUDE_DIRS})

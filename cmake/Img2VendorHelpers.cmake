@@ -1,5 +1,6 @@
 # Purpose: Helpers for vendored subprojects (test/install isolation, host ldflag stripping).
-# Inputs:  BUILD_TESTING, vendored targets (ZLIB::ZLIB, png_static, webp, ...) at call time.
+# Inputs:  BUILD_TESTING, IMG2_EXE_LINK_FLAGS, IMG2_POSITION_INDEPENDENT_CODE, CMAKE_BUILD_TYPE /
+#          CMAKE_CONFIGURATION_TYPES, vendored targets (ZLIB::ZLIB, png_static, webp, ...) at call time.
 # Outputs: macros imgcat2_vendor_begin/imgcat2_vendor_end, img2_vendor_section_begin/end,
 #          function imgcat2_strip_vendored_ldflags().
 
@@ -46,15 +47,87 @@ function(imgcat2_strip_vendored_ldflags _var)
 	set(${_var} "${_out}" PARENT_SCOPE)
 endfunction()
 
+# [R1] NDEBUG only if missing: vendors are always built with NDEBUG (decision 5), but the default
+# configuration flags (e.g. CMAKE_C_FLAGS_RELWITHDEBINFO) already carry -DNDEBUG, and a second one must not
+# be added. Returns, in <out>, the compile options that add -DNDEBUG for the language/configuration pairs
+# whose flags lack it (empty with the default RelWithDebInfo build). A language that is not enabled yet
+# (CXX is enabled inside the vendor section) and has no flags of its own follows the C decision.
+function(_img2_vendor_ndebug_options _out)
+	set(_opts "")
+	get_property(_langs GLOBAL PROPERTY ENABLED_LANGUAGES)
+	if(CMAKE_CONFIGURATION_TYPES)
+		set(_cfgs ${CMAKE_CONFIGURATION_TYPES})
+	else()
+		set(_cfgs "${CMAKE_BUILD_TYPE}")
+	endif()
+	foreach(_cfg IN LISTS _cfgs)
+		string(TOUPPER "${_cfg}" _ucfg)
+		set(_c_has FALSE)
+		foreach(_lang C CXX)
+			if(NOT _lang IN_LIST _langs AND NOT DEFINED CMAKE_${_lang}_FLAGS_${_ucfg} AND NOT DEFINED CMAKE_${_lang}_FLAGS)
+				set(_has ${_c_has})
+			elseif(" ${CMAKE_${_lang}_FLAGS_${_ucfg}} ${CMAKE_${_lang}_FLAGS} " MATCHES "[ \t][-/]DNDEBUG[ \t]")
+				set(_has TRUE)
+			else()
+				set(_has FALSE)
+			endif()
+			if(_lang STREQUAL "C")
+				set(_c_has ${_has})
+			endif()
+			if(NOT _has)
+				if(CMAKE_CONFIGURATION_TYPES)
+					list(APPEND _opts "$<$<AND:$<COMPILE_LANGUAGE:${_lang}>,$<CONFIG:${_cfg}>>:-DNDEBUG>")
+				else()
+					list(APPEND _opts "$<$<COMPILE_LANGUAGE:${_lang}>:-DNDEBUG>")
+				endif()
+			endif()
+		endforeach()
+	endforeach()
+	set(${_out} "${_opts}" PARENT_SCOPE)
+endfunction()
+
 # Vendor section: everything configured between begin and end (vendor subdirectories, try_compile probes)
 # sees the executable link flags (-static, stack size) in CMAKE_EXE_LINKER_FLAGS, exactly as before the
 # flags moved onto the executables. Subdirectories capture the value at add_subdirectory() time; the
 # top-level targets created after img2_vendor_section_end() see the restored value.
+# Inside the section only (every value is saved by begin and restored by end; unset when it was empty):
+#   BUILD_SHARED_LIBS OFF (normal variable), CMAKE_POSITION_INDEPENDENT_CODE ${IMG2_POSITION_INDEPENDENT_CODE},
+#   CMAKE_POLICY_DEFAULT_CMP0077/CMP0126/CMP0125 NEW (vendor option()/set(CACHE)/find_* honour the normal
+#   knob variables set by cmake/vendor/*.cmake, so nothing lands in a consumer's cache), and the directory
+#   COMPILE_OPTIONS -O3 -g (+ -DNDEBUG where missing). COMPILE_OPTIONS initialise the target property at
+#   target creation and are inherited by subdirectories at add_subdirectory() time, so the vendor targets
+#   compile exactly as with the former global add_compile_options(-O3 -g), and nothing reaches our targets
+#   or a consumer's.
+set(_IMG2_VENDOR_SECTION_VARS BUILD_SHARED_LIBS CMAKE_POSITION_INDEPENDENT_CODE
+	CMAKE_POLICY_DEFAULT_CMP0077 CMAKE_POLICY_DEFAULT_CMP0126 CMAKE_POLICY_DEFAULT_CMP0125)
 macro(img2_vendor_section_begin)
 	set(_IMG2_SAVED_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 	string(JOIN " " _img2_lf ${IMG2_EXE_LINK_FLAGS})
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_img2_lf}")   # vendors see today's -static/stack flags
+	foreach(_img2_v IN LISTS _IMG2_VENDOR_SECTION_VARS)
+		set(_IMG2_SAVED_${_img2_v} "${${_img2_v}}")
+	endforeach()
+	get_property(_IMG2_SAVED_DIR_COMPILE_OPTIONS DIRECTORY PROPERTY COMPILE_OPTIONS)
+	set(BUILD_SHARED_LIBS OFF)
+	set(CMAKE_POSITION_INDEPENDENT_CODE ${IMG2_POSITION_INDEPENDENT_CODE})
+	set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+	set(CMAKE_POLICY_DEFAULT_CMP0126 NEW)
+	set(CMAKE_POLICY_DEFAULT_CMP0125 NEW)
+	set_property(DIRECTORY APPEND PROPERTY COMPILE_OPTIONS -O3 -g)
+	_img2_vendor_ndebug_options(_img2_ndebug_opts)
+	if(_img2_ndebug_opts)
+		set_property(DIRECTORY APPEND PROPERTY COMPILE_OPTIONS ${_img2_ndebug_opts})
+	endif()
 endmacro()
 macro(img2_vendor_section_end)
 	set(CMAKE_EXE_LINKER_FLAGS "${_IMG2_SAVED_EXE_LINKER_FLAGS}")
+	foreach(_img2_v IN LISTS _IMG2_VENDOR_SECTION_VARS)
+		if("${_IMG2_SAVED_${_img2_v}}" STREQUAL "")
+			unset(${_img2_v})
+		else()
+			set(${_img2_v} "${_IMG2_SAVED_${_img2_v}}")
+		endif()
+		unset(_IMG2_SAVED_${_img2_v})
+	endforeach()
+	set_property(DIRECTORY PROPERTY COMPILE_OPTIONS "${_IMG2_SAVED_DIR_COMPILE_OPTIONS}")
 endmacro()

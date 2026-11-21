@@ -1,13 +1,13 @@
 # Purpose: Platform link settings: static linking, macOS libc++ selection, stack size.
 # Inputs:  IMG2_ENABLE_STATIC_LIBCXX, UNIX/APPLE/WIN32.
-# Outputs: BUILD_SHARED_LIBS, CMAKE_FIND_LIBRARY_SUFFIXES, IMG2_EXE_LINK_FLAGS, STATIC_LIBCXX_LIBS, DYNAMIC_LIBCXX_LIBS.
+# Outputs: CMAKE_FIND_LIBRARY_SUFFIXES, IMG2_EXE_LINK_FLAGS, STATIC_LIBCXX_LIBS, DYNAMIC_LIBCXX_LIBS.
 #          IMG2_EXE_LINK_FLAGS (-static, stack size) go only on executables (img2_static_executable) and, during
 #          the vendor section, into CMAKE_EXE_LINKER_FLAGS (img2_vendor_section_begin/end).
 
 set(IMG2_EXE_LINK_FLAGS "")
 
-# Static linking preference
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+# Static linking preference: BUILD_SHARED_LIBS OFF is a normal variable inside the vendor section
+# (img2_vendor_section_begin/end); our own libraries are explicitly STATIC.
 
 # Platform-specific static linking
 # macOS doesn't support fully static binaries (libSystem must be dynamic)

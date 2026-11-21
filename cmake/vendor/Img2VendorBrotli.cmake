@@ -5,9 +5,10 @@
 # Brotli (MIT): a single vendored copy shared by libheif (brotli-compressed items of the
 # ISO/IEC 23001-17 uncompressed codec) and libjxl. Static libraries only, no CLI/tests.
 if((IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF) OR (IMG2_ENABLE_JXL AND NOT IMG2_USE_SYSTEM_JXL))
-	set(BROTLI_BUILD_TOOLS OFF CACHE BOOL "brotli: no CLI tool")
-	set(BROTLI_BUILD_FOR_PACKAGE OFF CACHE BOOL "brotli: static libraries only")
-	set(BROTLI_DISABLE_TESTS ON CACHE BOOL "brotli: no tests")
+	# Knobs as normal variables (vendor section: CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+	set(BROTLI_BUILD_TOOLS OFF)          # no CLI tool
+	set(BROTLI_BUILD_FOR_PACKAGE OFF)    # static libraries only
+	set(BROTLI_DISABLE_TESTS ON)         # no tests
 	imgcat2_vendor_begin(NO_INSTALL)
 	add_subdirectory(vendor/brotli EXCLUDE_FROM_ALL)
 	imgcat2_vendor_end()

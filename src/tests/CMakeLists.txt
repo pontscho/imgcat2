@@ -47,8 +47,7 @@ endif()
 add_executable(test_public_api unit/main.c unit/test_public_api.c)
 target_link_libraries(test_public_api PRIVATE img2)
 target_compile_definitions(test_public_api PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
-img2_apply_project_settings(test_public_api)
-img2_static_executable(test_public_api)
+img2_apply_project_settings(test_public_api)   # dynamic (PIE) link, like every img2_add_test() test
 add_test(NAME test_public_api COMMAND test_public_api)
 set_tests_properties(test_public_api PROPERTIES TIMEOUT 10 LABELS "unit;lib"
 	ENVIRONMENT "TMPDIR=${PROJECT_BINARY_DIR}/test-tmp")

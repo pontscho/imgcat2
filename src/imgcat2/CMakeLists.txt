@@ -18,5 +18,7 @@ if(IMG2_BUILD_CLI)
 	set_target_properties(imgcat2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")   # keeps build/imgcat2
 	img2_apply_project_settings(imgcat2)
 	img2_static_executable(imgcat2)
+	# [SL2] Full RELRO (exe only; the static non-PIE link keeps working)
+	target_link_options(imgcat2 PRIVATE $<$<PLATFORM_ID:Linux>:-Wl,-z,relro,-z,now>)
 	install(TARGETS imgcat2 RUNTIME DESTINATION bin)   # replaced in S9
 endif()

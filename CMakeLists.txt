@@ -1,13 +1,15 @@
 cmake_minimum_required(VERSION 3.21)
 project(img2 VERSION 1.0.0 LANGUAGES C)
 
-# Set default build type to RelWithDebInfo if not specified
-if(NOT CMAKE_BUILD_TYPE)
+# Default build type RelWithDebInfo, only as the top-level project (a consumer's build type is its own)
+if(PROJECT_IS_TOP_LEVEL AND NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Choose the type of build (Debug, Release, RelWithDebInfo, MinSizeRel)" FORCE)
 endif()
 
-# Export compile_commands.json for clang-tidy
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# Export compile_commands.json for clang-tidy (top-level builds only)
+if(PROJECT_IS_TOP_LEVEL)
+	set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -20,11 +22,15 @@ include(Img2Platform)
 include(Img2Tooling)
 
 # Compiler flags
-# Optimization flags apply to everything (vendored dependencies included).
-# Warning flags (-Werror) are project-only: IMGCAT2_WARNING_FLAGS, applied per target by
+# No global flags: -O3 -g reach vendored dependencies through the vendor section
+# (img2_vendor_section_begin/end) and our own targets through img2_apply_project_settings().
+# Warning flags (-Werror only with IMG2_WERROR) are project-only: IMGCAT2_WARNING_FLAGS, applied per target by
 # img2_apply_project_settings() (cmake/Img2ProjectSettings.cmake).
-add_compile_options(-O3 -g)
-set(IMGCAT2_WARNING_FLAGS -Wall -Wextra -Werror -Wno-error=unused-but-set-variable)
+if(IMG2_WERROR)
+	set(IMGCAT2_WARNING_FLAGS -Wall -Wextra -Werror -Wno-error=unused-but-set-variable)
+else()
+	set(IMGCAT2_WARNING_FLAGS -Wall -Wextra -Wno-error=unused-but-set-variable)
+endif()
 
 # pkg-config
 find_package(PkgConfig REQUIRED)

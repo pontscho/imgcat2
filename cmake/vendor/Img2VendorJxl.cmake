@@ -14,11 +14,12 @@ if(IMG2_ENABLE_JXL AND NOT IMG2_USE_SYSTEM_JXL)
 	set(IMGCAT2_VENDORED_FIND_DIR "${PROJECT_SOURCE_DIR}/cmake/vendored-find")
 
 	# --- Highway (SIMD dispatch), static library only
-	set(HWY_FORCE_STATIC_LIBS ON CACHE BOOL "highway: static library")
-	set(HWY_ENABLE_CONTRIB OFF CACHE BOOL "highway: no contrib")
-	set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "highway: no examples")
-	set(HWY_ENABLE_INSTALL OFF CACHE BOOL "highway: no install rules")
-	set(HWY_ENABLE_TESTS OFF CACHE BOOL "highway: no tests")
+	# (knobs here and below as normal variables; vendor section: CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+	set(HWY_FORCE_STATIC_LIBS ON)    # static library
+	set(HWY_ENABLE_CONTRIB OFF)      # no contrib
+	set(HWY_ENABLE_EXAMPLES OFF)     # no examples
+	set(HWY_ENABLE_INSTALL OFF)      # no install rules
+	set(HWY_ENABLE_TESTS OFF)        # no tests
 	imgcat2_vendor_begin(NO_INSTALL)
 	add_subdirectory(vendor/highway EXCLUDE_FROM_ALL)
 	imgcat2_vendor_end()
@@ -47,19 +48,19 @@ if(IMG2_ENABLE_JXL AND NOT IMG2_USE_SYSTEM_JXL)
 	endif()
 
 	# --- libjxl: libraries only (jxl, jxl_cms; jxl_threads is built but unused)
-	set(JPEGXL_FORCE_SYSTEM_HWY ON CACHE BOOL "libjxl: top-level vendored highway")
-	set(JPEGXL_FORCE_SYSTEM_BROTLI ON CACHE BOOL "libjxl: top-level vendored brotli")
-	set(JPEGXL_FORCE_SYSTEM_LCMS2 ON CACHE BOOL "libjxl: top-level vendored lcms2")
-	set(JPEGXL_ENABLE_SKCMS OFF CACHE BOOL "libjxl: lcms2 instead of skcms")
-	set(JPEGXL_BUNDLE_LIBPNG OFF CACHE BOOL "libjxl: no bundled libpng")
+	set(JPEGXL_FORCE_SYSTEM_HWY ON)       # top-level vendored highway
+	set(JPEGXL_FORCE_SYSTEM_BROTLI ON)    # top-level vendored brotli
+	set(JPEGXL_FORCE_SYSTEM_LCMS2 ON)     # top-level vendored lcms2
+	set(JPEGXL_ENABLE_SKCMS OFF)          # lcms2 instead of skcms
+	set(JPEGXL_BUNDLE_LIBPNG OFF)         # no bundled libpng
 	foreach(_jxl_opt TOOLS DEVTOOLS EXAMPLES BENCHMARK FUZZERS DOXYGEN MANPAGES JNI SJPEG
 			OPENEXR VIEWERS PLUGINS TCMALLOC COVERAGE)
-		set(JPEGXL_ENABLE_${_jxl_opt} OFF CACHE BOOL "libjxl: no ${_jxl_opt}")
+		set(JPEGXL_ENABLE_${_jxl_opt} OFF)
 	endforeach()
-	set(JPEGXL_ENABLE_TRANSCODE_JPEG ON CACHE BOOL "libjxl: JPEG reconstruction")
-	set(JPEGXL_ENABLE_BOXES ON CACHE BOOL "libjxl: box (Exif/XMP) decoding")
-	set(JPEGXL_STATIC OFF CACHE BOOL "libjxl: no static tool binaries")
-	set(JPEGXL_TEST_TOOLS OFF CACHE BOOL "libjxl: no tool tests")
+	set(JPEGXL_ENABLE_TRANSCODE_JPEG ON)  # JPEG reconstruction
+	set(JPEGXL_ENABLE_BOXES ON)           # box (Exif/XMP) decoding
+	set(JPEGXL_STATIC OFF)                # no static tool binaries
+	set(JPEGXL_TEST_TOOLS OFF)            # no tool tests
 	# The extras/tools find_package() probes are off with the tools; keep any left-over
 	# probe away from host packages
 	foreach(_pkg GIF PNG OpenEXR benchmark GTest)
