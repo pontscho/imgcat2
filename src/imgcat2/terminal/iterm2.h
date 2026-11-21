@@ -18,8 +18,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../core/cli.h"
-#include "../core/image.h"
+#include "../cli.h"
+#include "../../libimg2/core/image.h"
 
 /**
  * @brief Check if image format is supported by iTerm2 protocol

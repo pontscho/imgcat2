@@ -13,9 +13,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../../imgcat2/core/image.h"
-#include "../../imgcat2/core/pipeline.h"
-#include "../../imgcat2/decoders/magic.h"
+#include "../../libimg2/core/image.h"
+#include "../../imgcat2/pipeline.h"
+#include "../../libimg2/decoders/magic.h"
 #include "../ctest.h"
 #include "../test_tmpdir.h"
 

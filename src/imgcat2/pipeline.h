@@ -14,9 +14,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../decoders/magic.h"
+#include "../libimg2/decoders/magic.h"
 #include "cli.h"
-#include "image.h"
+#include "../libimg2/core/image.h"
 
 /**
  * @brief Read file with path traversal protection and size limits

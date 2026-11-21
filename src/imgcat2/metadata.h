@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "../decoders/magic.h"
+#include "../libimg2/decoders/magic.h"
 
 /* Forward declarations for EXIF/XMP structures */
 #ifdef HAVE_EXIF_READER

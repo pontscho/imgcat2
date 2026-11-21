@@ -12,7 +12,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../imgcat2/core/image.h"
+#include "../libimg2/core/image.h"
 
 /* Forward declarations of internal decoder functions */
 extern image_t **decode_png(const uint8_t *data, size_t len, int *frame_count);

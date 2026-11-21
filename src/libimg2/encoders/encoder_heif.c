@@ -14,7 +14,7 @@
 #include <libheif/heif.h>
 /* clang-format on */
 
-#include "../encoders/encoder.h"
+#include "encoder.h"
 
 /**
  * @brief HEIF memory write state structure

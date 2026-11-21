@@ -12,11 +12,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../imgcat2/core/cli.h"
-#include "../../imgcat2/core/image.h"
-#include "../../imgcat2/core/pipeline.h"
-#include "../../imgcat2/decoders/decoder.h"
-#include "../../imgcat2/encoders/encoder.h"
+#include "../../imgcat2/cli.h"
+#include "../../libimg2/core/image.h"
+#include "../../imgcat2/pipeline.h"
+#include "../../libimg2/decoders/decoder.h"
+#include "../../libimg2/encoders/encoder.h"
 #include "../ctest.h"
 
 /* Minimal 1x1 PNG for testing */

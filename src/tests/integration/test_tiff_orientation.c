@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "../../imgcat2/core/image.h"
+#include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
 CTEST(tiff_orientation, verify_no_transformation_needed)

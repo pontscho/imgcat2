@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../imgcat2/core/cli.h"
+#include "../../imgcat2/cli.h"
 #include "../ctest.h"
 
 /**

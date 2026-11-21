@@ -13,7 +13,7 @@
 
 #include "../../imgcat2/ansi/ansi.h"
 #include "../../imgcat2/ansi/escape.h"
-#include "../../imgcat2/core/image.h"
+#include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
 /**

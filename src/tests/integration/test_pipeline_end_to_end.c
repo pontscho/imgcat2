@@ -11,11 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../imgcat2/core/cli.h"
-#include "../../imgcat2/core/image.h"
-#include "../../imgcat2/core/pipeline.h"
-#include "../../imgcat2/decoders/decoder.h"
-#include "../../imgcat2/decoders/magic.h"
+#include "../../imgcat2/cli.h"
+#include "../../libimg2/core/image.h"
+#include "../../imgcat2/pipeline.h"
+#include "../../libimg2/decoders/decoder.h"
+#include "../../libimg2/decoders/magic.h"
 #include "../ctest.h"
 
 /**

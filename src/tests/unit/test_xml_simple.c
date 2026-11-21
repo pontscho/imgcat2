@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../imgcat2/metadata/xml_parser.h"
+#include "../../libimg2/metadata/xml_parser.h"
 
 int main(void)
 {

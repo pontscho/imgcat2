@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../encoders/encoder.h"
+#include "encoder.h"
 
 /**
  * @brief PNG memory write state structure

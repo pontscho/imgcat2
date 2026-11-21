@@ -15,7 +15,7 @@
 #include <jpeglib.h>
 /* clang-format on */
 
-#include "../encoders/encoder.h"
+#include "encoder.h"
 
 /**
  * @struct jpeg_error_mgr_extended

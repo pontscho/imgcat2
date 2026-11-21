@@ -8,11 +8,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../imgcat2/core/metadata.h"
+#include "../../imgcat2/metadata.h"
 #include "../ctest.h"
 
 #ifdef HAVE_EXIF_READER
-#include "../../imgcat2/metadata/exif_reader.h"
+#include "../../libimg2/metadata/exif_reader.h"
 
 /**
  * Test EXIF text output doesn't crash with NULL

@@ -9,8 +9,8 @@
 #ifndef IMGCAT2_FILE_H
 #define IMGCAT2_FILE_H
 
-#include "../core/cli.h"
-#include "../core/image.h"
+#include "../cli.h"
+#include "../../libimg2/core/image.h"
 
 /**
  * @brief Render image to file or stdout

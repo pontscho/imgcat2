@@ -11,8 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../decoders/decoder.h"
-#include "../terminal/terminal.h"
+#include "../libimg2/decoders/decoder.h"
+#include "terminal/terminal.h"
 #include "cli.h"
 
 /** Project version from CMake */

@@ -12,8 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../imgcat2/core/image.h"
-#include "../../imgcat2/encoders/encoder.h"
+#include "../../libimg2/core/image.h"
+#include "../../libimg2/encoders/encoder.h"
 #include "../ctest.h"
 
 /**

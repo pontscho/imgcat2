@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "../../imgcat2/core/image.h"
+#include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
 CTEST(avif_orientation, libheif_handles_orientation_natively)

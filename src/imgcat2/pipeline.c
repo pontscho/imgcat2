@@ -16,17 +16,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../ansi/ansi.h"
-#include "../ansi/escape.h"
-#include "../decoders/decoder.h"
-#include "../decoders/magic.h"
-#include "../terminal/terminal.h"
+#include "ansi/ansi.h"
+#include "ansi/escape.h"
+#include "../libimg2/decoders/decoder.h"
+#include "../libimg2/decoders/magic.h"
+#include "terminal/terminal.h"
 #include "cli.h"
-#include "image.h"
+#include "../libimg2/core/image.h"
 #include "pipeline.h"
 
 #ifdef HAVE_EXIF_READER
-#include "../metadata/exif_reader.h"
+#include "../libimg2/metadata/exif_reader.h"
 #endif
 
 #ifdef _WIN32

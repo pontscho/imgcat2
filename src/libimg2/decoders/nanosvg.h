@@ -198,8 +198,8 @@ void nsvgDelete(NSVGimage* image);
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include "../../src/imgcat2/text/font_manager.h"
-#include "../stb/stb_truetype.h"
+#include "../text/font_manager.h"
+#include "stb_truetype.h"
 
 #define NSVG_PI (3.14159265358979323846264338327f)
 #define NSVG_KAPPA90 (0.5522847493f)	// Length proportional to radius of a cubic bezier handle for 90deg arcs.

@@ -26,7 +26,7 @@ def embed_single_font(ttf_path, var_name):
 def main():
     if len(sys.argv) != 3:
         print(f"Usage: {sys.argv[0]} <font_dir> <output_base>")
-        print(f"Example: {sys.argv[0]} src/imgcat2/font src/imgcat2/font/embedded_fonts")
+        print(f"Example: {sys.argv[0]} src/libimg2/font build/generated/embedded_fonts")
         sys.exit(1)
 
     font_dir = sys.argv[1]

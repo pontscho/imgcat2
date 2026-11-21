@@ -48,9 +48,15 @@ include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorResvg.cmake")
 include(Img2LinkOrder)
 include(Img2ProjectSettings)
 
+# Generated sources (embedded fonts) live in the build tree
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(IMG2_GENERATED_DIR "${PROJECT_BINARY_DIR}/generated")
+
 # Add include directories
 include_directories(
 	${PROJECT_SOURCE_DIR}/src
+	${PROJECT_SOURCE_DIR}/src/libimg2
+	${IMG2_GENERATED_DIR}
 	${NANOSVG_INCLUDE_DIR}
 	${STB_INCLUDE_DIR}
 	${QOI_INCLUDE_DIR}
@@ -93,35 +99,35 @@ endif()
 
 set(IMGCAT2_SOURCES
 	# Core module
-	src/imgcat2/core/image.c
-	src/imgcat2/core/pipeline.c
-	src/imgcat2/core/cli.c
-	src/imgcat2/core/base64.c
-	src/imgcat2/core/metadata.c
+	src/libimg2/core/image.c
+	src/imgcat2/pipeline.c
+	src/imgcat2/cli.c
+	src/imgcat2/base64.c
+	src/imgcat2/metadata.c
 
 	# Decoders module
-	src/imgcat2/decoders/decoder.c
-	src/imgcat2/decoders/magic.c
-	src/imgcat2/decoders/decoder_stb.c
-	src/imgcat2/decoders/decoder_png.c
-	src/imgcat2/decoders/decoder_jpeg.c
-	src/imgcat2/decoders/decoder_qoi.c
-	src/imgcat2/decoders/decoder_ico.c
-	src/imgcat2/decoders/decoder_pnm.c
-	src/imgcat2/decoders/decoder_yuv.c
-	src/imgcat2/decoders/decoder_nanosvg.c
+	src/libimg2/decoders/decoder.c
+	src/libimg2/decoders/magic.c
+	src/libimg2/decoders/decoder_stb.c
+	src/libimg2/decoders/decoder_png.c
+	src/libimg2/decoders/decoder_jpeg.c
+	src/libimg2/decoders/decoder_qoi.c
+	src/libimg2/decoders/decoder_ico.c
+	src/libimg2/decoders/decoder_pnm.c
+	src/libimg2/decoders/decoder_yuv.c
+	src/libimg2/decoders/decoder_nanosvg.c
 
 	# Encoders module
-	src/imgcat2/encoders/encoder.c
-	src/imgcat2/encoders/encoder_jpeg.c
-	src/imgcat2/encoders/encoder_png.c
+	src/libimg2/encoders/encoder.c
+	src/libimg2/encoders/encoder_jpeg.c
+	src/libimg2/encoders/encoder_png.c
 
 	# Terminal module - file renderer
 	src/imgcat2/terminal/file.c
 
 	# Text/Font module
-	src/imgcat2/text/font_manager.c
-	src/imgcat2/font/embedded_fonts.c
+	src/libimg2/text/font_manager.c
+	${IMG2_GENERATED_DIR}/embedded_fonts.c
 
 	# ANSI module
 	src/imgcat2/ansi/ansi.c
@@ -129,50 +135,50 @@ set(IMGCAT2_SOURCES
 )
 
 if(GIF_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_gif.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_gif.c)
 endif()
 
 if(WEBP_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_webp.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_webp.c)
 endif()
 
 if(HEIF_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_heif.c)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_avif.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_heif.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_avif.c)
 endif()
 
 if(TIFF_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_tiff.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_tiff.c)
 endif()
 
 if(RAW_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_raw.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_raw.c)
 endif()
 
 if(JXL_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_jxl.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_jxl.c)
 endif()
 
 if(RESVG_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/decoders/decoder_resvg.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/decoders/decoder_resvg.c)
 endif()
 
 # Conditional encoder sources
 if(WEBP_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/encoders/encoder_webp.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/encoders/encoder_webp.c)
 endif()
 
 if(HEIF_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/encoders/encoder_heif.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/encoders/encoder_heif.c)
 endif()
 
 if(JXL_FOUND)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/encoders/encoder_jxl.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/encoders/encoder_jxl.c)
 endif()
 
 if(IMG2_ENABLE_EXIF_READER)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/metadata/xml_parser.c)
-	list(APPEND IMGCAT2_SOURCES src/imgcat2/metadata/exif_reader.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/metadata/xml_parser.c)
+	list(APPEND IMGCAT2_SOURCES src/libimg2/metadata/exif_reader.c)
 	add_definitions(-DHAVE_EXIF_READER)
 endif()
 
@@ -190,25 +196,18 @@ else()
 	list(APPEND IMGCAT2_SOURCES src/imgcat2/terminal/kitty.c)
 endif()
 
-# Font embedding
+# Font embedding (generated into the build tree; IMG2_GENERATED_DIR is set above)
+set(_img2_font_dir "${PROJECT_SOURCE_DIR}/src/libimg2/font")
 add_custom_command(
-	OUTPUT ${PROJECT_SOURCE_DIR}/src/imgcat2/font/embedded_fonts.c
-	       ${PROJECT_SOURCE_DIR}/src/imgcat2/font/embedded_fonts.h
-	COMMAND python3 ${PROJECT_SOURCE_DIR}/tools/embed_font.py
-	        ${PROJECT_SOURCE_DIR}/src/imgcat2/font
-	        ${PROJECT_SOURCE_DIR}/src/imgcat2/font/embedded_fonts
-	DEPENDS ${PROJECT_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.book.ttf
-	        ${PROJECT_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.bold.ttf
-	        ${PROJECT_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.oblique.ttf
-	        ${PROJECT_SOURCE_DIR}/src/imgcat2/font/dejavu-sans-mono.bold-oblique.ttf
-	        ${PROJECT_SOURCE_DIR}/tools/embed_font.py
-	COMMENT "Embedding DejaVu Sans Mono font family (Regular, Bold, Italic, Bold-Italic)"
-)
-
-add_custom_target(embed_fonts ALL DEPENDS
-	${PROJECT_SOURCE_DIR}/src/imgcat2/font/embedded_fonts.c
-	${PROJECT_SOURCE_DIR}/src/imgcat2/font/embedded_fonts.h
-)
+	OUTPUT "${IMG2_GENERATED_DIR}/embedded_fonts.c" "${IMG2_GENERATED_DIR}/embedded_fonts.h"
+	COMMAND ${CMAKE_COMMAND} -E make_directory "${IMG2_GENERATED_DIR}"
+	COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/embed_font.py"
+	        "${_img2_font_dir}" "${IMG2_GENERATED_DIR}/embedded_fonts"
+	DEPENDS "${_img2_font_dir}/dejavu-sans-mono.book.ttf" "${_img2_font_dir}/dejavu-sans-mono.bold.ttf"
+	        "${_img2_font_dir}/dejavu-sans-mono.oblique.ttf" "${_img2_font_dir}/dejavu-sans-mono.bold-oblique.ttf"
+	        "${PROJECT_SOURCE_DIR}/tools/embed_font.py"
+	COMMENT "Embedding DejaVu Sans Mono font family" VERBATIM)
+add_custom_target(embed_fonts DEPENDS "${IMG2_GENERATED_DIR}/embedded_fonts.c" "${IMG2_GENERATED_DIR}/embedded_fonts.h")
 
 # Main executable
 add_executable(imgcat2 ${IMGCAT2_SOURCES} src/imgcat2/main.c)

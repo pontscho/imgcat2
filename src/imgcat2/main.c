@@ -10,16 +10,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "core/cli.h"
-#include "core/image.h"
-#include "core/metadata.h"
-#include "core/pipeline.h"
-#include "decoders/decoder.h"
-#include "decoders/magic.h"
-#include "encoders/encoder.h"
+#include "cli.h"
+#include "../libimg2/core/image.h"
+#include "metadata.h"
+#include "pipeline.h"
+#include "../libimg2/decoders/decoder.h"
+#include "../libimg2/decoders/magic.h"
+#include "../libimg2/encoders/encoder.h"
 #include "terminal/file.h"
 #include "terminal/terminal.h"
-#include "text/font_manager.h"
+#include "../libimg2/text/font_manager.h"
 
 /**
  * @brief Main program entry point

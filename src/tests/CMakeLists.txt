@@ -440,7 +440,7 @@ set_tests_properties(test_convert PROPERTIES
 add_executable(test_xml_parser
 	unit/main.c
 	unit/test_xml_parser.c
-	../imgcat2/metadata/xml_parser.c
+	../libimg2/metadata/xml_parser.c
 )
 
 target_link_libraries(test_xml_parser
@@ -457,8 +457,8 @@ set_tests_properties(test_xml_parser PROPERTIES
 add_executable(test_exif_reader
 	unit/main.c
 	unit/test_exif_reader.c
-	../imgcat2/metadata/exif_reader.c
-	../imgcat2/metadata/xml_parser.c
+	../libimg2/metadata/exif_reader.c
+	../libimg2/metadata/xml_parser.c
 )
 
 target_link_libraries(test_exif_reader
@@ -491,7 +491,7 @@ set_tests_properties(test_jpeg_exif_integration PROPERTIES
 add_executable(test_png_exif_integration
 	integration/main.c
 	integration/test_png_exif_integration.c
-	../imgcat2/decoders/decoder_png.c
+	../libimg2/decoders/decoder_png.c
 )
 
 target_link_libraries(test_png_exif_integration
@@ -514,7 +514,7 @@ if(WEBP_FOUND)
 	add_executable(test_webp_exif_integration
 		integration/main.c
 		integration/test_webp_exif_integration.c
-		../imgcat2/decoders/decoder_webp.c
+		../libimg2/decoders/decoder_webp.c
 	)
 
 	target_link_libraries(test_webp_exif_integration
@@ -535,7 +535,7 @@ if(HEIF_FOUND)
 	add_executable(test_heif_exif_integration
 		integration/main.c
 		integration/test_heif_exif_integration.c
-		../imgcat2/decoders/decoder_heif.c
+		../libimg2/decoders/decoder_heif.c
 	)
 
 	target_link_libraries(test_heif_exif_integration
@@ -555,7 +555,7 @@ if(JXL_FOUND)
 	add_executable(test_jxl_exif_integration
 		integration/main.c
 		integration/test_jxl_exif_integration.c
-		../imgcat2/decoders/decoder_jxl.c
+		../libimg2/decoders/decoder_jxl.c
 	)
 
 	target_link_libraries(test_jxl_exif_integration
@@ -575,7 +575,7 @@ if(RAW_FOUND)
 	add_executable(test_raw_exif_integration
 		integration/main.c
 		integration/test_raw_exif_integration.c
-		../imgcat2/decoders/decoder_raw.c
+		../libimg2/decoders/decoder_raw.c
 	)
 
 	target_link_libraries(test_raw_exif_integration
@@ -595,7 +595,7 @@ if(TIFF_FOUND)
 	add_executable(test_tiff_exif_integration
 		integration/main.c
 		integration/test_tiff_exif_integration.c
-		../imgcat2/decoders/decoder_tiff.c
+		../libimg2/decoders/decoder_tiff.c
 	)
 
 	target_link_libraries(test_tiff_exif_integration
@@ -754,9 +754,9 @@ endif()
 add_executable(test_metadata_output
 	unit/main.c
 	unit/test_metadata_output.c
-	../imgcat2/core/metadata.c
-	../imgcat2/metadata/exif_reader.c
-	../imgcat2/metadata/xml_parser.c
+	../imgcat2/metadata.c
+	../libimg2/metadata/exif_reader.c
+	../libimg2/metadata/xml_parser.c
 )
 
 target_link_libraries(test_metadata_output

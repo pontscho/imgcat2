@@ -11,10 +11,10 @@
 #include <string.h>
 #include <time.h>
 
-#include "../core/base64.h"
-#include "../decoders/decoder.h"
-#include "../decoders/magic.h"
-#include "../terminal/terminal.h"
+#include "../base64.h"
+#include "../../libimg2/decoders/decoder.h"
+#include "../../libimg2/decoders/magic.h"
+#include "terminal.h"
 #include "kitty.h"
 
 bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *opts)

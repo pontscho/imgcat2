@@ -10,11 +10,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "../../imgcat2/core/image.h"
+#include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
 #ifdef HAVE_EXIF_READER
-#include "../../imgcat2/metadata/exif_reader.h"
+#include "../../libimg2/metadata/exif_reader.h"
 #endif
 
 /* Forward declaration of decode_jxl from decoder */

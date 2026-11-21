@@ -12,8 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../imgcat2/core/cli.h"
-#include "../../imgcat2/core/image.h"
+#include "../../imgcat2/cli.h"
+#include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
 /**

@@ -13,7 +13,7 @@
 #include <png.h>
 #include <stddef.h>
 
-#include "../core/cli.h"
+#include "../../imgcat2/cli.h"
 #include "../core/image.h"
 #include "magic.h"
 #include "yuv.h"

@@ -13,7 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../core/cli.h"
+#include "../../imgcat2/cli.h"
 #include "../core/image.h"
 
 /* output_format_t is defined in cli.h */

@@ -15,9 +15,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../../imgcat2/core/cli.h"
-#include "../../imgcat2/core/image.h"
-#include "../../imgcat2/encoders/encoder.h"
+#include "../../imgcat2/cli.h"
+#include "../../libimg2/core/image.h"
+#include "../../libimg2/encoders/encoder.h"
 #include "../../imgcat2/terminal/file.h"
 #include "../ctest.h"
 #include "../test_tmpdir.h"

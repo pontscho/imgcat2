@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../imgcat2/core/image.h"
+#include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
 /* Forward declaration for JPEG encoder function */

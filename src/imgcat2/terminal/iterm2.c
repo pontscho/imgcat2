@@ -10,11 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../core/base64.h"
-#include "../core/cli.h"
-#include "../decoders/decoder.h"
-#include "../decoders/magic.h"
-#include "../encoders/encoder.h"
+#include "../base64.h"
+#include "../cli.h"
+#include "../../libimg2/decoders/decoder.h"
+#include "../../libimg2/decoders/magic.h"
+#include "../../libimg2/encoders/encoder.h"
 #include "iterm2.h"
 
 bool iterm2_is_format_supported(const uint8_t *data, size_t size, cli_options_t *opts)

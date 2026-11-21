@@ -14,7 +14,7 @@
 #include <webp/encode.h>
 /* clang-format on */
 
-#include "../encoders/encoder.h"
+#include "encoder.h"
 
 /**
  * @brief Encode RGBA image to WebP format

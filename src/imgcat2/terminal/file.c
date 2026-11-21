@@ -18,7 +18,7 @@
 #include <unistd.h>
 #endif
 
-#include "../encoders/encoder.h"
+#include "../../libimg2/encoders/encoder.h"
 #include "file.h"
 
 /**

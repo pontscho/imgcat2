@@ -19,7 +19,7 @@
 /* QOI implementation */
 #define QOI_IMPLEMENTATION
 #define QOI_NO_STDIO
-#include "../../vendor/qoi/qoi.h"
+#include "qoi.h"
 
 /**
  * @brief Decode QOI image (single frame)

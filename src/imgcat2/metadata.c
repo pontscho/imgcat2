@@ -9,7 +9,7 @@
 #include "metadata.h"
 
 #ifdef HAVE_EXIF_READER
-#include "../metadata/exif_reader.h"
+#include "../libimg2/metadata/exif_reader.h"
 #endif
 
 /**

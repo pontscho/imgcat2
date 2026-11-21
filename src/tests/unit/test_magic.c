@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../imgcat2/decoders/magic.h"
+#include "../../libimg2/decoders/magic.h"
 #include "../ctest.h"
 
 /**

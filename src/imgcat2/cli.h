@@ -12,7 +12,7 @@
 
 #include <stdbool.h>
 
-#include "../decoders/yuv.h"
+#include "../libimg2/decoders/yuv.h"
 
 /**
  * @enum output_format_t

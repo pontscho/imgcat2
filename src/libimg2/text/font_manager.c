@@ -42,10 +42,10 @@ static font_t *g_fallback_font = NULL;
 static bool g_initialized = false;
 
 /* Embedded fallback fonts */
-#include "../font/embedded_fonts.h"
+#include "embedded_fonts.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
-#include "../../vendor/stb/stb_truetype.h"
+#include "stb_truetype.h"
 
 /**
  * @brief Platform-specific font search paths
