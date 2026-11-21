@@ -209,11 +209,12 @@ static img2_image_t **decode_webp_static(const uint8_t *data, size_t len, int *f
 	}
 
 	// Create img2_image_t structure
-	img2_image_t *img = img2_image_alloc((uint32_t)width, (uint32_t)height);
-	if (img == NULL) {
+	img2_image_t *img = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc((uint32_t)width, (uint32_t)height, &img);
+	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		WebPFree(pixels);
-		return img2_decode_fail(st, IMG2_E_NOMEM);
+		return img2_decode_fail(st, alloc_st);
 	}
 
 	// Copy pixels to img2_image_t (WebP returns RGBA8888, same as our format)
@@ -353,6 +354,12 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 	uint32_t canvas_width = anim_info.canvas_width;
 	uint32_t canvas_height = anim_info.canvas_height;
 
+	// [F14] every output frame is a full canvas: reject before allocating anything
+	if (num_frames > 1 && img2_decode_check_total_pixels((uint64_t)num_frames, canvas_width, canvas_height) != IMG2_OK) {
+		WebPAnimDecoderDelete(dec);
+		return img2_decode_fail(st, IMG2_E_LIMIT);
+	}
+
 	// Allocate frames array
 	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
 	if (frames == NULL) {
@@ -369,6 +376,7 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 	// Decode each frame; timestamps are the end time of each frame in ms
 	int frame_idx = 0;
 	int prev_timestamp = 0;
+	uint64_t total_pixels = 0;
 	while (WebPAnimDecoderHasMoreFrames(dec) && frame_idx < num_frames) {
 		uint8_t *frame_buf;
 		int timestamp;
@@ -379,11 +387,15 @@ static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int 
 			goto cleanup_error;
 		}
 
-		// Create output frame
-		frames[frame_idx] = img2_image_alloc(canvas_width, canvas_height);
-		if (frames[frame_idx] == NULL) {
+		// Create output frame ([F14] within the running pixel total)
+		if (img2_decode_add_frame_pixels(&total_pixels, canvas_width, canvas_height) != IMG2_OK) {
+			*st = IMG2_E_LIMIT;
+			goto cleanup_error;
+		}
+		img2_status_t alloc_st = img2_decode_image_alloc(canvas_width, canvas_height, &frames[frame_idx]);
+		if (alloc_st != IMG2_OK) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", frame_idx);
-			*st = IMG2_E_NOMEM;
+			*st = alloc_st;
 			goto cleanup_error;
 		}
 

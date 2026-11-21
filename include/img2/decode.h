@@ -19,7 +19,9 @@ IMG2_BEGIN_DECLS
 typedef struct img2_decode_opts {
 	img2_mime_t force_mime;          /**< IMG2_MIME_UNKNOWN = detect from content */
 	const img2_yuv_params_t *yuv;    /**< Required when force_mime == IMG2_MIME_YUV */
-	int max_frames;                  /**< <= 0: no extra limit; N > 0: keep the first N frames */
+	int max_frames;                  /**< <= 0: no extra limit; N > 0: keep the first N frames. Applied after
+	                                      decoding (the decoder still decodes every frame it supports), so it
+	                                      trims the result and does not bound decode time or memory */
 	int jpeg_deblock;                /**< -1 = default (quantsmooth when built), 0 = off, 1 = on */
 } img2_decode_opts_t;
 
@@ -30,7 +32,8 @@ typedef struct img2_decode_opts {
  * @brief Decode an image buffer
  *
  * buf is untrusted: buf NULL / len 0 / out NULL -> IMG2_E_ARG; len > IMG2_MAX_FILE_SIZE ->
- * IMG2_E_LIMIT; every frame is limited to IMG2_MAX_DIMENSION / IMG2_MAX_PIXELS.
+ * IMG2_E_LIMIT; every frame is limited to IMG2_MAX_DIMENSION / IMG2_MAX_PIXELS (else IMG2_E_LIMIT),
+ * and the frames of an animated GIF, APNG or WebP to 2^30 pixels in total (else IMG2_E_LIMIT).
  *
  * @param buf  Encoded image data
  * @param len  Length of buf in bytes

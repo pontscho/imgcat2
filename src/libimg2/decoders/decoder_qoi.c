@@ -59,11 +59,12 @@ static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *fr
 	}
 
 	// Create img2_image_t structure
-	img2_image_t *output = img2_image_alloc((uint32_t)desc.width, (uint32_t)desc.height);
-	if (output == NULL) {
+	img2_image_t *output = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc((uint32_t)desc.width, (uint32_t)desc.height, &output);
+	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		free(pixels);
-		return img2_decode_fail(st, IMG2_E_NOMEM);
+		return img2_decode_fail(st, alloc_st);
 	}
 
 	// Copy pixels (QOI already returns RGBA8888, same as our format)

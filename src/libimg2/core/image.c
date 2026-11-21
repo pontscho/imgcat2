@@ -124,6 +124,17 @@ void img2_frames_free(img2_frames_t *f)
 	f->loop_count = 0;
 }
 
+/** @brief [F6] clamp a rounded fit dimension to [1, max] in double before the uint32 conversion (no float->uint32 UB) */
+static uint32_t fit_round_clamp(double v, uint32_t max)
+{
+	if (!(v >= 1.0)) { /* also NaN */
+		return 1;
+	} else if (v >= (double)max) {
+		return max;
+	}
+	return (uint32_t)v;
+}
+
 img2_status_t img2_fit_size(uint32_t src_w, uint32_t src_h, uint32_t max_w, uint32_t max_h, uint32_t *out_w, uint32_t *out_h)
 {
 	if (out_w == NULL || out_h == NULL) {
@@ -147,19 +158,19 @@ img2_status_t img2_fit_size(uint32_t src_w, uint32_t src_h, uint32_t max_w, uint
 	if (src_aspect > target_aspect) {
 		/* Source is wider - fit to width */
 		new_width = max_w;
-		new_height = (uint32_t)roundf((float)new_width / src_aspect);
+		new_height = fit_round_clamp((double)roundf((float)new_width / src_aspect), max_h);
 		if (new_height > max_h) {
 			new_height = max_h;
-			new_width = (uint32_t)roundf((float)new_height * src_aspect);
+			new_width = fit_round_clamp((double)roundf((float)new_height * src_aspect), max_w);
 		}
 
 	} else {
 		/* Source is taller - fit to height */
 		new_height = max_h;
-		new_width = (uint32_t)roundf((float)new_height * src_aspect);
+		new_width = fit_round_clamp((double)roundf((float)new_height * src_aspect), max_w);
 		if (new_width > max_w) {
 			new_width = max_w;
-			new_height = (uint32_t)roundf((float)new_width / src_aspect);
+			new_height = fit_round_clamp((double)roundf((float)new_width / src_aspect), max_h);
 		}
 	}
 
@@ -167,14 +178,6 @@ img2_status_t img2_fit_size(uint32_t src_w, uint32_t src_h, uint32_t max_w, uint
 	if (new_width == 0 || new_height == 0) {
 		img2_log(IMG2_LOG_ERROR, "image_scale_fit: calculated dimensions are invalid %u×%u", new_width, new_height);
 		return IMG2_E_ARG;
-	}
-
-	/* Post-condition clamp (only reachable through roundf) */
-	if (new_width > max_w) {
-		new_width = max_w;
-	}
-	if (new_height > max_h) {
-		new_height = max_h;
 	}
 
 	*out_w = new_width;

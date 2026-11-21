@@ -16,6 +16,9 @@
 #include <img2/image.h>
 #include <img2/yuv.h>
 
+/** Upper bound of -w/--width and -H/--height (pixels) */
+#define IMGCAT2_MAX_CUSTOM_DIMENSION 16384
+
 /**
  * @struct cli_options_t
  * @brief Command-line options structure

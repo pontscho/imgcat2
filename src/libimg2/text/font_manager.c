@@ -206,6 +206,14 @@ static char *parse_font_family_from_ttf(const char *font_path)
 		/* Convert UTF-16BE to UTF-8 (Microsoft platform) */
 		family = convert_utf16be_to_utf8((const uint8_t *)name, length);
 	}
+	if (family != NULL) {
+		/* [F27] the name table is untrusted: no C0 controls / DEL in names shown by --fonts */
+		for (char *p = family; *p != '\0'; p++) {
+			if ((unsigned char)*p < 0x20 || (unsigned char)*p == 0x7F) {
+				*p = '?';
+			}
+		}
+	}
 
 	free(data);
 	return family;
@@ -438,6 +446,13 @@ static bool img2_font_manager_init_locked(void)
 	g_fallback_font = (img2_font_t *)malloc(sizeof(img2_font_t));
 	if (g_fallback_font != NULL) {
 		g_fallback_font->family = strdup("DejaVu Sans Mono");
+	}
+	if (g_fallback_font != NULL && g_fallback_font->family == NULL) {
+		/* [F12] never intern a handle with a NULL family: no fallback (img2_font_load_fallback -> NOT_FOUND) */
+		free(g_fallback_font);
+		g_fallback_font = NULL;
+	}
+	if (g_fallback_font != NULL) {
 		g_fallback_font->weight = IMG2_FONT_WEIGHT_NORMAL;
 		g_fallback_font->style = IMG2_FONT_STYLE_NORMAL;
 		g_fallback_font->data = img2_embedded_dejavu_regular.data;
@@ -501,21 +516,6 @@ static void img2_font_manager_cleanup_locked(void)
 	g_fallback_font = NULL;
 
 	g_initialized = false;
-}
-
-bool img2_font_manager_init(void)
-{
-	pthread_mutex_lock(&s_font_lock);
-	bool ok = img2_font_manager_init_locked();
-	pthread_mutex_unlock(&s_font_lock);
-	return ok;
-}
-
-void img2_font_manager_cleanup(void)
-{
-	pthread_mutex_lock(&s_font_lock);
-	img2_font_manager_cleanup_locked();
-	pthread_mutex_unlock(&s_font_lock);
 }
 
 void img2_font_manager_cleanup_final(const int *refs)
@@ -632,9 +632,12 @@ static img2_font_t *img2_font_find_fallback_locked(void)
 
 /**
  * @brief Load a font by family name (caller holds s_font_lock; [R3] calls only *_locked helpers)
+ *
+ * @param st Set to IMG2_E_NOMEM if building the handle failed, else IMG2_E_NOT_FOUND, when NULL is returned
  */
-static img2_font_t *img2_font_find_locked(const char *family, img2_font_weight_t weight, img2_font_style_t style)
+static img2_font_t *img2_font_find_locked(const char *family, img2_font_weight_t weight, img2_font_style_t style, img2_status_t *st)
 {
+	*st = IMG2_E_NOT_FOUND;
 	if (!g_initialized) {
 		img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
 		return NULL;
@@ -681,10 +684,16 @@ static img2_font_t *img2_font_find_locked(const char *family, img2_font_weight_t
 
 	img2_font_t *font = (img2_font_t *)malloc(sizeof(img2_font_t));
 	if (font == NULL) {
+		*st = IMG2_E_NOMEM;
 		return NULL;
 	}
 
 	font->family = strdup(entry->family);
+	if (font->family == NULL) {
+		free(font);
+		*st = IMG2_E_NOMEM;
+		return NULL;
+	}
 	font->weight = entry->weight;
 	font->style = entry->style;
 	font->data = entry->data;
@@ -694,15 +703,22 @@ static img2_font_t *img2_font_find_locked(const char *family, img2_font_weight_t
 	return font;
 }
 
-img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_font_style_t style)
+/** @brief img2_font_find() with the failure reason in *st (IMG2_E_NOMEM or IMG2_E_NOT_FOUND) */
+static img2_font_t *font_find_status(const char *family, img2_font_weight_t weight, img2_font_style_t style, img2_status_t *st)
 {
 	pthread_mutex_lock(&s_font_lock);
 	if (!g_initialized) {
 		img2_font_manager_init_locked();
 	}
-	img2_font_t *font = img2_font_find_locked(family, weight, style);
+	img2_font_t *font = img2_font_find_locked(family, weight, style, st);
 	pthread_mutex_unlock(&s_font_lock);
 	return font;
+}
+
+img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_font_style_t style)
+{
+	img2_status_t st;
+	return font_find_status(family, weight, style, &st);
 }
 
 img2_font_t *img2_font_find_fallback(void)
@@ -746,8 +762,9 @@ img2_status_t img2_font_load(const char *family, img2_font_weight_t weight, img2
 	if (family == NULL) {
 		return IMG2_E_ARG;
 	}
-	*out = img2_font_find(family, weight, style);
-	return *out != NULL ? IMG2_OK : IMG2_E_NOT_FOUND;
+	img2_status_t st = IMG2_E_NOT_FOUND;
+	*out = font_find_status(family, weight, style, &st);
+	return *out != NULL ? IMG2_OK : st;
 }
 
 img2_status_t img2_font_load_fallback(img2_font_t **out)
@@ -756,7 +773,8 @@ img2_status_t img2_font_load_fallback(img2_font_t **out)
 		return IMG2_E_ARG;
 	}
 	*out = img2_font_find_fallback();
-	return *out != NULL ? IMG2_OK : IMG2_E_NOT_FOUND;
+	/* the embedded fallback is always built at init; only an allocation failure leaves it NULL */
+	return *out != NULL ? IMG2_OK : IMG2_E_NOMEM;
 }
 
 img2_status_t img2_font_foreach(img2_font_visit_fn fn, void *user)

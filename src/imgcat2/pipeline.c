@@ -398,6 +398,17 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
  * @param out_dims Output dimensions
  * @return true on success, false on error
  */
+/** @brief [F19] clamp a rounded dimension to [0, IMG2_MAX_DIMENSION] before the uint32 cast (0 stays invalid) */
+static uint32_t custom_dim_clamp(float v)
+{
+	if (!(v > 0.0f)) {
+		return 0;
+	} else if (v >= (float)IMG2_MAX_DIMENSION) {
+		return IMG2_MAX_DIMENSION;
+	}
+	return (uint32_t)v;
+}
+
 static bool calculate_custom_dimensions(const img2_image_t *src, int target_width, int target_height, target_dimensions_t *out_dims)
 {
 	if (src == NULL || src->width == 0 || src->height == 0 || out_dims == NULL) {
@@ -417,12 +428,12 @@ static bool calculate_custom_dimensions(const img2_image_t *src, int target_widt
 	} else if (target_width > 0) {
 		/* Only width specified: calculate height from aspect ratio */
 		final_width = (uint32_t)target_width;
-		final_height = (uint32_t)roundf((float)final_width / src_aspect);
+		final_height = custom_dim_clamp(roundf((float)final_width / src_aspect));
 
 	} else if (target_height > 0) {
 		/* Only height specified: calculate width from aspect ratio */
 		final_height = (uint32_t)target_height;
-		final_width = (uint32_t)roundf((float)final_height * src_aspect);
+		final_width = custom_dim_clamp(roundf((float)final_height * src_aspect));
 
 	} else {
 		fprintf(stderr, "calculate_custom_dimensions: no dimensions specified\n");

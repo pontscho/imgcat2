@@ -22,22 +22,8 @@ extern "C" {
 /* Public (<img2/font.h>): weight/style enums, img2_font_t, img2_font_load, img2_font_load_fallback,
  * img2_font_get_data, img2_font_get_family, img2_font_info_t, img2_font_foreach. Internal below. */
 
-/**
- * @brief Initialize font manager (optional: every entry point initialises lazily)
- *
- * Scans system font directories and builds font cache. Thread-safe (s_font_lock).
- *
- * @return true on success, false on failure
- */
-bool img2_font_manager_init(void);
-
-/**
- * @brief Cleanup font manager
- *
- * Frees all cached fonts, the interned handles and the fallback; a later call
- * re-initialises. Takes s_font_lock.
- */
-void img2_font_manager_cleanup(void);
+/* Every entry point initialises the font cache lazily (scan of the system font directories + the
+ * embedded fallbacks, under s_font_lock); the final img2_shutdown() frees it. */
 
 /**
  * @brief Internal: cleanup for the final img2_shutdown()

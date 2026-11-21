@@ -310,12 +310,13 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
 	}
 
 	// Create img2_image_t
-	img2_image_t *img = img2_image_alloc(width, height);
-	if (img == NULL) {
+	img2_image_t *img = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc(width, height, &img);
+	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t");
 		_TIFFfree(raster);
 		TIFFClose(tif);
-		return img2_decode_fail(st, IMG2_E_NOMEM);
+		return img2_decode_fail(st, alloc_st);
 	}
 
 	// Convert ABGR to RGBA (libtiff returns ABGR packed in uint32_t)

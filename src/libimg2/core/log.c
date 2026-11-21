@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "log.h"
 
@@ -42,7 +43,7 @@ void img2_log(img2_log_level_t level, const char *fmt, ...)
 
 	char buf[512];
 	char *heap = NULL;
-	const char *msg = buf;
+	char *msg = buf;
 
 	va_list ap;
 	va_list ap2;
@@ -61,6 +62,15 @@ void img2_log(img2_log_level_t level, const char *fmt, ...)
 		/* on malloc failure the truncated buf is delivered */
 	}
 	va_end(ap2);
+
+	/* [F22] messages may carry file-derived text: C0 controls (except '\t' and a final '\n') and DEL -> '?' */
+	size_t msg_len = strlen(msg);
+	for (size_t i = 0; i < msg_len; i++) {
+		unsigned char c = (unsigned char)msg[i];
+		if ((c < 0x20 && c != '\t' && !(c == '\n' && i + 1 == msg_len)) || c == 0x7F) {
+			msg[i] = '?';
+		}
+	}
 
 	pthread_mutex_lock(&s_lock);
 	img2_log_fn fn = s_fn;

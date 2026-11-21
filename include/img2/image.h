@@ -125,7 +125,7 @@ img2_status_t img2_scale_fit(const img2_image_t *src, uint32_t max_w, uint32_t m
  * @param max_h Maximum height
  * @param out_w Output width (1 <= *out_w <= max_w on success)
  * @param out_h Output height (1 <= *out_h <= max_h on success)
- * @return IMG2_OK, or IMG2_E_ARG (zero argument, NULL output, or a degenerate result)
+ * @return IMG2_OK, or IMG2_E_ARG (zero argument or NULL output). A side that rounds to 0 is clamped to 1.
  */
 img2_status_t img2_fit_size(uint32_t src_w, uint32_t src_h, uint32_t max_w, uint32_t max_h, uint32_t *out_w, uint32_t *out_h);
 

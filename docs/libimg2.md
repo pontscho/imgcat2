@@ -330,10 +330,12 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   (`IMG2_E_LIMIT` / `false`).
 - Every frame goes through one gate: each axis `<= IMG2_MAX_DIMENSION` (65536), total
   `<= IMG2_MAX_PIXELS` (200 megapixels); violations are `IMG2_E_LIMIT`.
-- `img2_decode_opts_t.max_frames > 0` keeps only the first N frames.
-- There is no cap on the total pixels across all frames of an animation: decoders allocate frame by frame, so a
-  post-decode sum could not bound peak memory, and an in-decoder cap would change imgcat2's behaviour for large
-  animations. Use `max_frames` (and the per-frame limits) to bound memory.
+- `img2_decode_opts_t.max_frames > 0` keeps only the first N frames. It trims the result after decoding,
+  so it does not bound decode time or memory.
+- **[F14]** Animated GIF, APNG and WebP decodes are capped at 2^30 pixels summed over all output frames (each
+  frame is a full canvas, 4 GiB of RGBA at the cap): checked up front from the frame count and again while
+  allocating frame by frame; exceeding it frees everything and returns `IMG2_E_LIMIT`. GIF/APNG/WebP also keep
+  their 200-frame cap. Other multi-frame decoders (TIFF pages, HEIF/AVIF image lists, JXL) have no total cap.
 - **[SM2]** Every entry point that takes a caller-built `img2_image_t`/`img2_frames_t` (`img2_scale`,
   `img2_scale_fit`, `img2_encode`, `img2_apply_orientation`) validates it first: non-NULL pixels, non-zero
   dimensions within the limits, `stride == width * 4` (1.0 accepts packed rows only), frame count >= 1 and

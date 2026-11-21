@@ -50,7 +50,7 @@ img2_status_t img2_font_load(const char *family, img2_font_weight_t weight, img2
  * @brief The embedded DejaVu Sans Mono (regular) font
  *
  * @param out Output handle (see img2_font_t); *out = NULL on error
- * @return IMG2_OK; IMG2_E_ARG (out NULL); IMG2_E_NOT_FOUND
+ * @return IMG2_OK; IMG2_E_ARG (out NULL); IMG2_E_NOMEM
  */
 img2_status_t img2_font_load_fallback(img2_font_t **out);
 

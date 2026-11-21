@@ -17,6 +17,7 @@
 #include <img2/decode.h>
 
 #include "../core/image.h"
+#include "../core/log.h"
 #include "magic.h"
 #include "yuv.h"
 
@@ -83,6 +84,59 @@ static inline img2_image_t **img2_decode_fail(img2_status_t *st, img2_status_t c
 		*st = code;
 	}
 	return NULL;
+}
+
+/**
+ * @brief Internal: allocate a decoder's first frame / canvas with the LIMIT vs NOMEM decision
+ *
+ * @param out Allocated image, NULL on error
+ * @return IMG2_OK; IMG2_E_LIMIT if the dimensions fail img2_image_calc_size() (zero, > IMG2_MAX_DIMENSION,
+ *         > IMG2_MAX_PIXELS); IMG2_E_NOMEM if the allocation failed
+ */
+static inline img2_status_t img2_decode_image_alloc(uint32_t width, uint32_t height, img2_image_t **out)
+{
+	size_t byte_count;
+	bool size_ok = img2_image_calc_size(width, height, &byte_count);
+
+	*out = img2_image_alloc(width, height);
+	if (*out == NULL) {
+		return size_ok ? IMG2_E_NOMEM : IMG2_E_LIMIT;
+	}
+	return IMG2_OK;
+}
+
+/**
+ * @brief Internal [F14]: add one frame of width x height to the running pixel total of an animated decode
+ *
+ * @return IMG2_OK, or IMG2_E_LIMIT if the total would exceed IMG2_MAX_TOTAL_PIXELS (total unchanged then)
+ */
+static inline img2_status_t img2_decode_add_frame_pixels(uint64_t *total, uint32_t width, uint32_t height)
+{
+	uint64_t pixels = (uint64_t)width * (uint64_t)height;
+
+	if (pixels > IMG2_MAX_TOTAL_PIXELS || *total > IMG2_MAX_TOTAL_PIXELS - pixels) {
+		img2_log(IMG2_LOG_ERROR, "Error: Animation exceeds the total frame pixel limit (%llu)", (unsigned long long)IMG2_MAX_TOTAL_PIXELS);
+		return IMG2_E_LIMIT;
+	}
+	*total += pixels;
+	return IMG2_OK;
+}
+
+/**
+ * @brief Internal [F14]: fail fast before any allocation when frame_count full-canvas frames cannot fit
+ *        into IMG2_MAX_TOTAL_PIXELS (the running total in the frame loop stays the authoritative check)
+ *
+ * @return IMG2_OK or IMG2_E_LIMIT
+ */
+static inline img2_status_t img2_decode_check_total_pixels(uint64_t frame_count, uint32_t width, uint32_t height)
+{
+	uint64_t pixels = (uint64_t)width * (uint64_t)height;
+
+	if (pixels != 0 && frame_count > IMG2_MAX_TOTAL_PIXELS / pixels) {
+		img2_log(IMG2_LOG_ERROR, "Error: Animation exceeds the total frame pixel limit (%llu)", (unsigned long long)IMG2_MAX_TOTAL_PIXELS);
+		return IMG2_E_LIMIT;
+	}
+	return IMG2_OK;
 }
 
 /**

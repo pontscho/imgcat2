@@ -6,6 +6,7 @@
  * and help/version display functions.
  */
 
+#include <errno.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -247,6 +248,24 @@ void print_font_list(void)
 }
 
 /**
+ * @brief Parse a -w/-H value: decimal integer in [1, IMGCAT2_MAX_CUSTOM_DIMENSION], nothing else
+ *
+ * @return 0 on success, -1 on error (error printed to stderr)
+ */
+static int parse_dimension_arg(const char *arg, const char *what, int *out)
+{
+	char *end = NULL;
+	errno = 0;
+	long v = strtol(arg, &end, 10);
+	if (errno != 0 || end == arg || *end != '\0' || v < 1 || v > IMGCAT2_MAX_CUSTOM_DIMENSION) {
+		fprintf(stderr, "Error: %s must be between 1 and %d pixels (got '%s')\n", what, IMGCAT2_MAX_CUSTOM_DIMENSION, arg);
+		return -1;
+	}
+	*out = (int)v;
+	return 0;
+}
+
+/**
  * @brief Parse command-line arguments
  *
  * Parses command-line arguments using getopt_long() and populates
@@ -318,12 +337,16 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			case 'L': opts->list_fonts = true; break;
 
 			case 'w':
-				opts->target_width = atoi(optarg);
+				if (parse_dimension_arg(optarg, "Width", &opts->target_width) < 0) {
+					return -1;
+				}
 				opts->has_custom_dimensions = true;
 				break;
 
 			case 'H':
-				opts->target_height = atoi(optarg);
+				if (parse_dimension_arg(optarg, "Height", &opts->target_height) < 0) {
+					return -1;
+				}
 				opts->has_custom_dimensions = true;
 				break;
 

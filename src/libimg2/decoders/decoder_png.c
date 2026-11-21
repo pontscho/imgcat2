@@ -583,6 +583,12 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	}
 	png_read_update_info(png_ptr, info_ptr);
 
+	/* [F14] every output frame is a full canvas: reject before allocating anything */
+	if (num_frames > 1 && img2_decode_check_total_pixels((uint64_t)num_frames, canvas_width, canvas_height) != IMG2_OK) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return img2_decode_fail(st, IMG2_E_LIMIT);
+	}
+
 	/* Allocate frames array */
 	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
 	if (frames == NULL) {
@@ -597,16 +603,20 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	}
 
 	/* Create accumulator canvas for frame composition */
-	img2_image_t *accumulator = img2_image_alloc(canvas_width, canvas_height);
-	if (accumulator == NULL) {
+	img2_image_t *accumulator = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc(canvas_width, canvas_height, &accumulator);
+	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
 		free(frames);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return img2_decode_fail(st, IMG2_E_NOMEM);
+		return img2_decode_fail(st, alloc_st);
 	}
 
 	/* Previous frame backup for DISPOSE_PREVIOUS */
 	img2_image_t *previous = NULL;
+
+	/* [F14] running pixel total of the output frames */
+	uint64_t total_pixels = 0;
 
 	/* Process each frame */
 	for (uint32_t frame_idx = 0; frame_idx < num_frames; frame_idx++) {
@@ -636,7 +646,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		/* Validate frame dimensions and offsets */
 		if (x_offset + frame_width > canvas_width || y_offset + frame_height > canvas_height) {
 			img2_log(IMG2_LOG_ERROR, "Error: Frame %u dimensions exceed canvas bounds", frame_idx);
-			*st = IMG2_E_LIMIT;
+			*st = IMG2_E_FORMAT;
 			goto cleanup_error;
 		}
 
@@ -683,6 +693,12 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		apng_composite_frame(accumulator, frame_buffer, x_offset, y_offset, frame_width, frame_height, canvas_width, canvas_height, blend_op);
 
 		/* Copy accumulator to output frame */
+		if (img2_decode_add_frame_pixels(&total_pixels, canvas_width, canvas_height) != IMG2_OK) {
+			free(frame_buffer);
+			free(row_pointers);
+			*st = IMG2_E_LIMIT;
+			goto cleanup_error;
+		}
 		frames[frame_idx] = img2_image_alloc(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %u", frame_idx);
@@ -913,11 +929,13 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
 	}
 
 	// Create img2_image_t structure and decode straight into its pixel buffer
-	img = img2_image_alloc(width, height);
-	if (img == NULL) {
+	img2_image_t *new_img = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc(width, height, &new_img);
+	img = new_img;
+	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return img2_decode_fail(st, IMG2_E_NOMEM);
+		return img2_decode_fail(st, alloc_st);
 	}
 
 	row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);

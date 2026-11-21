@@ -66,11 +66,12 @@ static img2_image_t **decode_stb_frames(const uint8_t *data, size_t len, int *fr
 	}
 
 	// Create img2_image_t structure
-	img2_image_t *img = img2_image_alloc((uint32_t)width, (uint32_t)height);
-	if (img == NULL) {
+	img2_image_t *img = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc((uint32_t)width, (uint32_t)height, &img);
+	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		stbi_image_free(pixels);
-		return img2_decode_fail(st, IMG2_E_NOMEM);
+		return img2_decode_fail(st, alloc_st);
 	}
 
 	// Copy pixel data (stb_image returns RGBA8888 when we request 4 channels)

@@ -21,6 +21,9 @@
  * img2_fit_size, img2_scale*, img2_apply_orientation, img2_image_create, pixel accessors (<img2/image.h>).
  * Internal below. */
 
+/** @brief Internal: cap on the summed pixels of all frames of one animated decode (GIF, APNG, WebP) */
+#define IMG2_MAX_TOTAL_PIXELS ((uint64_t)1u << 30)
+
 /**
  * @brief Internal [SM2]: validate a (possibly caller-built) image
  *

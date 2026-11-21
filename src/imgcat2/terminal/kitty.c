@@ -52,6 +52,8 @@ force_ansi:
 
 int kitty_render(img2_image_t **frames, int frame_count, const cli_options_t *opts)
 {
+	(void)frame_count; /* only the first frame is sent */
+
 	/* Get first frame */
 	img2_image_t *img = frames[0];
 
@@ -63,11 +65,7 @@ int kitty_render(img2_image_t **frames, int frame_count, const cli_options_t *op
 	char *encoded = base64_encode(img->pixels, raw_size, &encoded_size);
 	if (encoded == NULL) {
 		fprintf(stderr, "Error: Failed to base64 encode RGBA data\n");
-		for (int i = 0; i < frame_count; i++) {
-			img2_image_destroy(frames[i]);
-		}
-		free(frames);
-		return -1;
+		return -1; /* frames stay owned by the caller */
 	}
 
 	/* Use chunked transmission in tmux to avoid DCS size limits (~1MB) */

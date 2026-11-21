@@ -132,6 +132,86 @@ CTEST(anim_timing, single_frame_png)
 	check_file("data/png/rgb8_srgb.png", 1, 0u, 0);
 }
 
+/*
+ * Synthetic GIF: w x h logical screen, 2-colour global table, frame_count 1x1 frames at (0,0).
+ * Each frame is 2C <pos/size> 00 + LZW min code size 2, one 2-byte sub-block (clear, index 0, EOI).
+ * Returns the length written to buf (cap must be >= 20 + 15 * frame_count).
+ */
+static size_t build_gif(uint8_t *buf, size_t cap, uint16_t w, uint16_t h, int frame_count)
+{
+	static const uint8_t head[] = { 'G', 'I', 'F', '8', '9', 'a' };
+	static const uint8_t frame[] = { 0x2C, 0, 0, 0, 0, 1, 0, 1, 0, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00 };
+	size_t n = 0;
+	if (cap < 20 + sizeof(frame) * (size_t)frame_count) {
+		return 0;
+	}
+	memcpy(buf, head, sizeof(head));
+	n = sizeof(head);
+	buf[n++] = (uint8_t)(w & 0xFF);
+	buf[n++] = (uint8_t)(w >> 8);
+	buf[n++] = (uint8_t)(h & 0xFF);
+	buf[n++] = (uint8_t)(h >> 8);
+	buf[n++] = 0x80; /* global colour table, 2 entries */
+	buf[n++] = 0;    /* background */
+	buf[n++] = 0;    /* aspect */
+	static const uint8_t gct[] = { 0, 0, 0, 0xFF, 0xFF, 0xFF };
+	memcpy(buf + n, gct, sizeof(gct));
+	n += sizeof(gct);
+	for (int i = 0; i < frame_count; i++) {
+		memcpy(buf + n, frame, sizeof(frame));
+		n += sizeof(frame);
+	}
+	buf[n++] = 0x3B;
+	return n;
+}
+
+CTEST(anim_timing, gif_synthetic_decodes)
+{
+	if (!img2_can_decode(IMG2_MIME_GIF)) {
+		return; /* skipped: GIF decoder not built */
+	}
+	/* sanity check of build_gif: a small canvas decodes (frames composed onto the 4x3 canvas) */
+	uint8_t buf[256];
+	size_t len = build_gif(buf, sizeof(buf), 4, 3, 2);
+	ASSERT_TRUE(len > 0);
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_OK, img2_decode(buf, len, NULL, &fr));
+	ASSERT_EQUAL(2, fr.count);
+	ASSERT_EQUAL(4, fr.frames[0]->width);
+	ASSERT_EQUAL(3, fr.frames[0]->height);
+	img2_frames_free(&fr);
+}
+
+CTEST(anim_timing, gif_oversized_screen_is_limit)
+{
+	if (!img2_can_decode(IMG2_MIME_GIF)) {
+		return; /* skipped: GIF decoder not built */
+	}
+	/* 65535 x 65535 logical screen: canvas over IMG2_MAX_PIXELS -> LIMIT, not NOMEM */
+	uint8_t buf[256];
+	size_t len = build_gif(buf, sizeof(buf), 0xFFFF, 0xFFFF, 1);
+	ASSERT_TRUE(len > 0);
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_E_LIMIT, img2_decode(buf, len, NULL, &fr));
+	ASSERT_NULL(fr.frames);
+	ASSERT_EQUAL(0, fr.count);
+}
+
+CTEST(anim_timing, gif_total_pixels_is_limit)
+{
+	if (!img2_can_decode(IMG2_MIME_GIF)) {
+		return; /* skipped: GIF decoder not built */
+	}
+	/* [F14] 11 frames of a 10000 x 10000 canvas (each frame within IMG2_MAX_PIXELS) = 1.1e9 > 2^30 total */
+	uint8_t buf[512];
+	size_t len = build_gif(buf, sizeof(buf), 10000, 10000, 11);
+	ASSERT_TRUE(len > 0);
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_E_LIMIT, img2_decode(buf, len, NULL, &fr));
+	ASSERT_NULL(fr.frames);
+	ASSERT_EQUAL(0, fr.count);
+}
+
 CTEST(anim_timing, max_frames_keeps_loop_count)
 {
 	if (!img2_can_decode(IMG2_MIME_GIF)) {

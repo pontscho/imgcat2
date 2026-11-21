@@ -540,10 +540,11 @@ static img2_image_t **decode_yuv_frames(const uint8_t *data, size_t len, const i
 		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
-	img2_image_t *img = img2_image_alloc(params->width, params->height);
-	if (img == NULL) {
+	img2_image_t *img = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc(params->width, params->height, &img);
+	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
-		return img2_decode_fail(st, IMG2_E_NOMEM);
+		return img2_decode_fail(st, alloc_st);
 	}
 
 	const uint32_t w = params->width;

@@ -23,7 +23,8 @@ typedef enum img2_log_level {
 /**
  * @brief Host log callback
  *
- * msg has no trailing newline; the callback is called on the logging thread.
+ * msg has no trailing newline; control bytes (C0 except tab, and DEL) are replaced by '?' before
+ * delivery (also on the default stderr sink). The callback is called on the logging thread.
  * Contract: the callback must be thread-safe, must not call ANY img2_* function (including
  * img2_set_log_callback/img2_set_log_level), and may be invoked while library-internal locks are
  * held (e.g. during img2_init's registry listing, or font cache messages). Re-entry can deadlock.
