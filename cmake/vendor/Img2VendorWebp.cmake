@@ -25,7 +25,9 @@ if(IMG2_ENABLE_WEBP AND NOT IMG2_USE_SYSTEM_WEBP)
 	set(WEBP_LIBRARIES webpdemux webp sharpyuv)
 	set(WEBP_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/vendor/libwebp/src")
 	set(WEBP_LIB_TYPE "vendored libwebp 1.6.0")
-	img2_feature(WEBP LIBS ${WEBP_LIBRARIES} INCLUDE_DIRS ${WEBP_INCLUDE_DIRS})
+	img2_feature(WEBP LIBS ${WEBP_LIBRARIES} INCLUDE_DIRS ${WEBP_INCLUDE_DIRS}
+		ARCHIVES "$<TARGET_FILE:webpdemux>" "$<TARGET_FILE:webp>" "$<TARGET_FILE:sharpyuv>"
+		ARCHIVE_TARGETS webpdemux webp sharpyuv)
 
 elseif(IMG2_ENABLE_WEBP)
 	set(WEBP_LIB_TYPE "host")
@@ -45,7 +47,8 @@ elseif(IMG2_ENABLE_WEBP)
 	endif()
 
 	if(WEBP_FOUND)
-		img2_feature(WEBP LIBS ${WEBP_LIBRARIES} INCLUDE_DIRS ${WEBP_INCLUDE_DIRS})
+		img2_feature(WEBP LIBS ${WEBP_LIBRARIES} INCLUDE_DIRS ${WEBP_INCLUDE_DIRS} SYSTEM_LIBS ${WEBP_LIBRARIES})
+		img2_warn_host_dependency("libwebp (IMG2_USE_SYSTEM_WEBP)")
 
 	else()
 		message(WARNING "libwebp not found, WebP support disabled")

@@ -280,6 +280,68 @@ make
 
 </details>
 
+### Build Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `IMG2_ENABLE_GIF` / `_WEBP` / `_HEIF` / `_TIFF` / `_RAW` / `_JXL` | ON | Optional codecs |
+| `IMG2_ENABLE_RESVG` | OFF | resvg SVG renderer (host library) |
+| `IMG2_ENABLE_EXIF_READER` | ON | EXIF/XMP metadata |
+| `IMG2_ENABLE_JPEGQS` | ON | jpeg-quantsmooth JPEG deblocking |
+| `IMG2_USE_SYSTEM_<X>` | OFF | Host library instead of the vendored copy (`JPEG`, `PNG`, `GIF`, `WEBP`, `TIFF`, `LCMS2`, `RAW`, `HEIF`, `JXL`) |
+| `IMG2_BUILD_CLI` / `IMG2_BUILD_TESTS` | ON (top level) | Build the `imgcat2` tool / the tests |
+| `IMG2_INSTALL` | ON (top level) | Install rules and the `img2Config.cmake` package |
+| `IMG2_FAT_ARCHIVE` | `IMG2_INSTALL` | Merge libimg2 and all vendored libraries into one `libimg2.a` |
+| `IMG2_WERROR` | ON (top level) | Treat warnings as errors |
+| `IMG2_POSITION_INDEPENDENT_CODE` | ON | PIC library and vendors |
+
+See [docs/libimg2.md](docs/libimg2.md#options) for the full list.
+
+## Using imgcat2 as a library (libimg2)
+
+The decoders, encoders and scaler behind `imgcat2` are a static C11 library, `libimg2`, with public headers
+under `include/img2/`. Install it (the fat `libimg2.a` contains every vendored codec library):
+
+```bash
+cmake -S . -B build && cmake --build build -j
+cmake --install build --prefix /opt/img2 --component img2_development
+```
+
+and consume it with CMake:
+
+```cmake
+find_package(img2 1.0 REQUIRED)            # CMAKE_PREFIX_PATH=/opt/img2
+target_link_libraries(app PRIVATE img2::img2)
+```
+
+or build it as part of your project:
+
+```cmake
+set(IMG2_BUILD_CLI OFF)
+set(IMG2_BUILD_TESTS OFF)
+set(IMG2_INSTALL OFF)
+add_subdirectory(third_party/imgcat2 img2 EXCLUDE_FROM_ALL)
+target_link_libraries(app PRIVATE img2::img2)
+```
+
+A short example:
+
+```c
+#include <img2/img2.h>
+
+img2_frames_t fr;
+img2_image_t *thumb = NULL;
+if (img2_decode(data, len, NULL, &fr) == IMG2_OK) {
+	if (img2_scale_fit(fr.frames[0], 128, 128, IMG2_FILTER_DEFAULT, &thumb) == IMG2_OK) {
+		/* thumb->pixels: RGBA8888, thumb->width x thumb->height */
+		img2_image_destroy(thumb);
+	}
+	img2_frames_free(&fr);
+}
+```
+
+API overview, ownership rules, error codes, logging, threading and limits: [docs/libimg2.md](docs/libimg2.md).
+
 ## iTerm2 Native Support
 
 When running in iTerm2, imgcat2 automatically uses the native inline images protocol for significantly better quality:

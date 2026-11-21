@@ -1,0 +1,29 @@
+# img2 package configuration (generated from cmake/img2Config.cmake.in by cmake/Img2Install.cmake)
+# Provides the imported target img2::img2 (fat static libimg2.a: libimg2 + every vendored codec library).
+@PACKAGE_INIT@
+# [SL3] relocatable: every path derives from PACKAGE_PREFIX_DIR; set_and_check fails early if the files are missing.
+set_and_check(img2_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+set_and_check(img2_LIBRARY "@PACKAGE_IMG2_INSTALL_ARCHIVE@")
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+set(_img2_need_openmp @IMG2_NEED_OPENMP@)
+if(_img2_need_openmp)
+	find_dependency(OpenMP COMPONENTS C)
+endif()
+if(NOT TARGET img2::img2)
+	add_library(img2::img2 STATIC IMPORTED)
+	set(_img2_deps Threads::Threads)
+	if(_img2_need_openmp)
+		list(APPEND _img2_deps OpenMP::OpenMP_C)
+	endif()
+	list(APPEND _img2_deps m $<IF:$<PLATFORM_ID:Darwin>,c++,stdc++> @IMG2_HOST_LINK_LIBS@)
+	set_target_properties(img2::img2 PROPERTIES
+		IMPORTED_LOCATION "${img2_LIBRARY}"
+		INTERFACE_INCLUDE_DIRECTORIES "${img2_INCLUDE_DIR}"
+		INTERFACE_LINK_LIBRARIES "${_img2_deps}"
+		INTERFACE_LINK_OPTIONS "@IMG2_CONFIG_LINK_OPTIONS@")   # empty, or $<$<PLATFORM_ID:Linux>:-no-pie> if PIC OFF
+	unset(_img2_deps)
+endif()
+unset(_img2_need_openmp)
+set(img2_FEATURES "@IMG2_FEATURES@")
+check_required_components(img2)

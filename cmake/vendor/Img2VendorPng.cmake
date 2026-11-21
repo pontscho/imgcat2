@@ -54,6 +54,8 @@ if(IMG2_USE_SYSTEM_PNG)
 	" PNG_APNG_SUPPORTED_CHECK)
 	cmake_pop_check_state()
 	set(PNG_LIB_TYPE "host")
+	set(_png_feature_args SYSTEM_LIBS ${PNG_LIBRARIES})
+	img2_warn_host_dependency("libpng (IMG2_USE_SYSTEM_PNG)")
 
 else()
 	# Vendored libpng + APNG patch from the libpng-apng project:
@@ -131,8 +133,9 @@ else()
 		message(FATAL_ERROR "libpng: APNG patch applied but PNG_APNG_SUPPORTED is not defined in png.h")
 	endif()
 	set(PNG_LIB_TYPE "vendored libpng 1.6.59 + APNG patch")
+	set(_png_feature_args ARCHIVES "$<TARGET_FILE:png_static>" ARCHIVE_TARGETS png_static)
 endif()
-img2_feature(LIBPNG LIBS ${PNG_LIBRARIES} INCLUDE_DIRS ${PNG_INCLUDE_DIRS})
+img2_feature(LIBPNG LIBS ${PNG_LIBRARIES} INCLUDE_DIRS ${PNG_INCLUDE_DIRS} ${_png_feature_args})
 
 if(PNG_APNG_SUPPORTED_CHECK)
 	# PNG_APNG_SUPPORTED is already defined in png.h when APNG support is available

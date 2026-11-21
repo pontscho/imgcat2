@@ -24,7 +24,8 @@ if(IMG2_ENABLE_RESVG)
 	endif()
 
 	if(RESVG_FOUND)
-		img2_feature(RESVG LIBS ${RESVG_LIBRARIES} INCLUDE_DIRS ${RESVG_INCLUDE_DIRS})
+		img2_feature(RESVG LIBS ${RESVG_LIBRARIES} INCLUDE_DIRS ${RESVG_INCLUDE_DIRS} SYSTEM_LIBS ${RESVG_LIBRARIES})
+		img2_warn_host_dependency("resvg (IMG2_ENABLE_RESVG)")
 		message(STATUS "resvg found: ${RESVG_VERSION} (preferred SVG decoder)")
 
 	else()

@@ -227,7 +227,12 @@ if(IMG2_ENABLE_HEIF AND NOT IMG2_USE_SYSTEM_HEIF)
 	if(TARGET sharpyuv)
 		list(APPEND HEIF_CODECS "sharpyuv")
 	endif()
-	img2_feature(HEIF LIBS ${HEIF_CUSTOM_LIBS} INCLUDE_DIRS ${HEIF_INCLUDE_DIRS})
+	# Fat archive inputs in the former link order: libheif, libde265, aom, openjp2, kvazaar (sharpyuv, libjpeg,
+	# zlib-ng and brotli are registered by their own modules / Img2LinkOrder)
+	img2_feature(HEIF LIBS ${HEIF_CUSTOM_LIBS} INCLUDE_DIRS ${HEIF_INCLUDE_DIRS}
+		ARCHIVES "$<TARGET_FILE:heif>" "$<TARGET_FILE:de265>" "${AOM_LIBRARY}" "$<TARGET_FILE:openjp2>"
+		         "$<TARGET_FILE:vendor_kvazaar>"
+		ARCHIVE_TARGETS heif de265 aom-ext openjp2 vendor_kvazaar)
 
 elseif(IMG2_ENABLE_HEIF)
 	set(HEIF_LIB_TYPE "host")
@@ -376,7 +381,8 @@ elseif(IMG2_ENABLE_HEIF)
 			endif()
 		endif()
 
-		img2_feature(HEIF LIBS ${HEIF_CUSTOM_LIBS} INCLUDE_DIRS ${HEIF_INCLUDE_DIRS})
+		img2_feature(HEIF LIBS ${HEIF_CUSTOM_LIBS} INCLUDE_DIRS ${HEIF_INCLUDE_DIRS} SYSTEM_LIBS ${HEIF_CUSTOM_LIBS})
+		img2_warn_host_dependency("libheif (IMG2_USE_SYSTEM_HEIF)")
 
 	else()
 		message(WARNING "libheif not found, HEIF support disabled")

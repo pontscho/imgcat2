@@ -8,7 +8,10 @@ else()
 endif()
 add_library(imgcat2_cli STATIC ${_cli_src})
 target_include_directories(imgcat2_cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(imgcat2_cli PUBLIC img2)   # public <img2/...> API only (was img2_testing)
+target_link_libraries(imgcat2_cli PUBLIC ${IMG2_LINK_TARGET})   # public <img2/...> API only; fat libimg2.a if built
+if(TARGET img2_fat)
+	add_dependencies(imgcat2_cli img2_fat)
+endif()
 target_compile_definitions(imgcat2_cli PRIVATE IMGCAT2_VERSION_STRING="${PROJECT_VERSION}")
 img2_apply_project_settings(imgcat2_cli)
 
@@ -20,5 +23,5 @@ if(IMG2_BUILD_CLI)
 	img2_static_executable(imgcat2)
 	# [SL2] Full RELRO (exe only; the static non-PIE link keeps working)
 	target_link_options(imgcat2 PRIVATE $<$<PLATFORM_ID:Linux>:-Wl,-z,relro,-z,now>)
-	install(TARGETS imgcat2 RUNTIME DESTINATION bin)   # replaced in S9
+	# install rule: cmake/Img2Install.cmake (COMPONENT imgcat2)
 endif()

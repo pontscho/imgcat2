@@ -1,7 +1,7 @@
 # Purpose: Build options of libimg2 / imgcat2 (codec switches, vendored vs host deps).
 # Inputs:  PROJECT_IS_TOP_LEVEL.
 # Outputs: IMG2_ENABLE_*, IMG2_USE_SYSTEM_*, IMG2_BUILD_TESTS, IMG2_BUILD_CLI, IMG2_WERROR,
-#          IMG2_POSITION_INDEPENDENT_CODE cache options.
+#          IMG2_POSITION_INDEPENDENT_CODE, IMG2_INSTALL, IMG2_FAT_ARCHIVE cache options.
 
 # Build options
 option(IMG2_ENABLE_GIF "Enable GIF support (giflib)" ON)
@@ -20,6 +20,8 @@ option(IMG2_ENABLE_CLANG_FORMAT "Enable clang-format code formatting" ON)
 option(IMG2_ENABLE_STATIC_LIBCXX "Enable static linking of libc++ on macOS" OFF)
 option(IMG2_WERROR "Treat warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 option(IMG2_POSITION_INDEPENDENT_CODE "Build libimg2 and bundled vendors as PIC (needed for PIE/shared consumers)" ON)
+option(IMG2_INSTALL "Generate install rules for img2" ${PROJECT_IS_TOP_LEVEL})
+option(IMG2_FAT_ARCHIVE "Merge img2 + vendored archives into one libimg2.a" ${IMG2_INSTALL})
 
 # Dependency source selection: OFF (default) = build the vendored copy from vendor/,
 # ON = use the host library found via pkg-config / find_library (legacy behaviour)

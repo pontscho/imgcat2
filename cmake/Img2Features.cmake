@@ -2,7 +2,7 @@
 # Inputs:  img2_feature() / img2_register_archives() calls from cmake/vendor/*.cmake.
 # Outputs: IMG2_ALL_FEATURES, IMG2_MACRO_FEATURES, IMG2_LINK_ORDER, IMG2_INCLUDE_ORDER, IMG2_FEATURE_MACRO_PREFIX,
 #          IMG2_HAVE_<X>, IMG2_<X>_{LIBS,INCLUDE_DIRS,ARCHIVES}, IMG2_VENDORED_ARCHIVE_TARGETS, IMG2_SYSTEM_LINK_LIBS,
-#          IMG2_TRAILING_ARCHIVES.
+#          IMG2_TRAILING_ARCHIVES; function img2_warn_host_dependency().
 
 # Feature names == today's macro suffix, so the S5 macro rename is one place (IMG2_FEATURE_MACRO_PREFIX).
 set(IMG2_ALL_FEATURES ZLIB LIBPNG JPEGQS LIBJPEG GIFLIB WEBP HEIF TIFF RAW JXL RESVG EXIF_READER)
@@ -30,4 +30,12 @@ function(img2_register_archives)
 	cmake_parse_arguments(A "" "" "ARCHIVES;ARCHIVE_TARGETS" ${ARGN})
 	set(IMG2_TRAILING_ARCHIVES ${IMG2_TRAILING_ARCHIVES} ${A_ARCHIVES} PARENT_SCOPE)
 	set(IMG2_VENDORED_ARCHIVE_TARGETS ${IMG2_VENDORED_ARCHIVE_TARGETS} ${A_ARCHIVE_TARGETS} PARENT_SCOPE)
+endfunction()
+
+# Host libraries (IMG2_USE_SYSTEM_*, resvg) are not merged into the fat archive: they go to SYSTEM_LIBS, and the
+# installed package then depends on them.
+function(img2_warn_host_dependency what)
+	if(IMG2_INSTALL)
+		message(WARNING "img2: ${what} comes from the host; the installed img2 package depends on host libraries")
+	endif()
 endfunction()

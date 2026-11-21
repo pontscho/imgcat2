@@ -61,7 +61,13 @@ if(IMG2_ENABLE_RAW AND NOT IMG2_USE_SYSTEM_RAW)
 	set(RAW_CUSTOM_LIBS vendor_libraw)
 	set(RAW_INCLUDE_DIRS ${LIBRAW_SRC_DIR})
 	set(RAW_LIB_TYPE "vendored LibRaw 0.22.3, ${RAW_OPENMP}; lcms2: ${LCMS2_LIB_TYPE}")
-	img2_feature(RAW LIBS ${RAW_LIBRARIES} INCLUDE_DIRS ${RAW_INCLUDE_DIRS})
+	# OpenMP on Linux: -fopenmp link flag (IMG2_INTERFACE_LINK_OPTIONS); elsewhere the OpenMP::OpenMP_CXX target
+	set(_raw_system_libs "")
+	if(OpenMP_CXX_FOUND AND NOT (UNIX AND NOT APPLE))
+		set(_raw_system_libs OpenMP::OpenMP_CXX)
+	endif()
+	img2_feature(RAW LIBS ${RAW_LIBRARIES} INCLUDE_DIRS ${RAW_INCLUDE_DIRS}
+		ARCHIVES "$<TARGET_FILE:vendor_libraw>" ARCHIVE_TARGETS vendor_libraw SYSTEM_LIBS ${_raw_system_libs})
 
 elseif(IMG2_ENABLE_RAW)
 	set(RAW_LIB_TYPE "host")
@@ -105,10 +111,11 @@ elseif(IMG2_ENABLE_RAW)
 
 	if(RAW_FOUND)
 		if(APPLE)
-			img2_feature(RAW LIBS ${RAW_CUSTOM_LIBS} INCLUDE_DIRS ${RAW_INCLUDE_DIRS})
+			img2_feature(RAW LIBS ${RAW_CUSTOM_LIBS} INCLUDE_DIRS ${RAW_INCLUDE_DIRS} SYSTEM_LIBS ${RAW_CUSTOM_LIBS})
 		else()
-			img2_feature(RAW LIBS ${RAW_STATIC_LDFLAGS} INCLUDE_DIRS ${RAW_INCLUDE_DIRS})
+			img2_feature(RAW LIBS ${RAW_STATIC_LDFLAGS} INCLUDE_DIRS ${RAW_INCLUDE_DIRS} SYSTEM_LIBS ${RAW_STATIC_LDFLAGS})
 		endif()
+		img2_warn_host_dependency("libraw (IMG2_USE_SYSTEM_RAW)")
 
 	else()
 		message(WARNING "libraw not found, RAW support disabled")

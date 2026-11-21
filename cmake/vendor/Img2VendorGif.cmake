@@ -8,6 +8,8 @@ if(IMG2_ENABLE_GIF)
 		find_library(GIF_LIBRARY NAMES gif)
 		find_path(GIF_INCLUDE_DIR gif_lib.h)
 		set(GIF_LIB_TYPE "host")
+		set(_gif_feature_args SYSTEM_LIBS ${GIF_LIBRARY})
+		img2_warn_host_dependency("giflib (IMG2_USE_SYSTEM_GIF)")
 
 	else()
 		# Vendored giflib: hand-written static target (upstream only ships a Makefile).
@@ -32,10 +34,11 @@ if(IMG2_ENABLE_GIF)
 		set(GIF_LIBRARY vendor_giflib)
 		set(GIF_INCLUDE_DIR ${GIFLIB_SRC_DIR})
 		set(GIF_LIB_TYPE "vendored giflib 6.1.3")
+		set(_gif_feature_args ARCHIVES "$<TARGET_FILE:vendor_giflib>" ARCHIVE_TARGETS vendor_giflib)
 	endif()
 
 	if(GIF_LIBRARY AND GIF_INCLUDE_DIR)
-		img2_feature(GIFLIB LIBS ${GIF_LIBRARY} INCLUDE_DIRS ${GIF_INCLUDE_DIR})
+		img2_feature(GIFLIB LIBS ${GIF_LIBRARY} INCLUDE_DIRS ${GIF_INCLUDE_DIR} ${_gif_feature_args})
 		set(GIF_FOUND TRUE)
 
 	else()

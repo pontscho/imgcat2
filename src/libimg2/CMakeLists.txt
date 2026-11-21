@@ -116,6 +116,10 @@ if(APPLE AND STATIC_LIBCXX_LIBS)
 	target_link_libraries(img2 PRIVATE ${STATIC_LIBCXX_LIBS})
 elseif(APPLE AND DYNAMIC_LIBCXX_LIBS)
 	target_link_libraries(img2 PRIVATE ${DYNAMIC_LIBCXX_LIBS})
+elseif(CMAKE_CXX_COMPILER_LOADED)
+	# C++ vendors (LibRaw, libheif, libjxl, highway): an add_subdirectory consumer whose directory has only C
+	# enabled links with the C driver, so the C++ runtime must be part of img2's link interface
+	target_link_libraries(img2 PRIVATE stdc++)
 endif()
 target_link_libraries(img2 PRIVATE Threads::Threads)
 img2_apply_project_settings(img2)
@@ -168,9 +172,25 @@ endif()
 target_include_directories(img2_header_check PRIVATE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_BINARY_DIR}/include")
 add_dependencies(img2_header_check img2)
 
+# In-tree users of the fat archive (CLI, tests): the merged libimg2.a (cmake/Img2FatArchive.cmake) with the same
+# link interface as the installed package. add_subdirectory consumers keep the real img2 target (img2::img2).
+if(IMG2_FAT_ARCHIVE)
+	add_library(img2_bundled STATIC IMPORTED GLOBAL)
+	set_target_properties(img2_bundled PROPERTIES
+		IMPORTED_LOCATION "${IMG2_FAT_ARCHIVE_FILE}"
+		IMPORTED_LINK_INTERFACE_LANGUAGES "${IMG2_FAT_LINK_LANGUAGES}"   # C;CXX with the C++ vendors (C++ driver)
+		INTERFACE_INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/include;${PROJECT_BINARY_DIR}/include"
+		INTERFACE_LINK_LIBRARIES "${IMG2_SYSTEM_LINK_LIBS}"
+		INTERFACE_LINK_OPTIONS "${IMG2_INTERFACE_LINK_OPTIONS}")   # -fopenmp (Linux, if OpenMP); -no-pie if PIC OFF
+	set(IMG2_LINK_TARGET img2_bundled)
+else()
+	set(IMG2_LINK_TARGET img2)
+endif()
+set(IMG2_LINK_TARGET "${IMG2_LINK_TARGET}" PARENT_SCOPE)
+
 # White-box tests and the (transitional) CLI see the internal headers and feature macros.
 # Never installed or exported.
 add_library(img2_testing INTERFACE)
-target_link_libraries(img2_testing INTERFACE img2)
+target_link_libraries(img2_testing INTERFACE ${IMG2_LINK_TARGET})
 target_include_directories(img2_testing INTERFACE ${_img2_incs})
 target_compile_definitions(img2_testing INTERFACE ${_img2_defs})

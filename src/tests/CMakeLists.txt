@@ -43,9 +43,13 @@ if(TARGET test_threads)
 	target_compile_definitions(test_threads PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
 endif()
 
-# [L4] Public API test: links img2 only (no img2_testing, no internal include dirs); includes only <img2/img2.h>
+# [L4] Public API test: links img2 only (the fat archive if built; no img2_testing, no internal include dirs);
+# includes only <img2/img2.h>
 add_executable(test_public_api unit/main.c unit/test_public_api.c)
-target_link_libraries(test_public_api PRIVATE img2)
+target_link_libraries(test_public_api PRIVATE ${IMG2_LINK_TARGET})
+if(TARGET img2_fat)
+	add_dependencies(test_public_api img2_fat)
+endif()
 target_compile_definitions(test_public_api PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
 img2_apply_project_settings(test_public_api)   # dynamic (PIE) link, like every img2_add_test() test
 add_test(NAME test_public_api COMMAND test_public_api)
@@ -114,4 +118,31 @@ if(CMAKE_NM AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		-DSRC_DIR=${PROJECT_SOURCE_DIR}/src/libimg2
 		-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_symbols.cmake)
 	set_tests_properties(img2_symbols PROPERTIES LABELS guard)
+endif()
+
+# ============================================================================
+# CONSUMER TESTS (standalone project src/tests/consumer; top-level builds only)
+# ============================================================================
+if(PROJECT_IS_TOP_LEVEL)
+	# [L4] TMPDIR captured at configure time (gate.sh exports it); never hard-coded.
+	set(_img2_consumer_tmp "$ENV{TMPDIR}")
+	if(_img2_consumer_tmp STREQUAL "")
+		set(_img2_consumer_tmp "${PROJECT_BINARY_DIR}/test-tmp")
+	endif()
+	set(_img2_consumer_args -DSRC=${PROJECT_SOURCE_DIR} -DBIN=${PROJECT_BINARY_DIR} "-DGENERATOR=${CMAKE_GENERATOR}"
+		-DIMG=${PROJECT_SOURCE_DIR}/src/tests/data/png/rgb8_srgb.png
+		-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_consumer_smoke.cmake)
+	if(IMG2_INSTALL)
+		# install --component img2_development into the build tree, move the prefix, check for path leaks,
+		# then find_package(img2) from a fresh consumer
+		add_test(NAME img2_consumer_find_package COMMAND ${CMAKE_COMMAND} -DMODE=package ${_img2_consumer_args})
+		set_tests_properties(img2_consumer_find_package PROPERTIES LABELS consumer TIMEOUT 900
+			RESOURCE_LOCK img2_consumer PASS_REGULAR_EXPRESSION "img2 consumer OK"
+			ENVIRONMENT "TMPDIR=${_img2_consumer_tmp}")
+	endif()
+	# add_subdirectory consumer: rebuilds every vendor (opt-in: label expensive) + cache leak audit
+	add_test(NAME img2_consumer_subdir COMMAND ${CMAKE_COMMAND} -DMODE=subdir ${_img2_consumer_args})
+	set_tests_properties(img2_consumer_subdir PROPERTIES LABELS "consumer;expensive" TIMEOUT 7200
+		RESOURCE_LOCK img2_consumer PASS_REGULAR_EXPRESSION "img2 consumer OK"
+		ENVIRONMENT "TMPDIR=${_img2_consumer_tmp}")
 endif()

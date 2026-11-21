@@ -66,7 +66,11 @@ include(Img2Testing)
 # After img2_vendor_section_end(): the -static vendor link flags must not bias the Threads checks
 find_package(Threads REQUIRED)
 
-# Library, command line tool
+# Fat archive inputs and link interface ([R16] variables; target img2_fat when IMG2_FAT_ARCHIVE)
+include(Img2FatArchive)
+img2_add_fat_archive()
+
+# Library (+ img2_bundled), command line tool
 add_subdirectory(src/libimg2)
 if(IMG2_BUILD_CLI OR IMG2_BUILD_TESTS)
 	add_subdirectory(src/imgcat2)
@@ -80,6 +84,9 @@ if(IMG2_BUILD_TESTS)
 	enable_testing()
 	add_subdirectory(src/tests)
 endif()
+
+# Install rules and the img2Config.cmake package (IMG2_INSTALL)
+include(Img2Install)
 
 include(Img2Summary)
 

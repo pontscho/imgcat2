@@ -81,7 +81,10 @@ if(IMG2_ENABLE_JXL AND NOT IMG2_USE_SYSTEM_JXL)
 	set(JXL_INCLUDE_DIRS "${PROJECT_BINARY_DIR}/vendor/libjxl/lib/include")
 	set(JXL_VERSION "0.13.0")
 	set(JXL_LIB_TYPE "vendored libjxl ${JXL_VERSION}; highway ${IMGCAT2_VENDORED_HWY_VERSION}, ${BROTLI_LIB_TYPE}, lcms2: ${LCMS2_LIB_TYPE}")
-	img2_feature(JXL LIBS ${JXL_LIBRARIES} INCLUDE_DIRS ${JXL_INCLUDE_DIRS})
+	# highway is only used by libjxl, so its archive is registered here (brotli/lcms2: Img2LinkOrder)
+	img2_feature(JXL LIBS ${JXL_LIBRARIES} INCLUDE_DIRS ${JXL_INCLUDE_DIRS}
+		ARCHIVES "$<TARGET_FILE:jxl>" "$<TARGET_FILE:jxl_cms>" "$<TARGET_FILE:hwy>"
+		ARCHIVE_TARGETS jxl jxl_cms hwy)
 
 elseif(IMG2_ENABLE_JXL)
 	set(JXL_LIB_TYPE "host")
@@ -146,10 +149,11 @@ elseif(IMG2_ENABLE_JXL)
 		endif()
 
 		if(APPLE)
-			img2_feature(JXL LIBS ${JXL_CUSTOM_LIBS} INCLUDE_DIRS ${JXL_INCLUDE_DIRS})
+			img2_feature(JXL LIBS ${JXL_CUSTOM_LIBS} INCLUDE_DIRS ${JXL_INCLUDE_DIRS} SYSTEM_LIBS ${JXL_CUSTOM_LIBS})
 		else()
-			img2_feature(JXL LIBS ${JXL_STATIC_LDFLAGS} INCLUDE_DIRS ${JXL_INCLUDE_DIRS})
+			img2_feature(JXL LIBS ${JXL_STATIC_LDFLAGS} INCLUDE_DIRS ${JXL_INCLUDE_DIRS} SYSTEM_LIBS ${JXL_STATIC_LDFLAGS})
 		endif()
+		img2_warn_host_dependency("libjxl (IMG2_USE_SYSTEM_JXL)")
 		message(STATUS "libjxl found: ${JXL_VERSION}")
 
 	else()

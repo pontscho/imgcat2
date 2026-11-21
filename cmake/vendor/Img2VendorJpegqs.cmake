@@ -105,7 +105,14 @@ if(IMG2_ENABLE_JPEGQS AND JPEG_FOUND)
 		endforeach()
 	endif()
 
-	img2_feature(JPEGQS LIBS jpegqs INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/vendor/jpeg-quantsmooth)
+	# OpenMP on Linux reaches the fat archive's users as the -fopenmp link flag (IMG2_INTERFACE_LINK_OPTIONS,
+	# cmake/Img2FatArchive.cmake); elsewhere as the OpenMP::OpenMP_C target
+	set(_jpegqs_system_libs "")
+	if(OpenMP_C_FOUND AND NOT (UNIX AND NOT APPLE))
+		set(_jpegqs_system_libs OpenMP::OpenMP_C)
+	endif()
+	img2_feature(JPEGQS LIBS jpegqs INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/vendor/jpeg-quantsmooth
+		ARCHIVES "$<TARGET_FILE:jpegqs>" ARCHIVE_TARGETS jpegqs SYSTEM_LIBS ${_jpegqs_system_libs})
 	set(JPEGQS_FOUND TRUE)
 	message(STATUS "jpeg-quantsmooth: enabled (quality=6, niter=5, ${JPEGQS_OPENMP})")
 endif()

@@ -1,5 +1,6 @@
 # Purpose: Executable link flags and the test registration helper.
-# Inputs:  IMG2_EXE_LINK_FLAGS, STATIC_LIBCXX_LIBS/DYNAMIC_LIBCXX_LIBS, IMG2_HAVE_<X>, targets img2_testing/imgcat2_cli.
+# Inputs:  IMG2_EXE_LINK_FLAGS, STATIC_LIBCXX_LIBS/DYNAMIC_LIBCXX_LIBS, IMG2_HAVE_<X>, targets img2_testing/imgcat2_cli
+#          (and img2_fat when the fat archive is built).
 # Outputs: functions img2_static_executable(<tgt>), img2_add_test(<name> ...).
 
 # Executable link flags of today's fully static build (-static, stack size; macOS libc++)
@@ -43,6 +44,9 @@ function(img2_add_test name)
 	endif()
 	target_compile_definitions(${name} PRIVATE IMGCAT2_TEST_TMPDIR="${PROJECT_BINARY_DIR}/test-tmp")
 	img2_apply_project_settings(${name})
+	if(TARGET img2_fat)
+		add_dependencies(${name} img2_fat)   # img2_testing links the fat archive (img2_bundled)
+	endif()
 	# Tests link dynamically (toolchain default, PIE on Linux): the first in-tree PIE consumers of img2
 	add_test(NAME ${name} COMMAND ${name})
 	if(NOT T_LABELS)

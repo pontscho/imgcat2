@@ -1,6 +1,6 @@
 # Purpose: Vendored providers linked after every host static library (static link order).
 # Inputs:  Vendored targets (libjpeg-turbo-ext, webp, vendor_lcms2, brotlicommon, ZLIB::ZLIB), LIBJPEG_TURBO_LIBRARY, WEBP_FOUND.
-# Outputs: IMGCAT2_VENDORED_TRAILING_LIBS.
+# Outputs: IMGCAT2_VENDORED_TRAILING_LIBS; IMG2_TRAILING_ARCHIVES / IMG2_VENDORED_ARCHIVE_TARGETS (img2_register_archives).
 
 # Vendored providers linked after every host static library (libheif stack, libjxl, and
 # libtiff/libraw when USE_SYSTEM_*): those reference jpeg/webp/lcms2/zlib symbols, and with
@@ -25,3 +25,17 @@ if(TARGET brotlicommon)
 		"$<TARGET_FILE:brotlienc>" "$<TARGET_FILE:brotlidec>" "$<TARGET_FILE:brotlicommon>")
 endif()
 list(APPEND IMGCAT2_VENDORED_TRAILING_LIBS "$<TARGET_FILE:ZLIB::ZLIB>")
+
+# Fat archive: the providers that are not features (lcms2, brotli) and the trailing copies, in trailing-lib
+# order (img2_fat_archive.cmake keeps the first occurrence of an archive that is already registered)
+set(_img2_trailing_targets "")
+foreach(_t libjpeg-turbo-ext webpdemux webp sharpyuv vendor_lcms2 brotlienc brotlidec brotlicommon zlib-ng)
+	if(TARGET ${_t})
+		list(APPEND _img2_trailing_targets ${_t})
+	endif()
+endforeach()
+img2_register_archives(ARCHIVES ${IMGCAT2_VENDORED_TRAILING_LIBS} ARCHIVE_TARGETS ${_img2_trailing_targets})
+if(TARGET vendor_lcms2_host)
+	list(APPEND IMG2_SYSTEM_LINK_LIBS ${LCMS2_STATIC_LIB})
+	img2_warn_host_dependency("lcms2 (IMG2_USE_SYSTEM_LCMS2)")
+endif()
