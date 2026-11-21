@@ -11,7 +11,7 @@
 #include "../../imgcat2/metadata.h"
 #include "../ctest.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
 
 /**
@@ -59,8 +59,8 @@ CTEST(metadata_output, xmp_json_null)
  */
 CTEST(metadata_output, exif_text_minimal)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	// Set some basic fields
 	strcpy(exif.make, "Canon");
@@ -73,7 +73,7 @@ CTEST(metadata_output, exif_text_minimal)
 	// Should not crash - output goes to stdout
 	output_exif_text(&exif);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 	ASSERT_TRUE(true);
 }
 
@@ -82,8 +82,8 @@ CTEST(metadata_output, exif_text_minimal)
  */
 CTEST(metadata_output, xmp_text_minimal)
 {
-	xmp_info_t xmp;
-	xmp_info_init(&xmp);
+	img2_xmp_t xmp;
+	img2_xmp_init(&xmp);
 
 	// Set some basic fields
 	strcpy(xmp.creator, "John Doe");
@@ -94,7 +94,7 @@ CTEST(metadata_output, xmp_text_minimal)
 	// Should not crash - output goes to stdout
 	output_xmp_text(&xmp);
 
-	xmp_info_free(&xmp);
+	img2_xmp_clear(&xmp);
 	ASSERT_TRUE(true);
 }
 
@@ -103,8 +103,8 @@ CTEST(metadata_output, xmp_text_minimal)
  */
 CTEST(metadata_output, exif_json_minimal)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	// Set some basic fields
 	strcpy(exif.make, "Nikon");
@@ -116,7 +116,7 @@ CTEST(metadata_output, exif_json_minimal)
 	// For now just ensure it doesn't crash
 	output_exif_json(&exif, true);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 	ASSERT_TRUE(true);
 }
 
@@ -125,8 +125,8 @@ CTEST(metadata_output, exif_json_minimal)
  */
 CTEST(metadata_output, xmp_json_minimal)
 {
-	xmp_info_t xmp;
-	xmp_info_init(&xmp);
+	img2_xmp_t xmp;
+	img2_xmp_init(&xmp);
 
 	// Set some basic fields
 	strcpy(xmp.creator, "Jane Smith");
@@ -137,7 +137,7 @@ CTEST(metadata_output, xmp_json_minimal)
 	// Should not crash - output goes to stdout
 	output_xmp_json(&xmp, true);
 
-	xmp_info_free(&xmp);
+	img2_xmp_clear(&xmp);
 	ASSERT_TRUE(true);
 }
 
@@ -146,8 +146,8 @@ CTEST(metadata_output, xmp_json_minimal)
  */
 CTEST(metadata_output, exif_json_gps)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	// Set GPS data
 	exif.has_gps = true;
@@ -160,7 +160,7 @@ CTEST(metadata_output, exif_json_gps)
 	// Should output valid JSON with GPS data
 	output_exif_json(&exif, true);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 	ASSERT_TRUE(true);
 }
 
@@ -169,8 +169,8 @@ CTEST(metadata_output, exif_json_gps)
  */
 CTEST(metadata_output, json_escaping)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	// Set fields with special characters that need escaping
 	strcpy(exif.description, "Test \"quoted\" string\nwith newline\ttab");
@@ -179,7 +179,7 @@ CTEST(metadata_output, json_escaping)
 	// Should properly escape special characters in JSON
 	output_exif_json(&exif, true);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 	ASSERT_TRUE(true);
 }
 
@@ -188,8 +188,8 @@ CTEST(metadata_output, json_escaping)
  */
 CTEST(metadata_output, xmp_json_location)
 {
-	xmp_info_t xmp;
-	xmp_info_init(&xmp);
+	img2_xmp_t xmp;
+	img2_xmp_init(&xmp);
 
 	// Set location data
 	strcpy(xmp.city, "San Francisco");
@@ -199,7 +199,7 @@ CTEST(metadata_output, xmp_json_location)
 	// Should output valid JSON with location data
 	output_xmp_json(&xmp, true);
 
-	xmp_info_free(&xmp);
+	img2_xmp_clear(&xmp);
 	ASSERT_TRUE(true);
 }
 
@@ -208,8 +208,8 @@ CTEST(metadata_output, xmp_json_location)
  */
 CTEST(metadata_output, exif_text_full_camera)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	// Set comprehensive camera data
 	strcpy(exif.make, "Canon");
@@ -239,7 +239,7 @@ CTEST(metadata_output, exif_text_full_camera)
 	// Should output comprehensive camera information
 	output_exif_text(&exif);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 	ASSERT_TRUE(true);
 }
 
@@ -256,12 +256,12 @@ CTEST(metadata_output, disabled)
  */
 CTEST(metadata_output, mime_strings)
 {
-	ASSERT_STR("image/heif", get_mime_string(MIME_HEIF));
-	ASSERT_STR("image/avif", get_mime_string(MIME_AVIF));
-	ASSERT_STR("image/jxl", get_mime_string(MIME_JXL));
-	ASSERT_STR("image/qoi", get_mime_string(MIME_QOI));
-	ASSERT_STR("image/vnd.microsoft.icon", get_mime_string(MIME_ICO));
-	ASSERT_STR("image/x-win-bitmap", get_mime_string(MIME_CUR));
-	ASSERT_STR("image/svg+xml", get_mime_string(MIME_SVG));
-	ASSERT_STR("application/octet-stream", get_mime_string(MIME_UNKNOWN));
+	ASSERT_STR("image/heif", img2_mime_string(IMG2_MIME_HEIF));
+	ASSERT_STR("image/avif", img2_mime_string(IMG2_MIME_AVIF));
+	ASSERT_STR("image/jxl", img2_mime_string(IMG2_MIME_JXL));
+	ASSERT_STR("image/qoi", img2_mime_string(IMG2_MIME_QOI));
+	ASSERT_STR("image/vnd.microsoft.icon", img2_mime_string(IMG2_MIME_ICO));
+	ASSERT_STR("image/x-win-bitmap", img2_mime_string(IMG2_MIME_CUR));
+	ASSERT_STR("image/svg+xml", img2_mime_string(IMG2_MIME_SVG));
+	ASSERT_STR("application/octet-stream", img2_mime_string(IMG2_MIME_UNKNOWN));
 }

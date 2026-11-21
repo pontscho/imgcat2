@@ -83,6 +83,6 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
  * @note If target_width/height specified: converts to terminal cell dimensions
  * @note Outputs to stdout
  */
-int kitty_render(image_t **frames, int frame_count, const cli_options_t *opts);
+int kitty_render(img2_image_t **frames, int frame_count, const cli_options_t *opts);
 
 #endif /* IMGCAT2_KITTY_H */

@@ -90,124 +90,6 @@ static inline void gif_index_to_rgba(const ColorMapObject *color_map, int index,
 }
 
 /**
- * @brief Decode GIF image (first frame only)
- *
- * Decodes only the first frame of a GIF image (static GIF).
- * For animated GIFs, use decode_gif_animated().
- *
- * @param data Raw GIF file data
- * @param len Length of data in bytes
- * @param frame_count Output: always 1 (first frame only)
- * @return Array with single image_t*, or NULL on error
- *
- * @note Returns only the first frame, even if GIF is animated
- * @note Output format is RGBA8888
- */
-image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
-{
-	if (data == NULL || len == 0 || frame_count == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_gif");
-		return NULL;
-	}
-
-	// Initialize output
-	*frame_count = 0;
-
-	// Setup memory reader
-	gif_mem_reader reader;
-	reader.data = data;
-	reader.size = len;
-	reader.offset = 0;
-
-	// Open GIF file from memory
-	int error_code;
-	GifFileType *gif = DGifOpen(&reader, gif_read_func, &error_code);
-	if (gif == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Failed to open GIF: %s", GifErrorString(error_code));
-		return NULL;
-	}
-
-	// Read GIF structure
-	if (DGifSlurp(gif) != GIF_OK) {
-		img2_log(IMG2_LOG_ERROR, "Error: Failed to read GIF structure: %s", GifErrorString(gif->Error));
-		DGifCloseFile(gif, &error_code);
-		return NULL;
-	}
-
-	// Check if GIF has at least one frame
-	if (gif->ImageCount == 0) {
-		img2_log(IMG2_LOG_ERROR, "Error: GIF has no images");
-		DGifCloseFile(gif, &error_code);
-		return NULL;
-	}
-
-	// Get first frame
-	SavedImage *saved_image = &gif->SavedImages[0];
-
-	// Get color map (use local if available, otherwise global)
-	ColorMapObject *color_map = saved_image->ImageDesc.ColorMap;
-	if (color_map == NULL) {
-		color_map = gif->SColorMap;
-	}
-
-	if (color_map == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: GIF has no color map");
-		DGifCloseFile(gif, &error_code);
-		return NULL;
-	}
-
-	// Get transparent color index (if any)
-	int transparent_color = -1;
-	GraphicsControlBlock gcb;
-	if (DGifSavedExtensionToGCB(gif, 0, &gcb) == GIF_OK) {
-		if (gcb.TransparentColor != NO_TRANSPARENT_COLOR) {
-			transparent_color = gcb.TransparentColor;
-		}
-	}
-
-	// Get image dimensions
-	uint32_t width = saved_image->ImageDesc.Width;
-	uint32_t height = saved_image->ImageDesc.Height;
-
-	// Create image_t structure
-	image_t *img = image_create(width, height);
-	if (img == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
-		DGifCloseFile(gif, &error_code);
-		return NULL;
-	}
-
-	// Decode indexed pixels to RGBA
-	GifByteType *raster = saved_image->RasterBits;
-	for (uint32_t y = 0; y < height; y++) {
-		for (uint32_t x = 0; x < width; x++) {
-			int index = raster[y * width + x];
-			uint8_t rgba[4];
-			gif_index_to_rgba(color_map, index, transparent_color, rgba);
-			image_set_pixel(img, x, y, rgba[0], rgba[1], rgba[2], rgba[3]);
-		}
-	}
-
-	// Cleanup
-	DGifCloseFile(gif, &error_code);
-
-	// Allocate frames array (single frame)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
-	if (frames == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(img);
-		return NULL;
-	}
-
-	frames[0] = img;
-	*frame_count = 1;
-
-	// fprintf(stderr, "GIF decoded (first frame): %ux%u\n", width, height);
-
-	return frames;
-}
-
-/**
  * @brief Compose GIF frame onto accumulator canvas
  *
  * Composites a single GIF frame onto the accumulator canvas.
@@ -225,7 +107,7 @@ image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
  * @param canvas_width Canvas width (for bounds checking)
  * @param canvas_height Canvas height (for bounds checking)
  */
-static void frame_composition(image_t *accumulator, const GifByteType *raster, const ColorMapObject *color_map, int transparent_color, uint32_t img_left, uint32_t img_top, uint32_t img_width, uint32_t img_height, uint32_t canvas_width, uint32_t canvas_height)
+static void frame_composition(img2_image_t *accumulator, const GifByteType *raster, const ColorMapObject *color_map, int transparent_color, uint32_t img_left, uint32_t img_top, uint32_t img_width, uint32_t img_height, uint32_t canvas_width, uint32_t canvas_height)
 {
 	if (accumulator == NULL || raster == NULL || color_map == NULL) {
 		return;
@@ -249,7 +131,7 @@ static void frame_composition(image_t *accumulator, const GifByteType *raster, c
 				uint32_t canvas_x = img_left + x;
 				uint32_t canvas_y = img_top + y;
 				if (canvas_x < canvas_width && canvas_y < canvas_height) {
-					image_set_pixel(accumulator, canvas_x, canvas_y, rgba[0], rgba[1], rgba[2], rgba[3]);
+					img2_image_set_pixel(accumulator, canvas_x, canvas_y, rgba[0], rgba[1], rgba[2], rgba[3]);
 				}
 			}
 		}
@@ -265,13 +147,13 @@ static void frame_composition(image_t *accumulator, const GifByteType *raster, c
  * @param data Raw GIF file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
  * @note Maximum MAX_GIF_FRAMES frames (200) to prevent DoS
  * @note Implements proper GIF frame composition with disposal methods
  * @note Output format is RGBA8888
  */
-image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_gif_animated");
@@ -320,7 +202,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	uint32_t canvas_height = gif->SHeight;
 
 	// Allocate frames array
-	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		DGifCloseFile(gif, &error_code);
@@ -333,7 +215,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	}
 
 	// Create accumulator canvas for frame composition
-	image_t *accumulator = image_create(canvas_width, canvas_height);
+	img2_image_t *accumulator = img2_image_alloc(canvas_width, canvas_height);
 	if (accumulator == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
 		free(frames);
@@ -342,7 +224,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	}
 
 	// Previous frame backup for DISPOSE_PREVIOUS
-	image_t *previous = NULL;
+	img2_image_t *previous = NULL;
 
 	// Decode each frame
 	for (int frame_idx = 0; frame_idx < num_frames; frame_idx++) {
@@ -374,7 +256,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 
 		// Backup accumulator for DISPOSE_PREVIOUS
 		if (disposal_mode == DISPOSE_PREVIOUS && previous == NULL) {
-			previous = image_create(canvas_width, canvas_height);
+			previous = img2_image_alloc(canvas_width, canvas_height);
 			if (previous == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create previous frame backup");
 				goto cleanup_error;
@@ -395,7 +277,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 		frame_composition(accumulator, raster, color_map, transparent_color, img_left, img_top, img_width, img_height, canvas_width, canvas_height);
 
 		// Copy composed frame to output
-		frames[frame_idx] = image_create(canvas_width, canvas_height);
+		frames[frame_idx] = img2_image_alloc(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", frame_idx);
 			goto cleanup_error;
@@ -416,7 +298,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 						uint32_t canvas_x = img_left + x;
 						uint32_t canvas_y = img_top + y;
 						if (canvas_x < canvas_width && canvas_y < canvas_height) {
-							image_set_pixel(accumulator, canvas_x, canvas_y, 0, 0, 0, 0);
+							img2_image_set_pixel(accumulator, canvas_x, canvas_y, 0, 0, 0, 0);
 						}
 					}
 				}
@@ -436,9 +318,9 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	}
 
 	// Cleanup
-	image_destroy(accumulator);
+	img2_image_destroy(accumulator);
 	if (previous != NULL) {
-		image_destroy(previous);
+		img2_image_destroy(previous);
 	}
 	DGifCloseFile(gif, &error_code);
 
@@ -449,13 +331,13 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 
 cleanup_error:
 	// Cleanup on error
-	image_destroy(accumulator);
+	img2_image_destroy(accumulator);
 	if (previous != NULL) {
-		image_destroy(previous);
+		img2_image_destroy(previous);
 	}
 	for (int i = 0; i < num_frames; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);
@@ -477,7 +359,7 @@ cleanup_error:
  * @note Returns false if data is invalid or not a GIF
  * @note Does not validate that frames are decodable, only counts them
  */
-bool gif_is_animated(const uint8_t *data, size_t size)
+bool img2_gif_is_animated(const uint8_t *data, size_t size)
 {
 	if (data == NULL || size == 0) {
 		return false;

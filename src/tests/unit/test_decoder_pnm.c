@@ -2,7 +2,7 @@
  * @file test_decoder_pnm.c
  * @brief Unit tests for the native Netpbm (PBM/PGM/PPM/PAM) decoder
  *
- * Tests decode_netpbm() using ctest.h framework with inline byte arrays
+ * Tests img2_decode_pnm() using ctest.h framework with inline byte arrays
  * covering P1-P7, 8/16-bit samples, comments, padding and malformed input.
  */
 
@@ -18,12 +18,12 @@
 #include "../decoder_internal.h"
 
 /** Decode a string literal (excluding the implicit trailing NUL) */
-#define DECODE_LIT(lit, fc) decode_netpbm((const uint8_t *)(lit), sizeof(lit) - 1, (fc))
+#define DECODE_LIT(lit, fc) img2_decode_pnm((const uint8_t *)(lit), sizeof(lit) - 1, (fc))
 
 /** Assert RGBA value of pixel (x, y) */
 #define ASSERT_PX(img, x, y, r, g, b, a)                     \
 	do {                                                     \
-		const uint8_t *px_ = image_get_pixel((img), (x), (y)); \
+		const uint8_t *px_ = img2_image_get_pixel((img), (x), (y)); \
 		ASSERT_NOT_NULL(px_);                                \
 		ASSERT_EQUAL((r), px_[0]);                           \
 		ASSERT_EQUAL((g), px_[1]);                           \
@@ -32,20 +32,20 @@
 	} while (0)
 
 /**
- * @test decode_netpbm() rejects NULL / empty parameters
+ * @test img2_decode_pnm() rejects NULL / empty parameters
  */
 CTEST(decoder_pnm, null_parameters)
 {
 	int frame_count;
 	uint8_t dummy[10] = { 'P', '5', '\n' };
 
-	ASSERT_NULL(decode_netpbm(NULL, 100, &frame_count));
-	ASSERT_NULL(decode_netpbm(dummy, 0, &frame_count));
-	ASSERT_NULL(decode_netpbm(dummy, sizeof(dummy), NULL));
+	ASSERT_NULL(img2_decode_pnm(NULL, 100, &frame_count));
+	ASSERT_NULL(img2_decode_pnm(dummy, 0, &frame_count));
+	ASSERT_NULL(img2_decode_pnm(dummy, sizeof(dummy), NULL));
 }
 
 /**
- * @test decode_netpbm() rejects non-Netpbm data
+ * @test img2_decode_pnm() rejects non-Netpbm data
  */
 CTEST(decoder_pnm, garbage)
 {
@@ -64,7 +64,7 @@ CTEST(decoder_pnm, garbage)
 CTEST(decoder_pnm, p1_ascii_comments)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P1\n# comment line\n2 # width\n2\n1 0\n# mid-raster comment\n01", &frame_count);
+	img2_image_t **frames = DECODE_LIT("P1\n# comment line\n2 # width\n2\n1 0\n# mid-raster comment\n01", &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -77,7 +77,7 @@ CTEST(decoder_pnm, p1_ascii_comments)
 	ASSERT_PX(frames[0], 0, 1, 255, 255, 255, 255);
 	ASSERT_PX(frames[0], 1, 1, 0, 0, 0, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -86,7 +86,7 @@ CTEST(decoder_pnm, p1_ascii_comments)
 CTEST(decoder_pnm, p2_maxval_scaling)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P2\n4 1\n15\n0 7 15 20\n", &frame_count);
+	img2_image_t **frames = DECODE_LIT("P2\n4 1\n15\n0 7 15 20\n", &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -98,7 +98,7 @@ CTEST(decoder_pnm, p2_maxval_scaling)
 	ASSERT_PX(frames[0], 2, 0, 255, 255, 255, 255);
 	ASSERT_PX(frames[0], 3, 0, 255, 255, 255, 255); /* 20 > maxval: clamped */
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -107,14 +107,14 @@ CTEST(decoder_pnm, p2_maxval_scaling)
 CTEST(decoder_pnm, p3_ascii_rgb)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P3\n2 1\n255\n255 0 0\n  0 128 255\n", &frame_count);
+	img2_image_t **frames = DECODE_LIT("P3\n2 1\n255\n255 0 0\n  0 128 255\n", &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_PX(frames[0], 0, 0, 255, 0, 0, 255);
 	ASSERT_PX(frames[0], 1, 0, 0, 128, 255, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -124,7 +124,7 @@ CTEST(decoder_pnm, p4_row_padding)
 {
 	/* Row 0: 1000000001 (+ padding 111111), Row 1: 0101010101 (+ padding 000000) */
 	int frame_count;
-	image_t **frames = DECODE_LIT("P4\n10 2\n"
+	img2_image_t **frames = DECODE_LIT("P4\n10 2\n"
 	                              "\x80\x7F"
 	                              "\x55\x40",
 	                              &frame_count);
@@ -143,7 +143,7 @@ CTEST(decoder_pnm, p4_row_padding)
 		ASSERT_PX(frames[0], x, 1, v1, v1, v1, 255);
 	}
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -152,7 +152,7 @@ CTEST(decoder_pnm, p4_row_padding)
 CTEST(decoder_pnm, p5_8bit)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P5\n2 2\n255\n"
+	img2_image_t **frames = DECODE_LIT("P5\n2 2\n255\n"
 	                              "\x00\x7F\xAF\xFF",
 	                              &frame_count);
 
@@ -163,7 +163,7 @@ CTEST(decoder_pnm, p5_8bit)
 	ASSERT_PX(frames[0], 0, 1, 0xAF, 0xAF, 0xAF, 255);
 	ASSERT_PX(frames[0], 1, 1, 0xFF, 0xFF, 0xFF, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -172,7 +172,7 @@ CTEST(decoder_pnm, p5_8bit)
 CTEST(decoder_pnm, p5_16bit_big_endian)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P5\n3 1\n65535\n"
+	img2_image_t **frames = DECODE_LIT("P5\n3 1\n65535\n"
 	                              "\x00\x00"
 	                              "\x80\x00"
 	                              "\xFF\xFF",
@@ -184,7 +184,7 @@ CTEST(decoder_pnm, p5_16bit_big_endian)
 	ASSERT_PX(frames[0], 1, 0, 128, 128, 128, 255); /* 0x8000 -> 128 */
 	ASSERT_PX(frames[0], 2, 0, 255, 255, 255, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -193,7 +193,7 @@ CTEST(decoder_pnm, p5_16bit_big_endian)
 CTEST(decoder_pnm, p6_binary_rgb)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P6\n# comment\n2 1\n255\n"
+	img2_image_t **frames = DECODE_LIT("P6\n# comment\n2 1\n255\n"
 	                              "\xFF\x00\x00"
 	                              "\x00\x80\xFF",
 	                              &frame_count);
@@ -203,7 +203,7 @@ CTEST(decoder_pnm, p6_binary_rgb)
 	ASSERT_PX(frames[0], 0, 0, 255, 0, 0, 255);
 	ASSERT_PX(frames[0], 1, 0, 0, 128, 255, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -212,7 +212,7 @@ CTEST(decoder_pnm, p6_binary_rgb)
 CTEST(decoder_pnm, multi_image_first_only)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P5\n1 1\n255\n"
+	img2_image_t **frames = DECODE_LIT("P5\n1 1\n255\n"
 	                              "\x40"
 	                              "P5\n2 2\n255\n"
 	                              "\x00\x00\x00\x00",
@@ -224,7 +224,7 @@ CTEST(decoder_pnm, multi_image_first_only)
 	ASSERT_EQUAL(1, frames[0]->height);
 	ASSERT_PX(frames[0], 0, 0, 0x40, 0x40, 0x40, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -233,7 +233,7 @@ CTEST(decoder_pnm, multi_image_first_only)
 CTEST(decoder_pnm, p7_grayscale_alpha)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P7\nWIDTH 2\nHEIGHT 1\nDEPTH 2\nMAXVAL 255\nTUPLTYPE GRAYSCALE_ALPHA\nENDHDR\n"
+	img2_image_t **frames = DECODE_LIT("P7\nWIDTH 2\nHEIGHT 1\nDEPTH 2\nMAXVAL 255\nTUPLTYPE GRAYSCALE_ALPHA\nENDHDR\n"
 	                              "\x10\x80"
 	                              "\xF0\xFF",
 	                              &frame_count);
@@ -245,7 +245,7 @@ CTEST(decoder_pnm, p7_grayscale_alpha)
 	ASSERT_PX(frames[0], 0, 0, 0x10, 0x10, 0x10, 0x80);
 	ASSERT_PX(frames[0], 1, 0, 0xF0, 0xF0, 0xF0, 0xFF);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -254,7 +254,7 @@ CTEST(decoder_pnm, p7_grayscale_alpha)
 CTEST(decoder_pnm, p7_rgb_alpha)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P7\n# PAM comment\nWIDTH 1\nHEIGHT 1\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n"
+	img2_image_t **frames = DECODE_LIT("P7\n# PAM comment\nWIDTH 1\nHEIGHT 1\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n"
 	                              "\x01\x02\x03\x04",
 	                              &frame_count);
 
@@ -262,7 +262,7 @@ CTEST(decoder_pnm, p7_rgb_alpha)
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_PX(frames[0], 0, 0, 1, 2, 3, 4);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -271,7 +271,7 @@ CTEST(decoder_pnm, p7_rgb_alpha)
 CTEST(decoder_pnm, p7_missing_tupltype)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P7\nWIDTH 1\nHEIGHT 1\nDEPTH 3\nMAXVAL 255\nENDHDR\n"
+	img2_image_t **frames = DECODE_LIT("P7\nWIDTH 1\nHEIGHT 1\nDEPTH 3\nMAXVAL 255\nENDHDR\n"
 	                              "\x0A\x14\x1E",
 	                              &frame_count);
 
@@ -279,7 +279,7 @@ CTEST(decoder_pnm, p7_missing_tupltype)
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_PX(frames[0], 0, 0, 10, 20, 30, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -288,7 +288,7 @@ CTEST(decoder_pnm, p7_missing_tupltype)
 CTEST(decoder_pnm, p7_blackandwhite)
 {
 	int frame_count;
-	image_t **frames = DECODE_LIT("P7\nWIDTH 2\nHEIGHT 1\nDEPTH 1\nMAXVAL 1\nTUPLTYPE BLACKANDWHITE\nENDHDR\n"
+	img2_image_t **frames = DECODE_LIT("P7\nWIDTH 2\nHEIGHT 1\nDEPTH 1\nMAXVAL 1\nTUPLTYPE BLACKANDWHITE\nENDHDR\n"
 	                              "\x00\x01",
 	                              &frame_count);
 
@@ -297,7 +297,7 @@ CTEST(decoder_pnm, p7_blackandwhite)
 	ASSERT_PX(frames[0], 0, 0, 0, 0, 0, 255);
 	ASSERT_PX(frames[0], 1, 0, 255, 255, 255, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -383,16 +383,16 @@ CTEST(decoder_pnm, huge_dimensions)
  */
 CTEST(decoder_pnm, decode_through_registry)
 {
-	decoder_registry_init();
+	img2_decoder_registry_init();
 
-	const decoder_t *decoder = decoder_find_by_mime(MIME_PNM);
+	const img2_decoder_entry_t *decoder = img2_decoder_find(IMG2_MIME_PNM);
 	ASSERT_NOT_NULL(decoder);
-	ASSERT_EQUAL(MIME_PNM, decoder->mime_type);
+	ASSERT_EQUAL(IMG2_MIME_PNM, decoder->mime_type);
 	ASSERT_STR("PNM/PAM (native)", decoder->name);
 
 	static const char pgm[] = "P2\n2 1\n255\n10 200\n";
 	int frame_count;
-	image_t **frames = decoder_decode(NULL, (const uint8_t *)pgm, sizeof(pgm) - 1, MIME_PNM, &frame_count);
+	img2_image_t **frames = img2_decoder_dispatch(NULL, (const uint8_t *)pgm, sizeof(pgm) - 1, IMG2_MIME_PNM, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -401,5 +401,5 @@ CTEST(decoder_pnm, decode_through_registry)
 	ASSERT_PX(frames[0], 0, 0, 10, 10, 10, 255);
 	ASSERT_PX(frames[0], 1, 0, 200, 200, 200, 255);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }

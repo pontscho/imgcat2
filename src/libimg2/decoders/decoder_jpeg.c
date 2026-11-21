@@ -18,7 +18,7 @@
 #include "decoder.h"
 #include "../core/log.h"
 
-#ifdef HAVE_JPEGQS
+#ifdef IMG2_HAVE_JPEGQS
 #include "libjpegqs.h"
 
 /* threads = -1: keep the OpenMP default, so OMP_NUM_THREADS is honoured */
@@ -26,7 +26,7 @@ static jpegqs_control_t s_jpegqs_opts = { .flags = JPEGQS_DIAGONALS | JPEGQS_JOI
 #endif
 
 /* EXIF/XMP metadata support */
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
 #endif
 
@@ -46,7 +46,7 @@ struct jpeg_error_mgr_ext {
  * @brief Custom JPEG error handler
  *
  * Called by libjpeg when a fatal error occurs. Uses longjmp to
- * return control to decode_jpeg() instead of calling exit().
+ * return control to img2_decode_jpeg() instead of calling exit().
  */
 static void jpeg_error_exit(j_common_ptr cinfo)
 {
@@ -57,7 +57,7 @@ static void jpeg_error_exit(j_common_ptr cinfo)
 	(*cinfo->err->format_message)(cinfo, buffer);
 	img2_log(IMG2_LOG_ERROR, "Error: libjpeg error: %s", buffer);
 
-	/* Jump back to decode_jpeg() */
+	/* Jump back to img2_decode_jpeg() */
 	longjmp(err->setjmp_buffer, 1);
 }
 
@@ -71,12 +71,12 @@ static void jpeg_error_exit(j_common_ptr cinfo)
  * @param data Raw JPEG file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (JPEG is static)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note JPEG does not support animation or alpha channel
  * @note Alpha channel is added (opaque, 255) during RGB→RGBA conversion
  */
-image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jpeg");
@@ -117,7 +117,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	cinfo.out_color_space = JCS_RGB;
 
 	// Start decompression
-#ifdef HAVE_JPEGQS
+#ifdef IMG2_HAVE_JPEGQS
 	if (!jpegqs_start_decompress(&cinfo, &s_jpegqs_opts)) {
 #else
 	if (!jpeg_start_decompress(&cinfo)) {
@@ -138,8 +138,8 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 		return NULL;
 	}
 
-	// Create image_t structure for RGBA output
-	image_t *img = image_create(width, height);
+	// Create img2_image_t structure for RGBA output
+	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		jpeg_destroy_decompress(&cinfo);
@@ -151,7 +151,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	uint8_t *row_buffer = (uint8_t *)malloc(row_stride);
 	if (row_buffer == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JPEG row buffer");
-		image_destroy(img);
+		img2_image_destroy(img);
 		jpeg_destroy_decompress(&cinfo);
 		return NULL;
 	}
@@ -166,7 +166,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 		if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG scanline %u", y);
 			free(row_buffer);
-			image_destroy(img);
+			img2_image_destroy(img);
 			jpeg_destroy_decompress(&cinfo);
 			return NULL;
 		}
@@ -176,7 +176,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 			uint8_t r = row_buffer[x * 3 + 0];
 			uint8_t g = row_buffer[x * 3 + 1];
 			uint8_t b = row_buffer[x * 3 + 2];
-			image_set_pixel(img, x, y, r, g, b, 255);
+			img2_image_set_pixel(img, x, y, r, g, b, 255);
 		}
 
 		y++;
@@ -186,7 +186,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	free(row_buffer);
 
 	// Finish decompression
-#ifdef HAVE_JPEGQS
+#ifdef IMG2_HAVE_JPEGQS
 	if (!jpegqs_finish_decompress(&cinfo)) {
 		img2_log(IMG2_LOG_WARN, "Warning: jpegqs_finish_decompress() returned false");
 	}
@@ -200,25 +200,25 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	jpeg_destroy_decompress(&cinfo);
 
 	// Parse EXIF/XMP metadata (Phase 3)
-#ifdef HAVE_EXIF_READER
-	exif_info_t *exif = malloc(sizeof(exif_info_t));
-	xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+#ifdef IMG2_HAVE_EXIF_READER
+	img2_exif_t *exif = malloc(sizeof(img2_exif_t));
+	img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 
 	if (exif && xmp) {
-		exif_info_init(exif);
-		xmp_info_init(xmp);
+		img2_exif_init(exif);
+		img2_xmp_init(xmp);
 
 		// Try to parse EXIF data
-		if (parse_exif_from_jpeg(exif, data, len) != 0) {
+		if (img2_exif_parse_jpeg(exif, data, len) != 0) {
 			// No EXIF data or parse failed
 			free(exif);
 			exif = NULL;
 		}
 
 		// Try to parse XMP data
-		if (parse_xmp_from_jpeg(xmp, data, len) != 0) {
+		if (img2_xmp_parse_jpeg(xmp, data, len) != 0) {
 			// No XMP data or parse failed
-			xmp_info_free(xmp);
+			img2_xmp_clear(xmp);
 			free(xmp);
 			xmp = NULL;
 		}
@@ -233,17 +233,17 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 			free(exif);
 		}
 		if (xmp) {
-			xmp_info_free(xmp);
+			img2_xmp_clear(xmp);
 			free(xmp);
 		}
 	}
 #endif
 
 	// Allocate frames array (single frame for JPEG)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(img);
+		img2_image_destroy(img);
 		return NULL;
 	}
 

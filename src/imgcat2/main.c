@@ -50,8 +50,8 @@ int main(int argc, char **argv)
 
 		/* Encoder options */
 		.convert_mode = false,
-		.output_format = FORMAT_NONE,
-		.iterm2_format = FORMAT_JPEG,
+		.output_format = IMG2_FORMAT_NONE,
+		.iterm2_format = IMG2_FORMAT_JPEG,
 		.output_file = NULL,
 		.jpeg_quality = 90,
 		.png_compression = 6,
@@ -94,9 +94,9 @@ int main(int argc, char **argv)
 
 		/* Handle --fonts option: list available fonts and exit */
 	} else if (opts.list_fonts) {
-		font_manager_init();
-		font_manager_list_fonts();
-		font_manager_cleanup();
+		img2_font_manager_init();
+		img2_font_manager_list_fonts();
+		img2_font_manager_cleanup();
 		return EXIT_SUCCESS;
 	}
 
@@ -118,17 +118,17 @@ int main(int argc, char **argv)
 	}
 
 	/* Initialize encoder registry */
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Initialize decoder registry */
-	decoder_registry_init();
+	img2_decoder_registry_init();
 
 	/* Pipeline variables */
 	uint8_t *buffer = NULL;
 	size_t buffer_size = 0;
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
-	image_t **scaled_frames = NULL;
+	img2_image_t **scaled_frames = NULL;
 
 	/* STEP 1: Read input (file or stdin) */
 	if (pipeline_read(&opts, &buffer, &buffer_size) < 0) {
@@ -180,14 +180,14 @@ int main(int argc, char **argv)
 
 	/* STEP 2.5: Output metadata and exit if --info specified */
 	if (opts.info_mode) {
-		/* Re-detect MIME type for output (forced MIME_YUV for --yuv) */
-		mime_type_t mime = pipeline_input_mime(&opts, buffer, buffer_size);
+		/* Re-detect MIME type for output (forced IMG2_MIME_YUV for --yuv) */
+		img2_mime_t mime = pipeline_input_mime(&opts, buffer, buffer_size);
 
 		if (opts.json_output) {
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 			/* Build complete JSON with EXIF/XMP data */
-			const char *type = mime_type_name(mime);
-			const char *mime_str = get_mime_string(mime);
+			const char *type = img2_mime_name(mime);
+			const char *mime_str = img2_mime_string(mime);
 			printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d", type, mime_str, frames[0]->width, frames[0]->height, frame_count);
 			output_exif_json(frames[0]->exif, false);
 			output_xmp_json(frames[0]->xmp, false);
@@ -199,7 +199,7 @@ int main(int argc, char **argv)
 
 		} else {
 			output_metadata_text(mime, frames[0]->width, frames[0]->height, frame_count);
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 			output_exif_text(frames[0]->exif);
 			output_xmp_text(frames[0]->xmp);
 #endif
@@ -225,7 +225,7 @@ int main(int argc, char **argv)
 		}
 
 		/* Use scaled frames if available, otherwise original frames */
-		image_t **render_frames = scaled_frames ? scaled_frames : frames;
+		img2_image_t **render_frames = scaled_frames ? scaled_frames : frames;
 
 		/* Validate frame index */
 		if (opts.frame_index >= frame_count) {
@@ -282,7 +282,7 @@ cleanup:
 	/* Free decoded frames */
 	if (frames != NULL) {
 		for (int i = 0; i < frame_count; i++) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 		free(frames);
 	}
@@ -290,7 +290,7 @@ cleanup:
 	/* Free scaled frames */
 	if (scaled_frames != NULL) {
 		for (int i = 0; i < frame_count; i++) {
-			image_destroy(scaled_frames[i]);
+			img2_image_destroy(scaled_frames[i]);
 		}
 		free(scaled_frames);
 	}

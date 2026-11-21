@@ -405,7 +405,7 @@ CTEST(cli, parse_yuv_valid)
 	char *argv[] = { "imgcat2", "--yuv", "NV12:97:61", "frame.yuv" };
 	ASSERT_EQUAL(0, parse_arguments(4, argv, &opts));
 	ASSERT_TRUE(opts.yuv_input);
-	ASSERT_EQUAL(YUV_FMT_NV12, opts.yuv.format);
+	ASSERT_EQUAL(IMG2_YUV_FMT_NV12, opts.yuv.format);
 	ASSERT_EQUAL(97, opts.yuv.width);
 	ASSERT_EQUAL(61, opts.yuv.height);
 	ASSERT_EQUAL(97, opts.yuv.y_stride);
@@ -418,7 +418,7 @@ CTEST(cli, parse_yuv_valid)
 	char *argv2[] = { "imgcat2", "--yuv=yuv420p:97:61:128:64", "-" };
 	ASSERT_EQUAL(0, parse_arguments(3, argv2, &opts2));
 	ASSERT_TRUE(opts2.yuv_input);
-	ASSERT_EQUAL(YUV_FMT_I420, opts2.yuv.format);
+	ASSERT_EQUAL(IMG2_YUV_FMT_I420, opts2.yuv.format);
 	ASSERT_EQUAL(128, opts2.yuv.y_stride);
 	ASSERT_EQUAL(64, opts2.yuv.uv_stride);
 	ASSERT_NULL(opts2.input_file);

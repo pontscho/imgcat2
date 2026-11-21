@@ -17,16 +17,16 @@
 CTEST(avif_orientation, libheif_handles_orientation_natively)
 {
 	/* libheif (which decodes AVIF) automatically applies EXIF orientation */
-	/* Pipeline excludes AVIF from image_apply_orientation() calls */
+	/* Pipeline excludes AVIF from img2_image_orient() calls */
 
-	image_t *img = image_create(4, 4);
+	img2_image_t *img = img2_image_alloc(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Simulate already-rotated AVIF image from libheif */
-	int result = image_apply_orientation(img, 1);
+	int result = img2_image_orient(img, 1);
 	ASSERT_EQUAL(0, result);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 CTEST(avif_orientation, function_works_if_manually_called)
@@ -34,19 +34,19 @@ CTEST(avif_orientation, function_works_if_manually_called)
 	/* Even though pipeline doesn't call this for AVIF, */
 	/* the function should still work if manually invoked */
 
-	image_t *img = image_create(4, 4);
+	img2_image_t *img = img2_image_alloc(4, 4);
 	ASSERT_NOT_NULL(img);
 
-	image_set_pixel(img, 0, 0, 255, 0, 0, 255);
-	image_set_pixel(img, 0, 3, 0, 0, 255, 255);
+	img2_image_set_pixel(img, 0, 0, 255, 0, 0, 255);
+	img2_image_set_pixel(img, 0, 3, 0, 0, 255, 255);
 
-	int result = image_apply_orientation(img, 4);
+	int result = img2_image_orient(img, 4);
 	ASSERT_EQUAL(0, result);
 
-	uint8_t *tl = image_get_pixel(img, 0, 0);
+	uint8_t *tl = img2_image_get_pixel(img, 0, 0);
 	ASSERT_EQUAL(0, tl[0]);
 	ASSERT_EQUAL(0, tl[1]);
 	ASSERT_EQUAL(255, tl[2]);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }

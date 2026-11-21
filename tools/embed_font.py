@@ -61,8 +61,8 @@ def main():
             font_map.setdefault('regular', ttf_path)
 
     # Generate header file
-    h_content = """#ifndef EMBEDDED_FONTS_H
-#define EMBEDDED_FONTS_H
+    h_content = """#ifndef IMG2_EMBEDDED_FONTS_H
+#define IMG2_EMBEDDED_FONTS_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -70,7 +70,7 @@ def main():
 typedef struct {
     const uint8_t *data;
     size_t size;
-} embedded_font_t;
+} img2_embedded_font_t;
 
 """
 
@@ -82,7 +82,7 @@ typedef struct {
 
     # Embed each variant
     for variant, ttf_path in sorted(font_map.items()):
-        var_name = f'embedded_dejavu_{variant}'
+        var_name = f'img2_embedded_dejavu_{variant}'
 
         print(f"\nEmbedding {variant}: {os.path.basename(ttf_path)}")
 
@@ -92,10 +92,10 @@ typedef struct {
         # Add extern declaration to header
         h_content += f'extern const uint8_t {var_name}_data[];\n'
         h_content += f'extern const size_t {var_name}_size;\n'
-        h_content += f'extern const embedded_font_t {var_name};\n\n'
+        h_content += f'extern const img2_embedded_font_t {var_name};\n\n'
 
         # Add struct definition to source
-        c_content += f'const embedded_font_t {var_name} = {{\n'
+        c_content += f'const img2_embedded_font_t {var_name} = {{\n'
         c_content += f'    .data = {var_name}_data,\n'
         c_content += f'    .size = {var_name}_size\n'
         c_content += '};\n\n'
@@ -106,7 +106,7 @@ typedef struct {
         print(f"  Size: {size:,} bytes ({size/1024:.1f} KB)")
 
     # Close header
-    h_content += '#endif /* EMBEDDED_FONTS_H */\n'
+    h_content += '#endif /* IMG2_EMBEDDED_FONTS_H */\n'
 
     # Write files
     h_file = f'{output_base}.h'

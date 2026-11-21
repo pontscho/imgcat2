@@ -16,7 +16,7 @@
 #include "decoder.h"
 #include "../core/log.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
 #endif
 
@@ -63,7 +63,7 @@ static void png_read_func(png_structp png_ptr, png_bytep data, size_t length)
 	reader->offset += length;
 }
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Extract EXIF metadata from PNG using full libpng API
  *
@@ -72,9 +72,9 @@ static void png_read_func(png_structp png_ptr, png_bytep data, size_t length)
  *
  * @param data Raw PNG file data
  * @param len Length of data in bytes
- * @return Pointer to exif_info_t structure, or NULL if no EXIF found or on error
+ * @return Pointer to img2_exif_t structure, or NULL if no EXIF found or on error
  */
-static exif_info_t *extract_png_exif(const uint8_t *data, size_t len)
+static img2_exif_t *extract_png_exif(const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0) {
 		return NULL;
@@ -117,17 +117,17 @@ static exif_info_t *extract_png_exif(const uint8_t *data, size_t len)
 #if PNG_LIBPNG_VER >= 10617
 	/* png_get_eXIf() available in libpng >= 1.6.17 */
 	if (png_get_eXIf_1(png_ptr, info_ptr, &exif_size, &exif_data) != 0 && exif_data != NULL && exif_size > 0) {
-		/* Allocate and initialize exif_info_t */
-		exif_info_t *exif = malloc(sizeof(exif_info_t));
+		/* Allocate and initialize img2_exif_t */
+		img2_exif_t *exif = malloc(sizeof(img2_exif_t));
 		if (exif == NULL) {
 			png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 			return NULL;
 		}
 
-		exif_info_init(exif);
+		img2_exif_init(exif);
 
 		/* Parse EXIF data (raw TIFF format) */
-		if (parse_exif_from_tiff(exif, exif_data, exif_size) != 0) {
+		if (img2_exif_parse_tiff(exif, exif_data, exif_size) != 0) {
 			/* Parse failed */
 			free(exif);
 			exif = NULL;
@@ -158,7 +158,7 @@ static exif_info_t *extract_png_exif(const uint8_t *data, size_t len)
  * @param len Length of data in bytes
  * @return 0 on success, -1 on error
  */
-static int extract_png_text_to_exif(exif_info_t *exif, const uint8_t *data, size_t len)
+static int extract_png_text_to_exif(img2_exif_t *exif, const uint8_t *data, size_t len)
 {
 	if (exif == NULL || data == NULL || len == 0) {
 		return -1;
@@ -244,9 +244,9 @@ static int extract_png_text_to_exif(exif_info_t *exif, const uint8_t *data, size
  *
  * @param data Raw PNG file data
  * @param len Length of data in bytes
- * @return Pointer to xmp_info_t structure, or NULL if no XMP found or on error
+ * @return Pointer to img2_xmp_t structure, or NULL if no XMP found or on error
  */
-static xmp_info_t *extract_png_xmp(const uint8_t *data, size_t len)
+static img2_xmp_t *extract_png_xmp(const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0) {
 		return NULL;
@@ -292,19 +292,19 @@ static xmp_info_t *extract_png_xmp(const uint8_t *data, size_t len)
 			if (text_ptr[i].key != NULL && strcmp(text_ptr[i].key, "XML:com.adobe.xmp") == 0) {
 				/* Found XMP data */
 				if (text_ptr[i].text != NULL && text_ptr[i].text_length > 0) {
-					/* Allocate and initialize xmp_info_t */
-					xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+					/* Allocate and initialize img2_xmp_t */
+					img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 					if (xmp == NULL) {
 						png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 						return NULL;
 					}
 
-					xmp_info_init(xmp);
+					img2_xmp_init(xmp);
 
 					/* Parse XMP data (raw XML string) */
-					if (parse_xmp_from_xml(xmp, text_ptr[i].text, text_ptr[i].text_length) != 0) {
+					if (img2_xmp_parse_xml(xmp, text_ptr[i].text, text_ptr[i].text_length) != 0) {
 						/* Parse failed */
-						xmp_info_free(xmp);
+						img2_xmp_clear(xmp);
 						free(xmp);
 						xmp = NULL;
 					}
@@ -320,7 +320,7 @@ static xmp_info_t *extract_png_xmp(const uint8_t *data, size_t len)
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 	return NULL;
 }
-#endif /* HAVE_EXIF_READER */
+#endif /* IMG2_HAVE_EXIF_READER */
 
 #ifdef PNG_APNG_SUPPORTED
 
@@ -338,7 +338,7 @@ static xmp_info_t *extract_png_xmp(const uint8_t *data, size_t len)
  * @note Returns false if PNG_APNG_SUPPORTED not defined
  * @note Returns false if data is invalid or not a PNG
  */
-bool png_is_animated(const uint8_t *data, size_t size)
+bool img2_png_is_animated(const uint8_t *data, size_t size)
 {
 	if (data == NULL || size == 0) {
 		return false;
@@ -406,7 +406,7 @@ bool png_is_animated(const uint8_t *data, size_t size)
  * @param canvas_height Height of the canvas (for bounds checking)
  * @param blend_op Blend operation: 0 = SOURCE (replace), 1 = OVER (alpha blend)
  */
-static void apng_composite_frame(image_t *accumulator, uint8_t *frame_pixels, uint32_t x_offset, uint32_t y_offset, uint32_t frame_width, uint32_t frame_height, uint32_t canvas_width, uint32_t canvas_height, uint8_t blend_op)
+static void apng_composite_frame(img2_image_t *accumulator, uint8_t *frame_pixels, uint32_t x_offset, uint32_t y_offset, uint32_t frame_width, uint32_t frame_height, uint32_t canvas_width, uint32_t canvas_height, uint8_t blend_op)
 {
 	if (accumulator == NULL || frame_pixels == NULL) {
 		return;
@@ -473,13 +473,13 @@ static void apng_composite_frame(image_t *accumulator, uint8_t *frame_pixels, ui
  * @param data Raw PNG file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
  * @note Requires PNG_APNG_SUPPORTED to be defined
  * @note Output format is always RGBA8888
  * @note Frames are capped at MAX_PNG_FRAMES (200)
  */
-static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png_animated");
@@ -568,7 +568,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 	png_read_update_info(png_ptr, info_ptr);
 
 	/* Allocate frames array */
-	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -581,7 +581,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 	}
 
 	/* Create accumulator canvas for frame composition */
-	image_t *accumulator = image_create(canvas_width, canvas_height);
+	img2_image_t *accumulator = img2_image_alloc(canvas_width, canvas_height);
 	if (accumulator == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
 		free(frames);
@@ -590,7 +590,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 	}
 
 	/* Previous frame backup for DISPOSE_PREVIOUS */
-	image_t *previous = NULL;
+	img2_image_t *previous = NULL;
 
 	/* Process each frame */
 	for (uint32_t frame_idx = 0; frame_idx < num_frames; frame_idx++) {
@@ -622,7 +622,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 
 		/* Backup accumulator for DISPOSE_PREVIOUS */
 		if (dispose_op == PNG_DISPOSE_OP_PREVIOUS && previous == NULL) {
-			previous = image_create(canvas_width, canvas_height);
+			previous = img2_image_alloc(canvas_width, canvas_height);
 			if (previous == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create previous frame backup");
 				goto cleanup_error;
@@ -660,7 +660,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 		apng_composite_frame(accumulator, frame_buffer, x_offset, y_offset, frame_width, frame_height, canvas_width, canvas_height, blend_op);
 
 		/* Copy accumulator to output frame */
-		frames[frame_idx] = image_create(canvas_width, canvas_height);
+		frames[frame_idx] = img2_image_alloc(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %u", frame_idx);
 			free(frame_buffer);
@@ -687,7 +687,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 						uint32_t canvas_x = x_offset + x;
 						uint32_t canvas_y = y_offset + y;
 						if (canvas_x < canvas_width && canvas_y < canvas_height) {
-							image_set_pixel(accumulator, canvas_x, canvas_y, 0, 0, 0, 0);
+							img2_image_set_pixel(accumulator, canvas_x, canvas_y, 0, 0, 0, 0);
 						}
 					}
 				}
@@ -707,9 +707,9 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 	}
 
 	/* Cleanup */
-	image_destroy(accumulator);
+	img2_image_destroy(accumulator);
 	if (previous != NULL) {
-		image_destroy(previous);
+		img2_image_destroy(previous);
 	}
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 
@@ -718,13 +718,13 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 
 cleanup_error:
 	/* Cleanup on error */
-	image_destroy(accumulator);
+	img2_image_destroy(accumulator);
 	if (previous != NULL) {
-		image_destroy(previous);
+		img2_image_destroy(previous);
 	}
 	for (uint32_t i = 0; i < num_frames; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);
@@ -777,7 +777,7 @@ static void png_static_warning_fn(png_structp png_ptr, png_const_charp message)
 /**
  * @brief Decode static PNG image using the libpng low-level API
  *
- * Rows are decoded straight into the image_t RGBA8888 pixel buffer, with no
+ * Rows are decoded straight into the img2_image_t RGBA8888 pixel buffer, with no
  * intermediate buffer or copy. The transform set replicates exactly what the
  * simplified png_image API does for PNG_FORMAT_RGBA (png_image_read_direct in
  * libpng's pngread.c), so the output is byte-identical to it:
@@ -793,12 +793,12 @@ static void png_static_warning_fn(png_structp png_ptr, png_const_charp message)
  * @param data Raw PNG file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (PNG is static)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note This function handles only static PNG files
  * @note Output format is always RGBA8888
  */
-static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png");
@@ -832,14 +832,14 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	}
 
 	// Assigned after setjmp and used in the error path: must be volatile
-	image_t *volatile img = NULL;
+	img2_image_t *volatile img = NULL;
 	png_bytep *volatile row_pointers = NULL;
 
 	// Set up error handling
 	if (setjmp(png_jmpbuf(png_ptr))) {
 		img2_log(IMG2_LOG_ERROR, "Error: libpng failed to decode PNG: %s", error_ctx.message);
 		free(row_pointers);
-		image_destroy(img);
+		img2_image_destroy(img);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
@@ -881,8 +881,8 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 		png_error(png_ptr, "unexpected row size after RGBA8888 transforms");
 	}
 
-	// Create image_t structure and decode straight into its pixel buffer
-	img = image_create(width, height);
+	// Create img2_image_t structure and decode straight into its pixel buffer
+	img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -892,7 +892,7 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
 	if (row_pointers == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
-		image_destroy(img);
+		img2_image_destroy(img);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
@@ -907,15 +907,15 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 
 	// Parse EXIF/XMP metadata
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	// Extract EXIF from eXIf chunk using full libpng API
-	exif_info_t *exif = extract_png_exif(data, len);
+	img2_exif_t *exif = extract_png_exif(data, len);
 
 	// If no EXIF from eXIf chunk, allocate empty structure for tEXt data
 	if (exif == NULL) {
-		exif = malloc(sizeof(exif_info_t));
+		exif = malloc(sizeof(img2_exif_t));
 		if (exif != NULL) {
-			exif_info_init(exif);
+			img2_exif_init(exif);
 		}
 	}
 
@@ -925,7 +925,7 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	}
 
 	// Extract XMP from iTXt chunks using full libpng API
-	xmp_info_t *xmp = extract_png_xmp(data, len);
+	img2_xmp_t *xmp = extract_png_xmp(data, len);
 
 	// Store metadata in image structure
 	img->exif = exif;
@@ -933,10 +933,10 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 #endif
 
 	// Allocate frames array (single frame for PNG)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(img);
+		img2_image_destroy(img);
 		return NULL;
 	}
 
@@ -955,13 +955,13 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
  * @param data Raw PNG file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (1 for static, N for APNG)
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
  * @note For static PNG: returns 1 frame
  * @note For APNG: returns N frames (capped at MAX_PNG_FRAMES)
  * @note Output format is always RGBA8888
  */
-image_t **decode_png(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_png(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png");
@@ -973,7 +973,7 @@ image_t **decode_png(const uint8_t *data, size_t len, int *frame_count)
 
 	/* Check if animated */
 #ifdef PNG_APNG_SUPPORTED
-	if (png_is_animated(data, len)) {
+	if (img2_png_is_animated(data, len)) {
 		return decode_png_animated(data, len, frame_count);
 	}
 #endif /* PNG_APNG_SUPPORTED */

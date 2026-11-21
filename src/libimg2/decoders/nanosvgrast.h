@@ -25,6 +25,10 @@
 #ifndef NANOSVGRAST_H
 #define NANOSVGRAST_H
 
+#ifndef NSVGRAST_DEF
+#define NSVGRAST_DEF
+#endif
+
 #include "nanosvg.h"
 
 #ifndef NANOSVGRAST_CPLUSPLUS
@@ -49,7 +53,7 @@ typedef struct NSVGrasterizer NSVGrasterizer;
 */
 
 // Allocated rasterizer context.
-NSVGrasterizer* nsvgCreateRasterizer(void);
+NSVGRAST_DEF NSVGrasterizer* nsvgCreateRasterizer(void);
 
 // Rasterizes SVG image, returns RGBA image (non-premultiplied alpha)
 //   r - pointer to rasterizer context
@@ -60,12 +64,12 @@ NSVGrasterizer* nsvgCreateRasterizer(void);
 //   w - width of the image to render
 //   h - height of the image to render
 //   stride - number of bytes per scaleline in the destination buffer
-void nsvgRasterize(NSVGrasterizer* r,
+NSVGRAST_DEF void nsvgRasterize(NSVGrasterizer* r,
 				   NSVGimage* image, float tx, float ty, float scale,
 				   unsigned char* dst, int w, int h, int stride);
 
 // Deletes rasterizer context.
-void nsvgDeleteRasterizer(NSVGrasterizer*);
+NSVGRAST_DEF void nsvgDeleteRasterizer(NSVGrasterizer*);
 
 
 #ifndef NANOSVGRAST_CPLUSPLUS
@@ -150,7 +154,7 @@ struct NSVGrasterizer
 	int width, height, stride;
 };
 
-NSVGrasterizer* nsvgCreateRasterizer(void)
+NSVGRAST_DEF NSVGrasterizer* nsvgCreateRasterizer(void)
 {
 	NSVGrasterizer* r = (NSVGrasterizer*)malloc(sizeof(NSVGrasterizer));
 	if (r == NULL) goto error;
@@ -166,7 +170,7 @@ error:
 	return NULL;
 }
 
-void nsvgDeleteRasterizer(NSVGrasterizer* r)
+NSVGRAST_DEF void nsvgDeleteRasterizer(NSVGrasterizer* r)
 {
 	NSVGmemPage* p;
 
@@ -1372,7 +1376,7 @@ static void dumpEdges(NSVGrasterizer* r, const char* name)
 }
 */
 
-void nsvgRasterize(NSVGrasterizer* r,
+NSVGRAST_DEF void nsvgRasterize(NSVGrasterizer* r,
 				   NSVGimage* image, float tx, float ty, float scale,
 				   unsigned char* dst, int w, int h, int stride)
 {

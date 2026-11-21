@@ -123,11 +123,11 @@ void print_version(void)
 	printf("Supported image formats:\n");
 
 	/* Initialize decoder registry to get the list of supported formats */
-	decoder_registry_init();
+	img2_decoder_registry_init();
 
 	/* Print each supported format */
-	for (size_t i = 0; i < g_decoder_count; i++) {
-		printf("  - %s\n", g_decoder_registry[i].name);
+	for (size_t i = 0; i < img2_decoder_registry_size; i++) {
+		printf("  - %s\n", img2_decoder_registry[i].name);
 	}
 	printf("  - YUV raw (via --yuv)\n");
 }
@@ -215,38 +215,38 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 
 			case 'j':
 				opts->convert_mode = true;
-				opts->output_format = FORMAT_JPEG;
+				opts->output_format = IMG2_FORMAT_JPEG;
 				opts->jpeg_quality = atoi(optarg);
 				break;
 
 			case 'p':
 				opts->convert_mode = true;
-				opts->output_format = FORMAT_PNG;
+				opts->output_format = IMG2_FORMAT_PNG;
 				opts->png_compression = atoi(optarg);
 				break;
 
 			case 1000: /* --heif */
 				opts->convert_mode = true;
-				opts->output_format = FORMAT_HEIF;
+				opts->output_format = IMG2_FORMAT_HEIF;
 				opts->heif_quality = atoi(optarg);
 				break;
 
 			case 1001: /* --webp */
 				opts->convert_mode = true;
-				opts->output_format = FORMAT_WEBP;
+				opts->output_format = IMG2_FORMAT_WEBP;
 				opts->webp_quality = atoi(optarg);
 				break;
 
 			case 1002: /* --jxl */
 				opts->convert_mode = true;
-				opts->output_format = FORMAT_JXL;
+				opts->output_format = IMG2_FORMAT_JXL;
 				opts->jxl_quality = atoi(optarg);
 				break;
 
 			case 1003: /* --yuv */
 			{
 				char err[160];
-				if (yuv_parse_spec(optarg, &opts->yuv, err, sizeof(err)) < 0) {
+				if (img2_yuv_parse_spec(optarg, &opts->yuv, err, sizeof(err)) < 0) {
 					fprintf(stderr, "Error: Invalid --yuv '%s': %s\n", optarg, err);
 					fprintf(stderr, "Usage: --yuv format:width:height[:y_stride][:uv_stride]\n");
 					return -1;
@@ -264,9 +264,9 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 				if (strcmp(long_options[option_index].name, "iterm2-format") == 0) {
 					/* Parse iterm2-format argument */
 					if (strcasecmp(optarg, "png") == 0) {
-						opts->iterm2_format = FORMAT_PNG;
+						opts->iterm2_format = IMG2_FORMAT_PNG;
 					} else if (strcasecmp(optarg, "jpeg") == 0) {
-						opts->iterm2_format = FORMAT_JPEG;
+						opts->iterm2_format = IMG2_FORMAT_JPEG;
 					} else {
 						fprintf(stderr, "Error: Invalid iterm2-format '%s' (must be 'png' or 'jpeg')\n", optarg);
 						return -1;
@@ -371,7 +371,7 @@ int validate_options(cli_options_t *opts)
 	/* Validate encoder options */
 	if (opts->convert_mode) {
 		/* Require output format to be set */
-		if (opts->output_format == FORMAT_NONE) {
+		if (opts->output_format == IMG2_FORMAT_NONE) {
 			fprintf(stderr, "Error: Conversion mode requires --jpeg or --png\n");
 			return -1;
 		}

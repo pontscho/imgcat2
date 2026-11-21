@@ -12,7 +12,7 @@ set(IMG2_LINK_ORDER LIBPNG ZLIB JPEGQS LIBJPEG GIFLIB WEBP HEIF TIFF RAW JXL RES
 # Include order is NOT the link order: PNG, ZLIB, JPEG (unconditional), then GIF, WEBP, HEIF, TIFF, RAW, JXL,
 # RESVG, and jpeg-quantsmooth LAST (its directory has its own jconfig.h, which must not shadow libjpeg-turbo's).
 set(IMG2_INCLUDE_ORDER LIBPNG ZLIB LIBJPEG GIFLIB WEBP HEIF TIFF RAW JXL RESVG JPEGQS)
-set(IMG2_FEATURE_MACRO_PREFIX "HAVE_")   # S5 changes this single line to "IMG2_HAVE_"
+set(IMG2_FEATURE_MACRO_PREFIX "IMG2_HAVE_")
 
 function(img2_feature name)
 	cmake_parse_arguments(F "" "" "LIBS;INCLUDE_DIRS;ARCHIVES;ARCHIVE_TARGETS;SYSTEM_LIBS" ${ARGN})

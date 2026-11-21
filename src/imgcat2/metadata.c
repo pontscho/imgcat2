@@ -8,7 +8,7 @@
 
 #include "metadata.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../libimg2/metadata/exif_reader.h"
 #endif
 
@@ -18,10 +18,10 @@
  * Format: "TYPE mime WxH N frame(s)"
  * Example: "PNG image/png 1920x1080 1 frame"
  */
-void output_metadata_text(mime_type_t mime, uint32_t width, uint32_t height, int frame_count)
+void output_metadata_text(img2_mime_t mime, uint32_t width, uint32_t height, int frame_count)
 {
-	const char *type = mime_type_name(mime);
-	const char *mime_str = get_mime_string(mime);
+	const char *type = img2_mime_name(mime);
+	const char *mime_str = img2_mime_string(mime);
 
 	printf("%s %s %ux%u %d %s\n", type, mime_str, width, height, frame_count, frame_count == 1 ? "frame" : "frames");
 }
@@ -32,19 +32,19 @@ void output_metadata_text(mime_type_t mime, uint32_t width, uint32_t height, int
  * Format: {"type":"TYPE","mime":"MIME","width":W,"height":H,"frames":N}
  * Example: {"type":"PNG","mime":"image/png","width":1920,"height":1080,"frames":1}
  */
-void output_metadata_json(mime_type_t mime, uint32_t width, uint32_t height, int frame_count)
+void output_metadata_json(img2_mime_t mime, uint32_t width, uint32_t height, int frame_count)
 {
-	const char *type = mime_type_name(mime);
-	const char *mime_str = get_mime_string(mime);
+	const char *type = img2_mime_name(mime);
+	const char *mime_str = img2_mime_string(mime);
 
 	printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d}\n", type, mime_str, width, height, frame_count);
 }
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Output EXIF metadata in human-readable format
  */
-void output_exif_text(const struct exif_info_t *exif)
+void output_exif_text(const struct img2_exif *exif)
 {
 	if (exif == NULL) {
 		return;
@@ -164,7 +164,7 @@ void output_exif_text(const struct exif_info_t *exif)
 /**
  * @brief Output XMP metadata in human-readable format
  */
-void output_xmp_text(const struct xmp_info_t *xmp)
+void output_xmp_text(const struct img2_xmp *xmp)
 {
 	if (xmp == NULL) {
 		return;
@@ -266,7 +266,7 @@ static void print_json_string(const char *str)
 /**
  * @brief Output EXIF metadata as JSON object
  */
-void output_exif_json(const struct exif_info_t *exif, bool first)
+void output_exif_json(const struct img2_exif *exif, bool first)
 {
 	if (exif == NULL) {
 		return;
@@ -468,7 +468,7 @@ void output_exif_json(const struct exif_info_t *exif, bool first)
 /**
  * @brief Output XMP metadata as JSON object
  */
-void output_xmp_json(const struct xmp_info_t *xmp, bool first)
+void output_xmp_json(const struct img2_xmp *xmp, bool first)
 {
 	if (xmp == NULL) {
 		return;
@@ -596,4 +596,4 @@ void output_xmp_json(const struct xmp_info_t *xmp, bool first)
 
 	printf("}");
 }
-#endif /* HAVE_EXIF_READER */
+#endif /* IMG2_HAVE_EXIF_READER */

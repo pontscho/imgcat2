@@ -3,7 +3,7 @@
  * @brief Integration test for PNG decoder with EXIF/XMP metadata
  *
  * Tests that the PNG decoder properly extracts and stores EXIF/XMP metadata
- * in the image_t structure during decoding.
+ * in the img2_image_t structure during decoding.
  */
 
 #include <stdbool.h>
@@ -15,12 +15,12 @@
 #include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
 #endif
 
-/* Forward declaration of decode_png from decoder */
-image_t **decode_png(const uint8_t *data, size_t len, int *frame_count);
+/* Forward declaration of img2_decode_png from decoder */
+img2_image_t **img2_decode_png(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Helper function to load file into memory
@@ -70,20 +70,20 @@ CTEST(png_exif_integration, decode_with_exif)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_png(data, data_size, &frame_count);
+	img2_image_t **frames = img2_decode_png(data, data_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_EQUAL(100, img->width);
 	ASSERT_EQUAL(100, img->height);
 	ASSERT_NOT_NULL(img->pixels);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted */
 	ASSERT_NOT_NULL(img->exif);
 	ASSERT_STR("Canon", img->exif->make);
@@ -98,7 +98,7 @@ CTEST(png_exif_integration, decode_with_exif)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }
@@ -114,20 +114,20 @@ CTEST(png_exif_integration, decode_without_exif)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_png(data, data_size, &frame_count);
+	img2_image_t **frames = img2_decode_png(data, data_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Image should be decoded successfully */
 	ASSERT_EQUAL(512, img->width);
 	ASSERT_EQUAL(512, img->height);
 
 	/* EXIF may be present from tEXt chunks, but no camera Make/Model */
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	if (img->exif != NULL) {
 		/* hell.png has tEXt chunks (Title, Copyright), so EXIF exists */
 		/* But it should not have camera Make/Model from eXIf chunk */
@@ -142,7 +142,7 @@ CTEST(png_exif_integration, decode_without_exif)
 	ASSERT_NULL(img->xmp);
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }
@@ -158,20 +158,20 @@ CTEST(png_exif_integration, decode_with_text_chunks)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_png(data, data_size, &frame_count);
+	img2_image_t **frames = img2_decode_png(data, data_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_EQUAL(50, img->width);
 	ASSERT_EQUAL(50, img->height);
 	ASSERT_NOT_NULL(img->pixels);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify tEXt metadata was extracted and mapped to EXIF fields */
 	ASSERT_NOT_NULL(img->exif);
 	ASSERT_STR("Test Image Title", img->exif->description);
@@ -189,7 +189,7 @@ CTEST(png_exif_integration, decode_with_text_chunks)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }

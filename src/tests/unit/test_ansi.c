@@ -109,13 +109,13 @@ CTEST(ansi, escape_cache_init)
 CTEST(ansi, half_block_rendering)
 {
 	/* Create a simple 4x4 test image (2 terminal lines) */
-	image_t *img = image_create(4, 4);
+	img2_image_t *img = img2_image_alloc(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with solid red (opaque) */
 	for (uint32_t y = 0; y < img->height; y++) {
 		for (uint32_t x = 0; x < img->width; x++) {
-			image_set_pixel(img, x, y, 255, 0, 0, 255);
+			img2_image_set_pixel(img, x, y, 255, 0, 0, 255);
 		}
 	}
 
@@ -136,7 +136,7 @@ CTEST(ansi, half_block_rendering)
 	ASSERT_TRUE(strstr(result, "\n") != NULL); /* Should end with newline */
 
 	free(line_buffer);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -146,7 +146,7 @@ CTEST(ansi, half_block_rendering)
  */
 CTEST(ansi, generate_line_ansi_null_params)
 {
-	image_t *img = image_create(4, 4);
+	img2_image_t *img = img2_image_alloc(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	char *line_buffer = malloc(MAX_LINE_BUFFER_SIZE);
@@ -161,7 +161,7 @@ CTEST(ansi, generate_line_ansi_null_params)
 	ASSERT_NULL(result2);
 
 	free(line_buffer);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -172,27 +172,27 @@ CTEST(ansi, generate_line_ansi_null_params)
 CTEST(ansi, transparency)
 {
 	/* Create 4x4 image */
-	image_t *img = image_create(4, 4);
+	img2_image_t *img = img2_image_alloc(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Top row: fully opaque red (alpha = 255) */
 	for (uint32_t x = 0; x < img->width; x++) {
-		image_set_pixel(img, x, 0, 255, 0, 0, 255);
+		img2_image_set_pixel(img, x, 0, 255, 0, 0, 255);
 	}
 
 	/* Second row: semi-transparent (alpha = 64, < 128) */
 	for (uint32_t x = 0; x < img->width; x++) {
-		image_set_pixel(img, x, 1, 0, 255, 0, 64);
+		img2_image_set_pixel(img, x, 1, 0, 255, 0, 64);
 	}
 
 	/* Third row: just above threshold (alpha = 128) */
 	for (uint32_t x = 0; x < img->width; x++) {
-		image_set_pixel(img, x, 2, 0, 0, 255, 128);
+		img2_image_set_pixel(img, x, 2, 0, 0, 255, 128);
 	}
 
 	/* Fourth row: fully transparent (alpha = 0) */
 	for (uint32_t x = 0; x < img->width; x++) {
-		image_set_pixel(img, x, 3, 255, 255, 255, 0);
+		img2_image_set_pixel(img, x, 3, 255, 255, 255, 0);
 	}
 
 	char *line_buffer = malloc(MAX_LINE_BUFFER_SIZE);
@@ -206,7 +206,7 @@ CTEST(ansi, transparency)
 	ASSERT_TRUE(strlen(result) > 0);
 
 	free(line_buffer);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -217,13 +217,13 @@ CTEST(ansi, transparency)
 CTEST(ansi, generate_frame_ansi)
 {
 	/* Create 4x4 image (will generate 2 terminal lines) */
-	image_t *img = image_create(4, 4);
+	img2_image_t *img = img2_image_alloc(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with blue */
 	for (uint32_t y = 0; y < img->height; y++) {
 		for (uint32_t x = 0; x < img->width; x++) {
-			image_set_pixel(img, x, y, 0, 0, 255, 255);
+			img2_image_set_pixel(img, x, y, 0, 0, 255, 255);
 		}
 	}
 
@@ -240,7 +240,7 @@ CTEST(ansi, generate_frame_ansi)
 	}
 
 	free_frame_lines(lines, line_count);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -280,13 +280,13 @@ CTEST(ansi, free_frame_lines_null_safe)
 CTEST(ansi, generate_frame_ansi_odd_height)
 {
 	/* Create 4x5 image (odd height) */
-	image_t *img = image_create(4, 5);
+	img2_image_t *img = img2_image_alloc(4, 5);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with green */
 	for (uint32_t y = 0; y < img->height; y++) {
 		for (uint32_t x = 0; x < img->width; x++) {
-			image_set_pixel(img, x, y, 0, 255, 0, 255);
+			img2_image_set_pixel(img, x, y, 0, 255, 0, 255);
 		}
 	}
 
@@ -298,5 +298,5 @@ CTEST(ansi, generate_frame_ansi_odd_height)
 	ASSERT_EQUAL(2, line_count);
 
 	free_frame_lines(lines, line_count);
-	image_destroy(img);
+	img2_image_destroy(img);
 }

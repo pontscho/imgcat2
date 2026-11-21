@@ -41,7 +41,7 @@ void escape_cache_init(void)
 /**
  * @brief Generate ANSI escape sequence for one line (pair of pixel rows)
  */
-char *generate_line_ansi(const image_t *img, uint32_t y_top, char *line_buffer)
+char *generate_line_ansi(const img2_image_t *img, uint32_t y_top, char *line_buffer)
 {
 	if (img == NULL || img->pixels == NULL || line_buffer == NULL) {
 		return NULL;
@@ -63,13 +63,13 @@ char *generate_line_ansi(const image_t *img, uint32_t y_top, char *line_buffer)
 
 	for (uint32_t x = 0; x < img->width; x++) {
 		/* Get top pixel (background color) */
-		const uint8_t *top_pixel = image_get_pixel(img, x, y_top);
+		const uint8_t *top_pixel = img2_image_get_pixel(img, x, y_top);
 		if (top_pixel == NULL) {
 			return NULL;
 		}
 
 		/* Get bottom pixel (foreground color + half-block) */
-		const uint8_t *bottom_pixel = image_get_pixel(img, x, y_top + 1);
+		const uint8_t *bottom_pixel = img2_image_get_pixel(img, x, y_top + 1);
 		if (bottom_pixel == NULL) {
 			return NULL;
 		}
@@ -132,7 +132,7 @@ char *generate_line_ansi(const image_t *img, uint32_t y_top, char *line_buffer)
 /**
  * @brief Generate ANSI escape sequences for entire frame
  */
-char **generate_frame_ansi(const image_t *img, size_t *line_count)
+char **generate_frame_ansi(const img2_image_t *img, size_t *line_count)
 {
 	if (img == NULL || img->pixels == NULL || line_count == NULL) {
 		return NULL;

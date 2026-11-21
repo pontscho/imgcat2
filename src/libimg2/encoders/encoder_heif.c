@@ -97,7 +97,7 @@ static struct heif_error heif_memory_write_func(struct heif_context *ctx, const 
  * @note Caller must free *out_data with free() when done
  * @note Requires HEVC encoder to be available in libheif
  */
-int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_heif");

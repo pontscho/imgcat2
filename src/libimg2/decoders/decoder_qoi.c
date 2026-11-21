@@ -19,7 +19,12 @@
 /* QOI implementation */
 #define QOI_IMPLEMENTATION
 #define QOI_NO_STDIO
+#define qoi_encode img2_qoi_encode /* qoi.h has no QOIDEF: rename its two extern functions */
+#define qoi_decode img2_qoi_decode
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 #include "qoi.h"
+#pragma GCC diagnostic pop
 #include "../core/log.h"
 
 /**
@@ -31,11 +36,11 @@
  * @param data Raw QOI file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note Output format is RGBA8888
  */
-static image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_qoi_static");
@@ -53,8 +58,8 @@ static image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_c
 		return NULL;
 	}
 
-	// Create image_t structure
-	image_t *output = image_create((uint32_t)desc.width, (uint32_t)desc.height);
+	// Create img2_image_t structure
+	img2_image_t *output = img2_image_alloc((uint32_t)desc.width, (uint32_t)desc.height);
 	if (output == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		free(pixels);
@@ -69,10 +74,10 @@ static image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_c
 	free(pixels);
 
 	// Allocate frames array (single frame)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(output);
+		img2_image_destroy(output);
 		return NULL;
 	}
 
@@ -88,9 +93,9 @@ static image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_c
  * @param data Raw QOI file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (always 1 for QOI)
- * @return Array of image_t* pointers, or NULL on error
+ * @return Array of img2_image_t* pointers, or NULL on error
  */
-image_t **decode_qoi(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_qoi(const uint8_t *data, size_t len, int *frame_count)
 {
 	// QOI files are always single images (no animation)
 	return decode_qoi_static(data, len, frame_count);

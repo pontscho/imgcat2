@@ -6,8 +6,8 @@
  * Read-only implementation with zero external dependencies.
  */
 
-#ifndef EXIF_READER_H
-#define EXIF_READER_H
+#ifndef IMG2_INTERNAL_METADATA_EXIF_READER_H
+#define IMG2_INTERNAL_METADATA_EXIF_READER_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -19,7 +19,7 @@
  * Contains comprehensive EXIF data extracted from JPEG files including
  * camera settings, exposure info, GPS coordinates, and lens data.
  */
-typedef struct exif_info_t {
+typedef struct img2_exif {
 	/* Camera make/model */
 	char make[64]; /**< Camera manufacturer (e.g., "Canon") */
 	char model[64]; /**< Camera model (e.g., "EOS 5D Mark IV") */
@@ -86,7 +86,7 @@ typedef struct exif_info_t {
 	bool has_iso;
 	bool has_focal_length;
 	bool has_datetime;
-} exif_info_t;
+} img2_exif_t;
 
 /**
  * @brief XMP metadata information
@@ -94,7 +94,7 @@ typedef struct exif_info_t {
  * Contains XMP (Extensible Metadata Platform) data including
  * Dublin Core, IPTC, and application-specific metadata.
  */
-typedef struct xmp_info_t {
+typedef struct img2_xmp {
 	/* Dublin Core */
 	char creator[256]; /**< Creator/author (dc:creator) */
 	char copyright[512]; /**< Copyright notice (dc:rights) */
@@ -117,21 +117,21 @@ typedef struct xmp_info_t {
 	/* Validity flags */
 	bool has_rating;
 	bool has_keywords;
-} xmp_info_t;
+} img2_xmp_t;
 
 /**
  * @brief Initialize EXIF info structure with defaults
  *
  * @param exif EXIF info structure to initialize
  */
-void exif_info_init(exif_info_t *exif);
+void img2_exif_init(img2_exif_t *exif);
 
 /**
  * @brief Initialize XMP info structure with defaults
  *
  * @param xmp XMP info structure to initialize
  */
-void xmp_info_init(xmp_info_t *xmp);
+void img2_xmp_init(img2_xmp_t *xmp);
 
 /**
  * @brief Parse EXIF metadata from JPEG data
@@ -145,7 +145,7 @@ void xmp_info_init(xmp_info_t *xmp);
  * @param len Length of jpeg_data in bytes
  * @return 0 on success, -1 on error or no EXIF data found
  */
-int parse_exif(exif_info_t *exif, const uint8_t *jpeg_data, size_t len);
+int img2_exif_parse(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len);
 
 /**
  * @brief Parse EXIF metadata from JPEG data (format-specific)
@@ -160,7 +160,7 @@ int parse_exif(exif_info_t *exif, const uint8_t *jpeg_data, size_t len);
  * @param len Length of jpeg_data in bytes
  * @return 0 on success, -1 on error or no EXIF data found
  */
-int parse_exif_from_jpeg(exif_info_t *exif, const uint8_t *jpeg_data, size_t len);
+int img2_exif_parse_jpeg(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len);
 
 /**
  * @brief Parse EXIF metadata from raw TIFF/IFD data
@@ -175,7 +175,7 @@ int parse_exif_from_jpeg(exif_info_t *exif, const uint8_t *jpeg_data, size_t len
  * @param len Length of tiff_data in bytes
  * @return 0 on success, -1 on error or invalid TIFF structure
  */
-int parse_exif_from_tiff(exif_info_t *exif, const uint8_t *tiff_data, size_t len);
+int img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len);
 
 /**
  * @brief Parse XMP metadata from JPEG data
@@ -189,7 +189,7 @@ int parse_exif_from_tiff(exif_info_t *exif, const uint8_t *tiff_data, size_t len
  * @param len Length of jpeg_data in bytes
  * @return 0 on success, -1 on error or no XMP data found
  */
-int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len);
+int img2_xmp_parse(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len);
 
 /**
  * @brief Parse XMP metadata from JPEG data (format-specific)
@@ -204,7 +204,7 @@ int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len);
  * @param len Length of jpeg_data in bytes
  * @return 0 on success, -1 on error or no XMP data found
  */
-int parse_xmp_from_jpeg(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len);
+int img2_xmp_parse_jpeg(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len);
 
 /**
  * @brief Parse XMP metadata from raw XML string
@@ -219,20 +219,20 @@ int parse_xmp_from_jpeg(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len);
  * @param len Length of xml_data in bytes
  * @return 0 on success, -1 on error or invalid XML structure
  */
-int parse_xmp_from_xml(xmp_info_t *xmp, const char *xml_data, size_t len);
+int img2_xmp_parse_xml(img2_xmp_t *xmp, const char *xml_data, size_t len);
 
 /**
  * @brief Free dynamically allocated fields in EXIF info
  *
  * @param exif EXIF info structure to clean up
  */
-void exif_info_free(exif_info_t *exif);
+void img2_exif_clear(img2_exif_t *exif);
 
 /**
  * @brief Free dynamically allocated fields in XMP info
  *
  * @param xmp XMP info structure to clean up
  */
-void xmp_info_free(xmp_info_t *xmp);
+void img2_xmp_clear(img2_xmp_t *xmp);
 
-#endif /* EXIF_READER_H */
+#endif /* IMG2_INTERNAL_METADATA_EXIF_READER_H */

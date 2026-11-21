@@ -38,11 +38,11 @@ static const uint8_t TEST_JPEG[] = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0
 CTEST(convert, png_to_jpeg)
 {
 	/* Initialize registries */
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Decode PNG */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, TEST_PNG, sizeof(TEST_PNG), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -53,7 +53,7 @@ CTEST(convert, png_to_jpeg)
 	/* Encode to JPEG */
 	uint8_t *jpeg_data = NULL;
 	size_t jpeg_size = 0;
-	result = encoder_encode(frames[0], FORMAT_JPEG, 80, &jpeg_data, &jpeg_size);
+	result = img2_encoder_dispatch(frames[0], IMG2_FORMAT_JPEG, 80, &jpeg_data, &jpeg_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jpeg_data);
 	ASSERT_TRUE(jpeg_size > 0);
@@ -64,7 +64,7 @@ CTEST(convert, png_to_jpeg)
 	ASSERT_EQUAL(0xD8, jpeg_data[1]);
 
 	/* Decode JPEG back to verify it's valid */
-	image_t **jpeg_frames = NULL;
+	img2_image_t **jpeg_frames = NULL;
 	int jpeg_frame_count = 0;
 	result = pipeline_decode(NULL, jpeg_data, jpeg_size, &jpeg_frames, &jpeg_frame_count);
 	ASSERT_EQUAL(0, result);
@@ -78,8 +78,8 @@ CTEST(convert, png_to_jpeg)
 
 	/* Cleanup */
 	free(jpeg_data);
-	decoder_free_frames(frames, frame_count);
-	decoder_free_frames(jpeg_frames, jpeg_frame_count);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(jpeg_frames, jpeg_frame_count);
 }
 
 /**
@@ -89,11 +89,11 @@ CTEST(convert, png_to_jpeg)
  */
 CTEST(convert, jpeg_to_png)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Decode JPEG */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, TEST_JPEG, sizeof(TEST_JPEG), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -103,7 +103,7 @@ CTEST(convert, jpeg_to_png)
 	/* Encode to PNG */
 	uint8_t *png_data = NULL;
 	size_t png_size = 0;
-	result = encoder_encode(frames[0], FORMAT_PNG, 6, &png_data, &png_size);
+	result = img2_encoder_dispatch(frames[0], IMG2_FORMAT_PNG, 6, &png_data, &png_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(png_data);
 	ASSERT_TRUE(png_size > 0);
@@ -116,7 +116,7 @@ CTEST(convert, jpeg_to_png)
 	ASSERT_EQUAL(0x47, png_data[3]);
 
 	/* Decode PNG back to verify it's valid */
-	image_t **png_frames = NULL;
+	img2_image_t **png_frames = NULL;
 	int png_frame_count = 0;
 	result = pipeline_decode(NULL, png_data, png_size, &png_frames, &png_frame_count);
 	ASSERT_EQUAL(0, result);
@@ -129,8 +129,8 @@ CTEST(convert, jpeg_to_png)
 
 	/* Cleanup */
 	free(png_data);
-	decoder_free_frames(frames, frame_count);
-	decoder_free_frames(png_frames, png_frame_count);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(png_frames, png_frame_count);
 }
 
 /**
@@ -140,16 +140,16 @@ CTEST(convert, jpeg_to_png)
  */
 CTEST(convert, jpeg_quality_levels)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
-	image_t *img = image_create(10, 10);
+	img2_image_t *img = img2_image_alloc(10, 10);
 	ASSERT_NOT_NULL(img);
 
 	for (uint32_t y = 0; y < 10; y++) {
 		for (uint32_t x = 0; x < 10; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 10);
 			pixel[1] = (y * 255 / 10);
 			pixel[2] = 128;
@@ -160,7 +160,7 @@ CTEST(convert, jpeg_quality_levels)
 	/* Encode with quality 10 */
 	uint8_t *jpeg_q10 = NULL;
 	size_t size_q10 = 0;
-	int result = encoder_encode(img, FORMAT_JPEG, 10, &jpeg_q10, &size_q10);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_JPEG, 10, &jpeg_q10, &size_q10);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jpeg_q10);
 	ASSERT_TRUE(size_q10 > 0);
@@ -168,7 +168,7 @@ CTEST(convert, jpeg_quality_levels)
 	/* Encode with quality 50 */
 	uint8_t *jpeg_q50 = NULL;
 	size_t size_q50 = 0;
-	result = encoder_encode(img, FORMAT_JPEG, 50, &jpeg_q50, &size_q50);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_JPEG, 50, &jpeg_q50, &size_q50);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jpeg_q50);
 	ASSERT_TRUE(size_q50 > 0);
@@ -176,7 +176,7 @@ CTEST(convert, jpeg_quality_levels)
 	/* Encode with quality 90 */
 	uint8_t *jpeg_q90 = NULL;
 	size_t size_q90 = 0;
-	result = encoder_encode(img, FORMAT_JPEG, 90, &jpeg_q90, &size_q90);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_JPEG, 90, &jpeg_q90, &size_q90);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jpeg_q90);
 	ASSERT_TRUE(size_q90 > 0);
@@ -197,7 +197,7 @@ CTEST(convert, jpeg_quality_levels)
 	free(jpeg_q10);
 	free(jpeg_q50);
 	free(jpeg_q90);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -207,16 +207,16 @@ CTEST(convert, jpeg_quality_levels)
  */
 CTEST(convert, png_compression_levels)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
-	image_t *img = image_create(10, 10);
+	img2_image_t *img = img2_image_alloc(10, 10);
 	ASSERT_NOT_NULL(img);
 
 	for (uint32_t y = 0; y < 10; y++) {
 		for (uint32_t x = 0; x < 10; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 10);
 			pixel[1] = (y * 255 / 10);
 			pixel[2] = 128;
@@ -227,7 +227,7 @@ CTEST(convert, png_compression_levels)
 	/* Encode with compression 0 (no compression) */
 	uint8_t *png_c0 = NULL;
 	size_t size_c0 = 0;
-	int result = encoder_encode(img, FORMAT_PNG, 0, &png_c0, &size_c0);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_PNG, 0, &png_c0, &size_c0);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(png_c0);
 	ASSERT_TRUE(size_c0 > 0);
@@ -235,7 +235,7 @@ CTEST(convert, png_compression_levels)
 	/* Encode with compression 6 (default) */
 	uint8_t *png_c6 = NULL;
 	size_t size_c6 = 0;
-	result = encoder_encode(img, FORMAT_PNG, 6, &png_c6, &size_c6);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_PNG, 6, &png_c6, &size_c6);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(png_c6);
 	ASSERT_TRUE(size_c6 > 0);
@@ -243,7 +243,7 @@ CTEST(convert, png_compression_levels)
 	/* Encode with compression 9 (maximum) */
 	uint8_t *png_c9 = NULL;
 	size_t size_c9 = 0;
-	result = encoder_encode(img, FORMAT_PNG, 9, &png_c9, &size_c9);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_PNG, 9, &png_c9, &size_c9);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(png_c9);
 	ASSERT_TRUE(size_c9 > 0);
@@ -264,7 +264,7 @@ CTEST(convert, png_compression_levels)
 	free(png_c0);
 	free(png_c6);
 	free(png_c9);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -275,11 +275,11 @@ CTEST(convert, png_compression_levels)
  */
 CTEST(convert, round_trip)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Start with PNG */
-	image_t **frames1 = NULL;
+	img2_image_t **frames1 = NULL;
 	int frame_count1 = 0;
 	int result = pipeline_decode(NULL, TEST_PNG, sizeof(TEST_PNG), &frames1, &frame_count1);
 	ASSERT_EQUAL(0, result);
@@ -289,12 +289,12 @@ CTEST(convert, round_trip)
 	/* Encode to JPEG */
 	uint8_t *jpeg_data = NULL;
 	size_t jpeg_size = 0;
-	result = encoder_encode(frames1[0], FORMAT_JPEG, 80, &jpeg_data, &jpeg_size);
+	result = img2_encoder_dispatch(frames1[0], IMG2_FORMAT_JPEG, 80, &jpeg_data, &jpeg_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jpeg_data);
 
 	/* Decode JPEG */
-	image_t **frames2 = NULL;
+	img2_image_t **frames2 = NULL;
 	int frame_count2 = 0;
 	result = pipeline_decode(NULL, jpeg_data, jpeg_size, &frames2, &frame_count2);
 	ASSERT_EQUAL(0, result);
@@ -304,12 +304,12 @@ CTEST(convert, round_trip)
 	/* Encode to PNG */
 	uint8_t *png_data = NULL;
 	size_t png_size = 0;
-	result = encoder_encode(frames2[0], FORMAT_PNG, 6, &png_data, &png_size);
+	result = img2_encoder_dispatch(frames2[0], IMG2_FORMAT_PNG, 6, &png_data, &png_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(png_data);
 
 	/* Decode PNG again */
-	image_t **frames3 = NULL;
+	img2_image_t **frames3 = NULL;
 	int frame_count3 = 0;
 	result = pipeline_decode(NULL, png_data, png_size, &frames3, &frame_count3);
 	ASSERT_EQUAL(0, result);
@@ -325,9 +325,9 @@ CTEST(convert, round_trip)
 	/* Cleanup */
 	free(jpeg_data);
 	free(png_data);
-	decoder_free_frames(frames1, frame_count1);
-	decoder_free_frames(frames2, frame_count2);
-	decoder_free_frames(frames3, frame_count3);
+	img2_decoder_free_frames(frames1, frame_count1);
+	img2_decoder_free_frames(frames2, frame_count2);
+	img2_decoder_free_frames(frames3, frame_count3);
 }
 
 /**
@@ -337,16 +337,16 @@ CTEST(convert, round_trip)
  */
 CTEST(convert, png_transparency)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create image with varying alpha */
-	image_t *img = image_create(10, 10);
+	img2_image_t *img = img2_image_alloc(10, 10);
 	ASSERT_NOT_NULL(img);
 
 	for (uint32_t y = 0; y < 10; y++) {
 		for (uint32_t x = 0; x < 10; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = 255;
 			pixel[1] = 0;
 			pixel[2] = 0;
@@ -357,13 +357,13 @@ CTEST(convert, png_transparency)
 	/* Encode to PNG */
 	uint8_t *png_data = NULL;
 	size_t png_size = 0;
-	int result = encoder_encode(img, FORMAT_PNG, 6, &png_data, &png_size);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_PNG, 6, &png_data, &png_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(png_data);
 	ASSERT_TRUE(png_size > 0);
 
 	/* Decode PNG back */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	result = pipeline_decode(NULL, png_data, png_size, &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -376,8 +376,8 @@ CTEST(convert, png_transparency)
 
 	/* Cleanup */
 	free(png_data);
-	image_destroy(img);
-	decoder_free_frames(frames, frame_count);
+	img2_image_destroy(img);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -389,17 +389,17 @@ CTEST(convert, png_transparency)
  */
 CTEST(convert, dimensions_preserved_no_resize)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create a 200x150 test image */
-	image_t *img = image_create(200, 150);
+	img2_image_t *img = img2_image_alloc(200, 150);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with test data */
 	for (uint32_t y = 0; y < 150; y++) {
 		for (uint32_t x = 0; x < 200; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 200);
 			pixel[1] = (y * 255 / 150);
 			pixel[2] = 128;
@@ -410,12 +410,12 @@ CTEST(convert, dimensions_preserved_no_resize)
 	/* Encode to PNG */
 	uint8_t *png_data = NULL;
 	size_t png_size = 0;
-	int result = encoder_encode(img, FORMAT_PNG, 6, &png_data, &png_size);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_PNG, 6, &png_data, &png_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(png_data);
 
 	/* Decode back and verify original dimensions preserved */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	result = pipeline_decode(NULL, png_data, png_size, &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -427,8 +427,8 @@ CTEST(convert, dimensions_preserved_no_resize)
 
 	/* Cleanup */
 	free(png_data);
-	image_destroy(img);
-	decoder_free_frames(frames, frame_count);
+	img2_image_destroy(img);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
@@ -441,11 +441,11 @@ CTEST(convert, dimensions_preserved_no_resize)
  */
 CTEST(convert, dimensions_preserved_large_image)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create a 3000x2000 test image - much larger than any terminal */
-	image_t *img = image_create(3000, 2000);
+	img2_image_t *img = img2_image_alloc(3000, 2000);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill minimal test data */
@@ -454,12 +454,12 @@ CTEST(convert, dimensions_preserved_large_image)
 	/* Simulate convert mode: encode directly without pipeline_scale */
 	uint8_t *png_data = NULL;
 	size_t png_size = 0;
-	int result = encoder_encode(img, FORMAT_PNG, 1, &png_data, &png_size);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_PNG, 1, &png_data, &png_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(png_data);
 
 	/* Decode back and verify dimensions are preserved */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	result = pipeline_decode(NULL, png_data, png_size, &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -480,8 +480,8 @@ CTEST(convert, dimensions_preserved_large_image)
 	opts.target_width = -1;
 	opts.target_height = -1;
 
-	image_t **scaled = NULL;
-	image_t **scale_input = malloc(sizeof(image_t *));
+	img2_image_t **scaled = NULL;
+	img2_image_t **scale_input = malloc(sizeof(img2_image_t *));
 	ASSERT_NOT_NULL(scale_input);
 	scale_input[0] = frames[0];
 
@@ -493,12 +493,12 @@ CTEST(convert, dimensions_preserved_large_image)
 	ASSERT_TRUE(scaled[0]->width < 3000 || scaled[0]->height < 2000);
 
 	/* Cleanup */
-	image_destroy(scaled[0]);
+	img2_image_destroy(scaled[0]);
 	free(scaled);
 	free(scale_input);
 	free(png_data);
-	decoder_free_frames(frames, frame_count);
-	image_destroy(img);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_image_destroy(img);
 }
 
 /**
@@ -509,11 +509,11 @@ CTEST(convert, dimensions_preserved_large_image)
  */
 CTEST(convert, dimensions_preserved_ansi_fallback)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create a 2000x1500 image */
-	image_t *img = image_create(2000, 1500);
+	img2_image_t *img = img2_image_alloc(2000, 1500);
 	ASSERT_NOT_NULL(img);
 	memset(img->pixels, 64, (size_t)img->width * img->height * 4);
 
@@ -528,11 +528,11 @@ CTEST(convert, dimensions_preserved_ansi_fallback)
 	opts.target_width = -1;
 	opts.target_height = -1;
 
-	image_t **scale_input = malloc(sizeof(image_t *));
+	img2_image_t **scale_input = malloc(sizeof(img2_image_t *));
 	ASSERT_NOT_NULL(scale_input);
 	scale_input[0] = img;
 
-	image_t **scaled = NULL;
+	img2_image_t **scaled = NULL;
 	int result = pipeline_scale(scale_input, 1, &opts, &scaled);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(scaled);
@@ -544,10 +544,10 @@ CTEST(convert, dimensions_preserved_ansi_fallback)
 	/* But encode from original must preserve dimensions */
 	uint8_t *jpeg_data = NULL;
 	size_t jpeg_size = 0;
-	result = encoder_encode(img, FORMAT_JPEG, 80, &jpeg_data, &jpeg_size);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_JPEG, 80, &jpeg_data, &jpeg_size);
 	ASSERT_EQUAL(0, result);
 
-	image_t **decoded = NULL;
+	img2_image_t **decoded = NULL;
 	int dec_count = 0;
 	result = pipeline_decode(NULL, jpeg_data, jpeg_size, &decoded, &dec_count);
 	ASSERT_EQUAL(0, result);
@@ -555,12 +555,12 @@ CTEST(convert, dimensions_preserved_ansi_fallback)
 	ASSERT_EQUAL(1500, decoded[0]->height);
 
 	/* Cleanup */
-	image_destroy(scaled[0]);
+	img2_image_destroy(scaled[0]);
 	free(scaled);
 	free(scale_input);
 	free(jpeg_data);
-	decoder_free_frames(decoded, dec_count);
-	image_destroy(img);
+	img2_decoder_free_frames(decoded, dec_count);
+	img2_image_destroy(img);
 }
 
 /**
@@ -571,11 +571,11 @@ CTEST(convert, dimensions_preserved_ansi_fallback)
  */
 CTEST(convert, convert_with_custom_width)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create 800x600 image */
-	image_t *img = image_create(800, 600);
+	img2_image_t *img = img2_image_alloc(800, 600);
 	ASSERT_NOT_NULL(img);
 	memset(img->pixels, 200, (size_t)img->width * img->height * 4);
 
@@ -589,11 +589,11 @@ CTEST(convert, convert_with_custom_width)
 	opts.terminal.width = 1920;
 	opts.terminal.height = 1080;
 
-	image_t **input = malloc(sizeof(image_t *));
+	img2_image_t **input = malloc(sizeof(img2_image_t *));
 	ASSERT_NOT_NULL(input);
 	input[0] = img;
 
-	image_t **scaled = NULL;
+	img2_image_t **scaled = NULL;
 	int result = pipeline_scale(input, 1, &opts, &scaled);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(scaled);
@@ -603,10 +603,10 @@ CTEST(convert, convert_with_custom_width)
 	ASSERT_EQUAL(300, scaled[0]->height);
 
 	/* Cleanup */
-	image_destroy(scaled[0]);
+	img2_image_destroy(scaled[0]);
 	free(scaled);
 	free(input);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -617,11 +617,11 @@ CTEST(convert, convert_with_custom_width)
  */
 CTEST(convert, convert_with_custom_height)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create 800x600 image */
-	image_t *img = image_create(800, 600);
+	img2_image_t *img = img2_image_alloc(800, 600);
 	ASSERT_NOT_NULL(img);
 	memset(img->pixels, 200, (size_t)img->width * img->height * 4);
 
@@ -635,11 +635,11 @@ CTEST(convert, convert_with_custom_height)
 	opts.terminal.width = 1920;
 	opts.terminal.height = 1080;
 
-	image_t **input = malloc(sizeof(image_t *));
+	img2_image_t **input = malloc(sizeof(img2_image_t *));
 	ASSERT_NOT_NULL(input);
 	input[0] = img;
 
-	image_t **scaled = NULL;
+	img2_image_t **scaled = NULL;
 	int result = pipeline_scale(input, 1, &opts, &scaled);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(scaled);
@@ -649,10 +649,10 @@ CTEST(convert, convert_with_custom_height)
 	ASSERT_EQUAL(300, scaled[0]->height);
 
 	/* Cleanup */
-	image_destroy(scaled[0]);
+	img2_image_destroy(scaled[0]);
 	free(scaled);
 	free(input);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -663,11 +663,11 @@ CTEST(convert, convert_with_custom_height)
  */
 CTEST(convert, convert_with_custom_both)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create 800x600 image */
-	image_t *img = image_create(800, 600);
+	img2_image_t *img = img2_image_alloc(800, 600);
 	ASSERT_NOT_NULL(img);
 	memset(img->pixels, 200, (size_t)img->width * img->height * 4);
 
@@ -681,11 +681,11 @@ CTEST(convert, convert_with_custom_both)
 	opts.terminal.width = 1920;
 	opts.terminal.height = 1080;
 
-	image_t **input = malloc(sizeof(image_t *));
+	img2_image_t **input = malloc(sizeof(img2_image_t *));
 	ASSERT_NOT_NULL(input);
 	input[0] = img;
 
-	image_t **scaled = NULL;
+	img2_image_t **scaled = NULL;
 	int result = pipeline_scale(input, 1, &opts, &scaled);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(scaled);
@@ -695,13 +695,13 @@ CTEST(convert, convert_with_custom_both)
 	ASSERT_EQUAL(400, scaled[0]->height);
 
 	/* Cleanup */
-	image_destroy(scaled[0]);
+	img2_image_destroy(scaled[0]);
 	free(scaled);
 	free(input);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
-#ifdef HAVE_HEIF
+#ifdef IMG2_HAVE_HEIF
 /**
  * @test Test PNG to HEIF conversion
  *
@@ -709,11 +709,11 @@ CTEST(convert, convert_with_custom_both)
  */
 CTEST(convert, png_to_heif)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Decode PNG */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, TEST_PNG, sizeof(TEST_PNG), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -724,7 +724,7 @@ CTEST(convert, png_to_heif)
 	/* Encode to HEIF */
 	uint8_t *heif_data = NULL;
 	size_t heif_size = 0;
-	result = encoder_encode(frames[0], FORMAT_HEIF, 80, &heif_data, &heif_size);
+	result = img2_encoder_dispatch(frames[0], IMG2_FORMAT_HEIF, 80, &heif_data, &heif_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(heif_data);
 	ASSERT_TRUE(heif_size > 0);
@@ -737,7 +737,7 @@ CTEST(convert, png_to_heif)
 	ASSERT_EQUAL('p', heif_data[7]);
 
 	/* Decode HEIF back to verify it's valid */
-	image_t **heif_frames = NULL;
+	img2_image_t **heif_frames = NULL;
 	int heif_frame_count = 0;
 	result = pipeline_decode(NULL, heif_data, heif_size, &heif_frames, &heif_frame_count);
 	ASSERT_EQUAL(0, result);
@@ -751,12 +751,12 @@ CTEST(convert, png_to_heif)
 
 	/* Cleanup */
 	free(heif_data);
-	decoder_free_frames(frames, frame_count);
-	decoder_free_frames(heif_frames, heif_frame_count);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(heif_frames, heif_frame_count);
 }
 #endif
 
-#ifdef HAVE_WEBP
+#ifdef IMG2_HAVE_WEBP
 /**
  * @test Test PNG to WebP conversion
  *
@@ -764,11 +764,11 @@ CTEST(convert, png_to_heif)
  */
 CTEST(convert, png_to_webp)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Decode PNG */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, TEST_PNG, sizeof(TEST_PNG), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -779,7 +779,7 @@ CTEST(convert, png_to_webp)
 	/* Encode to WebP */
 	uint8_t *webp_data = NULL;
 	size_t webp_size = 0;
-	result = encoder_encode(frames[0], FORMAT_WEBP, 80, &webp_data, &webp_size);
+	result = img2_encoder_dispatch(frames[0], IMG2_FORMAT_WEBP, 80, &webp_data, &webp_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(webp_data);
 	ASSERT_TRUE(webp_size > 0);
@@ -796,7 +796,7 @@ CTEST(convert, png_to_webp)
 	ASSERT_EQUAL('P', webp_data[11]);
 
 	/* Decode WebP back to verify it's valid */
-	image_t **webp_frames = NULL;
+	img2_image_t **webp_frames = NULL;
 	int webp_frame_count = 0;
 	result = pipeline_decode(NULL, webp_data, webp_size, &webp_frames, &webp_frame_count);
 	ASSERT_EQUAL(0, result);
@@ -810,12 +810,12 @@ CTEST(convert, png_to_webp)
 
 	/* Cleanup */
 	free(webp_data);
-	decoder_free_frames(frames, frame_count);
-	decoder_free_frames(webp_frames, webp_frame_count);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(webp_frames, webp_frame_count);
 }
 #endif
 
-#ifdef HAVE_JXL
+#ifdef IMG2_HAVE_JXL
 /**
  * @test Test PNG to JXL conversion
  *
@@ -823,11 +823,11 @@ CTEST(convert, png_to_webp)
  */
 CTEST(convert, png_to_jxl)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Decode PNG */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, TEST_PNG, sizeof(TEST_PNG), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -838,7 +838,7 @@ CTEST(convert, png_to_jxl)
 	/* Encode to JXL */
 	uint8_t *jxl_data = NULL;
 	size_t jxl_size = 0;
-	result = encoder_encode(frames[0], FORMAT_JXL, 80, &jxl_data, &jxl_size);
+	result = img2_encoder_dispatch(frames[0], IMG2_FORMAT_JXL, 80, &jxl_data, &jxl_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jxl_data);
 	ASSERT_TRUE(jxl_size > 0);
@@ -854,7 +854,7 @@ CTEST(convert, png_to_jxl)
 	ASSERT_TRUE(valid_jxl);
 
 	/* Decode JXL back to verify it's valid */
-	image_t **jxl_frames = NULL;
+	img2_image_t **jxl_frames = NULL;
 	int jxl_frame_count = 0;
 	result = pipeline_decode(NULL, jxl_data, jxl_size, &jxl_frames, &jxl_frame_count);
 	ASSERT_EQUAL(0, result);
@@ -868,12 +868,12 @@ CTEST(convert, png_to_jxl)
 
 	/* Cleanup */
 	free(jxl_data);
-	decoder_free_frames(frames, frame_count);
-	decoder_free_frames(jxl_frames, jxl_frame_count);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(jxl_frames, jxl_frame_count);
 }
 #endif
 
-#ifdef HAVE_HEIF
+#ifdef IMG2_HAVE_HEIF
 /**
  * @test Test JPEG to HEIF conversion
  *
@@ -881,11 +881,11 @@ CTEST(convert, png_to_jxl)
  */
 CTEST(convert, jpeg_to_heif)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Decode JPEG */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, TEST_JPEG, sizeof(TEST_JPEG), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -896,7 +896,7 @@ CTEST(convert, jpeg_to_heif)
 	/* Encode to HEIF */
 	uint8_t *heif_data = NULL;
 	size_t heif_size = 0;
-	result = encoder_encode(frames[0], FORMAT_HEIF, 80, &heif_data, &heif_size);
+	result = img2_encoder_dispatch(frames[0], IMG2_FORMAT_HEIF, 80, &heif_data, &heif_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(heif_data);
 	ASSERT_TRUE(heif_size > 0);
@@ -909,7 +909,7 @@ CTEST(convert, jpeg_to_heif)
 	ASSERT_EQUAL('p', heif_data[7]);
 
 	/* Decode HEIF back to verify it's valid */
-	image_t **heif_frames = NULL;
+	img2_image_t **heif_frames = NULL;
 	int heif_frame_count = 0;
 	result = pipeline_decode(NULL, heif_data, heif_size, &heif_frames, &heif_frame_count);
 	ASSERT_EQUAL(0, result);
@@ -923,12 +923,12 @@ CTEST(convert, jpeg_to_heif)
 
 	/* Cleanup */
 	free(heif_data);
-	decoder_free_frames(frames, frame_count);
-	decoder_free_frames(heif_frames, heif_frame_count);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(heif_frames, heif_frame_count);
 }
 #endif
 
-#ifdef HAVE_WEBP
+#ifdef IMG2_HAVE_WEBP
 /**
  * @test Test JPEG to WebP conversion
  *
@@ -936,11 +936,11 @@ CTEST(convert, jpeg_to_heif)
  */
 CTEST(convert, jpeg_to_webp)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Decode JPEG */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, TEST_JPEG, sizeof(TEST_JPEG), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -951,7 +951,7 @@ CTEST(convert, jpeg_to_webp)
 	/* Encode to WebP */
 	uint8_t *webp_data = NULL;
 	size_t webp_size = 0;
-	result = encoder_encode(frames[0], FORMAT_WEBP, 80, &webp_data, &webp_size);
+	result = img2_encoder_dispatch(frames[0], IMG2_FORMAT_WEBP, 80, &webp_data, &webp_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(webp_data);
 	ASSERT_TRUE(webp_size > 0);
@@ -968,7 +968,7 @@ CTEST(convert, jpeg_to_webp)
 	ASSERT_EQUAL('P', webp_data[11]);
 
 	/* Decode WebP back to verify it's valid */
-	image_t **webp_frames = NULL;
+	img2_image_t **webp_frames = NULL;
 	int webp_frame_count = 0;
 	result = pipeline_decode(NULL, webp_data, webp_size, &webp_frames, &webp_frame_count);
 	ASSERT_EQUAL(0, result);
@@ -982,12 +982,12 @@ CTEST(convert, jpeg_to_webp)
 
 	/* Cleanup */
 	free(webp_data);
-	decoder_free_frames(frames, frame_count);
-	decoder_free_frames(webp_frames, webp_frame_count);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(webp_frames, webp_frame_count);
 }
 #endif
 
-#ifdef HAVE_JXL
+#ifdef IMG2_HAVE_JXL
 /**
  * @test Test JPEG to JXL conversion
  *
@@ -995,11 +995,11 @@ CTEST(convert, jpeg_to_webp)
  */
 CTEST(convert, jpeg_to_jxl)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Decode JPEG */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, TEST_JPEG, sizeof(TEST_JPEG), &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -1010,7 +1010,7 @@ CTEST(convert, jpeg_to_jxl)
 	/* Encode to JXL */
 	uint8_t *jxl_data = NULL;
 	size_t jxl_size = 0;
-	result = encoder_encode(frames[0], FORMAT_JXL, 80, &jxl_data, &jxl_size);
+	result = img2_encoder_dispatch(frames[0], IMG2_FORMAT_JXL, 80, &jxl_data, &jxl_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jxl_data);
 	ASSERT_TRUE(jxl_size > 0);
@@ -1026,7 +1026,7 @@ CTEST(convert, jpeg_to_jxl)
 	ASSERT_TRUE(valid_jxl);
 
 	/* Decode JXL back to verify it's valid */
-	image_t **jxl_frames = NULL;
+	img2_image_t **jxl_frames = NULL;
 	int jxl_frame_count = 0;
 	result = pipeline_decode(NULL, jxl_data, jxl_size, &jxl_frames, &jxl_frame_count);
 	ASSERT_EQUAL(0, result);
@@ -1040,12 +1040,12 @@ CTEST(convert, jpeg_to_jxl)
 
 	/* Cleanup */
 	free(jxl_data);
-	decoder_free_frames(frames, frame_count);
-	decoder_free_frames(jxl_frames, jxl_frame_count);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(jxl_frames, jxl_frame_count);
 }
 #endif
 
-#ifdef HAVE_HEIF
+#ifdef IMG2_HAVE_HEIF
 /**
  * @test Test HEIF quality levels
  *
@@ -1053,16 +1053,16 @@ CTEST(convert, jpeg_to_jxl)
  */
 CTEST(convert, heif_quality_levels)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
-	image_t *img = image_create(10, 10);
+	img2_image_t *img = img2_image_alloc(10, 10);
 	ASSERT_NOT_NULL(img);
 
 	for (uint32_t y = 0; y < 10; y++) {
 		for (uint32_t x = 0; x < 10; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 10);
 			pixel[1] = (y * 255 / 10);
 			pixel[2] = 128;
@@ -1073,7 +1073,7 @@ CTEST(convert, heif_quality_levels)
 	/* Encode with quality 10 */
 	uint8_t *heif_q10 = NULL;
 	size_t size_q10 = 0;
-	int result = encoder_encode(img, FORMAT_HEIF, 10, &heif_q10, &size_q10);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_HEIF, 10, &heif_q10, &size_q10);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(heif_q10);
 	ASSERT_TRUE(size_q10 > 0);
@@ -1081,7 +1081,7 @@ CTEST(convert, heif_quality_levels)
 	/* Encode with quality 50 */
 	uint8_t *heif_q50 = NULL;
 	size_t size_q50 = 0;
-	result = encoder_encode(img, FORMAT_HEIF, 50, &heif_q50, &size_q50);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_HEIF, 50, &heif_q50, &size_q50);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(heif_q50);
 	ASSERT_TRUE(size_q50 > 0);
@@ -1089,7 +1089,7 @@ CTEST(convert, heif_quality_levels)
 	/* Encode with quality 90 */
 	uint8_t *heif_q90 = NULL;
 	size_t size_q90 = 0;
-	result = encoder_encode(img, FORMAT_HEIF, 90, &heif_q90, &size_q90);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_HEIF, 90, &heif_q90, &size_q90);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(heif_q90);
 	ASSERT_TRUE(size_q90 > 0);
@@ -1110,11 +1110,11 @@ CTEST(convert, heif_quality_levels)
 	free(heif_q10);
 	free(heif_q50);
 	free(heif_q90);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 #endif
 
-#ifdef HAVE_WEBP
+#ifdef IMG2_HAVE_WEBP
 /**
  * @test Test WebP quality levels
  *
@@ -1123,16 +1123,16 @@ CTEST(convert, heif_quality_levels)
  */
 CTEST(convert, webp_quality_levels)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
-	image_t *img = image_create(10, 10);
+	img2_image_t *img = img2_image_alloc(10, 10);
 	ASSERT_NOT_NULL(img);
 
 	for (uint32_t y = 0; y < 10; y++) {
 		for (uint32_t x = 0; x < 10; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 10);
 			pixel[1] = (y * 255 / 10);
 			pixel[2] = 128;
@@ -1143,7 +1143,7 @@ CTEST(convert, webp_quality_levels)
 	/* Encode with quality 10 */
 	uint8_t *webp_q10 = NULL;
 	size_t size_q10 = 0;
-	int result = encoder_encode(img, FORMAT_WEBP, 10, &webp_q10, &size_q10);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_WEBP, 10, &webp_q10, &size_q10);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(webp_q10);
 	ASSERT_TRUE(size_q10 > 0);
@@ -1151,7 +1151,7 @@ CTEST(convert, webp_quality_levels)
 	/* Encode with quality 50 */
 	uint8_t *webp_q50 = NULL;
 	size_t size_q50 = 0;
-	result = encoder_encode(img, FORMAT_WEBP, 50, &webp_q50, &size_q50);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_WEBP, 50, &webp_q50, &size_q50);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(webp_q50);
 	ASSERT_TRUE(size_q50 > 0);
@@ -1159,7 +1159,7 @@ CTEST(convert, webp_quality_levels)
 	/* Encode with quality 90 */
 	uint8_t *webp_q90 = NULL;
 	size_t size_q90 = 0;
-	result = encoder_encode(img, FORMAT_WEBP, 90, &webp_q90, &size_q90);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_WEBP, 90, &webp_q90, &size_q90);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(webp_q90);
 	ASSERT_TRUE(size_q90 > 0);
@@ -1167,7 +1167,7 @@ CTEST(convert, webp_quality_levels)
 	/* Encode with quality 100 (lossless) */
 	uint8_t *webp_q100 = NULL;
 	size_t size_q100 = 0;
-	result = encoder_encode(img, FORMAT_WEBP, 100, &webp_q100, &size_q100);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_WEBP, 100, &webp_q100, &size_q100);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(webp_q100);
 	ASSERT_TRUE(size_q100 > 0);
@@ -1191,11 +1191,11 @@ CTEST(convert, webp_quality_levels)
 	free(webp_q50);
 	free(webp_q90);
 	free(webp_q100);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 #endif
 
-#ifdef HAVE_JXL
+#ifdef IMG2_HAVE_JXL
 /**
  * @test Test JXL quality levels
  *
@@ -1203,16 +1203,16 @@ CTEST(convert, webp_quality_levels)
  */
 CTEST(convert, jxl_quality_levels)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
-	image_t *img = image_create(10, 10);
+	img2_image_t *img = img2_image_alloc(10, 10);
 	ASSERT_NOT_NULL(img);
 
 	for (uint32_t y = 0; y < 10; y++) {
 		for (uint32_t x = 0; x < 10; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 10);
 			pixel[1] = (y * 255 / 10);
 			pixel[2] = 128;
@@ -1223,7 +1223,7 @@ CTEST(convert, jxl_quality_levels)
 	/* Encode with quality 10 */
 	uint8_t *jxl_q10 = NULL;
 	size_t size_q10 = 0;
-	int result = encoder_encode(img, FORMAT_JXL, 10, &jxl_q10, &size_q10);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_JXL, 10, &jxl_q10, &size_q10);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jxl_q10);
 	ASSERT_TRUE(size_q10 > 0);
@@ -1231,7 +1231,7 @@ CTEST(convert, jxl_quality_levels)
 	/* Encode with quality 50 */
 	uint8_t *jxl_q50 = NULL;
 	size_t size_q50 = 0;
-	result = encoder_encode(img, FORMAT_JXL, 50, &jxl_q50, &size_q50);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_JXL, 50, &jxl_q50, &size_q50);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jxl_q50);
 	ASSERT_TRUE(size_q50 > 0);
@@ -1239,7 +1239,7 @@ CTEST(convert, jxl_quality_levels)
 	/* Encode with quality 90 */
 	uint8_t *jxl_q90 = NULL;
 	size_t size_q90 = 0;
-	result = encoder_encode(img, FORMAT_JXL, 90, &jxl_q90, &size_q90);
+	result = img2_encoder_dispatch(img, IMG2_FORMAT_JXL, 90, &jxl_q90, &size_q90);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(jxl_q90);
 	ASSERT_TRUE(size_q90 > 0);
@@ -1260,7 +1260,7 @@ CTEST(convert, jxl_quality_levels)
 	free(jxl_q10);
 	free(jxl_q50);
 	free(jxl_q90);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -1273,19 +1273,19 @@ CTEST(convert, jxl_quality_levels)
  */
 CTEST(convert, jxl_lossless_roundtrip)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	uint32_t sizes[] = { 32, 256 };
 	for (size_t s = 0; s < sizeof(sizes) / sizeof(sizes[0]); s++) {
 		/* Create test image (pseudo-random noise, varying alpha) */
-		image_t *img = image_create(sizes[s], sizes[s]);
+		img2_image_t *img = img2_image_alloc(sizes[s], sizes[s]);
 		ASSERT_NOT_NULL(img);
 
 		uint32_t seed = 12345;
 		for (uint32_t y = 0; y < sizes[s]; y++) {
 			for (uint32_t x = 0; x < sizes[s]; x++) {
-				uint8_t *pixel = image_get_pixel(img, x, y);
+				uint8_t *pixel = img2_image_get_pixel(img, x, y);
 				for (int c = 0; c < 4; c++) {
 					seed = seed * 1103515245u + 12345u;
 					pixel[c] = (uint8_t)(seed >> 16);
@@ -1297,14 +1297,14 @@ CTEST(convert, jxl_lossless_roundtrip)
 		for (size_t q = 0; q < sizeof(qualities) / sizeof(qualities[0]); q++) {
 			uint8_t *jxl_data = NULL;
 			size_t jxl_size = 0;
-			int result = encoder_encode(img, FORMAT_JXL, qualities[q], &jxl_data, &jxl_size);
+			int result = img2_encoder_dispatch(img, IMG2_FORMAT_JXL, qualities[q], &jxl_data, &jxl_size);
 			ASSERT_EQUAL(0, result);
 			ASSERT_NOT_NULL(jxl_data);
 			if (sizes[s] == 256) {
 				ASSERT_TRUE(jxl_size > 128 * 1024);
 			}
 
-			image_t **frames = NULL;
+			img2_image_t **frames = NULL;
 			int frame_count = 0;
 			result = pipeline_decode(NULL, jxl_data, jxl_size, &frames, &frame_count);
 			ASSERT_EQUAL(0, result);
@@ -1314,15 +1314,15 @@ CTEST(convert, jxl_lossless_roundtrip)
 			ASSERT_EQUAL(0, memcmp(img->pixels, frames[0]->pixels, (size_t)img->width * img->height * 4));
 
 			free(jxl_data);
-			decoder_free_frames(frames, frame_count);
+			img2_decoder_free_frames(frames, frame_count);
 		}
 
-		image_destroy(img);
+		img2_image_destroy(img);
 	}
 }
 #endif
 
-#ifdef HAVE_WEBP
+#ifdef IMG2_HAVE_WEBP
 /**
  * @test Test WebP lossless round-trip
  *
@@ -1331,16 +1331,16 @@ CTEST(convert, jxl_lossless_roundtrip)
  */
 CTEST(convert, webp_lossless_roundtrip)
 {
-	decoder_registry_init();
-	encoder_registry_init();
+	img2_decoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create test image (32x32, noisy opaque pattern) */
-	image_t *img = image_create(32, 32);
+	img2_image_t *img = img2_image_alloc(32, 32);
 	ASSERT_NOT_NULL(img);
 
 	for (uint32_t y = 0; y < 32; y++) {
 		for (uint32_t x = 0; x < 32; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (uint8_t)((x * 37 + y * 11) & 0xFF);
 			pixel[1] = (uint8_t)((x * 5 + y * 71) & 0xFF);
 			pixel[2] = (uint8_t)((x * y * 13) & 0xFF);
@@ -1350,11 +1350,11 @@ CTEST(convert, webp_lossless_roundtrip)
 
 	uint8_t *webp_data = NULL;
 	size_t webp_size = 0;
-	int result = encoder_encode(img, FORMAT_WEBP, 100, &webp_data, &webp_size);
+	int result = img2_encoder_dispatch(img, IMG2_FORMAT_WEBP, 100, &webp_data, &webp_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(webp_data);
 
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	result = pipeline_decode(NULL, webp_data, webp_size, &frames, &frame_count);
 	ASSERT_EQUAL(0, result);
@@ -1364,7 +1364,7 @@ CTEST(convert, webp_lossless_roundtrip)
 	ASSERT_EQUAL(0, memcmp(img->pixels, frames[0]->pixels, (size_t)img->width * img->height * 4));
 
 	free(webp_data);
-	decoder_free_frames(frames, frame_count);
-	image_destroy(img);
+	img2_decoder_free_frames(frames, frame_count);
+	img2_image_destroy(img);
 }
 #endif

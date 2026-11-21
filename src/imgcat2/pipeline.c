@@ -25,7 +25,7 @@
 #include "../libimg2/core/image.h"
 #include "pipeline.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../libimg2/metadata/exif_reader.h"
 #endif
 
@@ -122,7 +122,7 @@ static bool validate_path_safe(const char *path, char *canonical_out)
  *
  * Securely reads a file into memory with:
  * - Path traversal protection (realpath/GetFullPathName)
- * - File size validation (≤ IMAGE_MAX_FILE_SIZE)
+ * - File size validation (≤ IMG2_MAX_FILE_SIZE)
  * - Safe memory allocation
  *
  * @param path File path to read
@@ -168,8 +168,8 @@ bool read_file_secure(const char *path, uint8_t **out_data, size_t *out_size)
 		return false;
 	}
 
-	if ((size_t)st.st_size > IMAGE_MAX_FILE_SIZE) {
-		fprintf(stderr, "Error: File too large (%lld bytes, max %lu bytes): %s\n", (long long)st.st_size, (unsigned long)IMAGE_MAX_FILE_SIZE, canonical_path);
+	if ((size_t)st.st_size > IMG2_MAX_FILE_SIZE) {
+		fprintf(stderr, "Error: File too large (%lld bytes, max %lu bytes): %s\n", (long long)st.st_size, (unsigned long)IMG2_MAX_FILE_SIZE, canonical_path);
 		return false;
 	}
 
@@ -211,7 +211,7 @@ bool read_file_secure(const char *path, uint8_t **out_data, size_t *out_size)
  * Reads stdin into dynamically allocated buffer with:
  * - Chunk-based reading (4KB chunks)
  * - Dynamic buffer growth (realloc strategy)
- * - Size limit enforcement (≤ IMAGE_MAX_FILE_SIZE)
+ * - Size limit enforcement (≤ IMG2_MAX_FILE_SIZE)
  * - Graceful EOF handling
  *
  * @param out_data Output parameter for stdin data (caller must free)
@@ -253,8 +253,8 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 	// Read in chunks until EOF or size limit
 	while (1) {
 		// Check size limit before reading
-		if (total_size >= IMAGE_MAX_FILE_SIZE) {
-			fprintf(stderr, "Error: stdin input exceeds maximum size (%lu bytes)\n", (unsigned long)IMAGE_MAX_FILE_SIZE);
+		if (total_size >= IMG2_MAX_FILE_SIZE) {
+			fprintf(stderr, "Error: stdin input exceeds maximum size (%lu bytes)\n", (unsigned long)IMG2_MAX_FILE_SIZE);
 			free(buffer);
 			return false;
 		}
@@ -262,8 +262,8 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 		// Expand buffer if needed
 		if (total_size + STDIN_CHUNK_SIZE > capacity) {
 			size_t new_capacity = capacity * 2;
-			if (new_capacity > IMAGE_MAX_FILE_SIZE) {
-				new_capacity = IMAGE_MAX_FILE_SIZE;
+			if (new_capacity > IMG2_MAX_FILE_SIZE) {
+				new_capacity = IMG2_MAX_FILE_SIZE;
 			}
 
 			uint8_t *new_buffer = (uint8_t *)realloc(buffer, new_capacity);
@@ -278,8 +278,8 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 
 		// Read chunk
 		size_t chunk_size = STDIN_CHUNK_SIZE;
-		if (total_size + chunk_size > IMAGE_MAX_FILE_SIZE) {
-			chunk_size = IMAGE_MAX_FILE_SIZE - total_size;
+		if (total_size + chunk_size > IMG2_MAX_FILE_SIZE) {
+			chunk_size = IMG2_MAX_FILE_SIZE - total_size;
 		}
 
 		size_t bytes_read = fread(buffer + total_size, 1, chunk_size, stdin);
@@ -403,7 +403,7 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
  * @param out_dims Output dimensions
  * @return true on success, false on error
  */
-static bool calculate_custom_dimensions(const image_t *src, int target_width, int target_height, target_dimensions_t *out_dims)
+static bool calculate_custom_dimensions(const img2_image_t *src, int target_width, int target_height, target_dimensions_t *out_dims)
 {
 	if (src == NULL || src->width == 0 || src->height == 0 || out_dims == NULL) {
 		fprintf(stderr, "calculate_custom_dimensions: invalid parameters\n");
@@ -469,20 +469,20 @@ int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_siz
 }
 
 /**
- * @brief Determine the input MIME type (forced MIME_YUV for --yuv, magic bytes otherwise)
+ * @brief Determine the input MIME type (forced IMG2_MIME_YUV for --yuv, magic bytes otherwise)
  */
-mime_type_t pipeline_input_mime(const cli_options_t *opts, const uint8_t *buffer, size_t size)
+img2_mime_t pipeline_input_mime(const cli_options_t *opts, const uint8_t *buffer, size_t size)
 {
 	if (opts != NULL && opts->yuv_input) {
-		return MIME_YUV;
+		return IMG2_MIME_YUV;
 	}
-	return detect_mime_type(buffer, size);
+	return img2_detect_mime(buffer, size);
 }
 
 /**
  * @brief Decode image with MIME type detection
  */
-int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count)
+int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, img2_image_t ***out_frames, int *out_frame_count)
 {
 	if (buffer == NULL || out_frames == NULL || out_frame_count == NULL) {
 		fprintf(stderr, "pipeline_decode: invalid parameters\n");
@@ -490,41 +490,41 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, ima
 	}
 
 	/* Detect MIME type (raw YUV has no magic bytes: forced by --yuv) */
-	mime_type_t mime = pipeline_input_mime(opts, buffer, size);
-	if (mime == MIME_UNKNOWN) {
+	img2_mime_t mime = pipeline_input_mime(opts, buffer, size);
+	if (mime == IMG2_MIME_UNKNOWN) {
 		fprintf(stderr, "pipeline_decode: unknown image format\n");
 		return -1;
 	}
 
-	if (mime == MIME_YUV && !opts->silent) {
+	if (mime == IMG2_MIME_YUV && !opts->silent) {
 		size_t frame_size = 0;
-		if (yuv_frame_size(&opts->yuv, &frame_size) && size > frame_size) {
+		if (img2_yuv_frame_size(&opts->yuv, &frame_size) && size > frame_size) {
 			fprintf(stderr, "Note: raw YUV input has %zu bytes beyond the first frame (%zu bytes); only the first frame is decoded\n", size - frame_size, frame_size);
 		}
 	}
 
 	/* Decode with registry */
-	img2_decode_opts_t dopts = { .force_mime = MIME_UNKNOWN, .yuv = (opts != NULL && opts->yuv_input) ? &opts->yuv : NULL, .max_frames = 0, .jpeg_deblock = -1 };
-	image_t **frames = decoder_decode(&dopts, buffer, size, mime, out_frame_count);
+	img2_decode_opts_t dopts = { .force_mime = IMG2_MIME_UNKNOWN, .yuv = (opts != NULL && opts->yuv_input) ? &opts->yuv : NULL, .max_frames = 0, .jpeg_deblock = -1 };
+	img2_image_t **frames = img2_decoder_dispatch(&dopts, buffer, size, mime, out_frame_count);
 	if (frames == NULL || *out_frame_count <= 0) {
 		fprintf(stderr, "pipeline_decode: failed to decode image\n");
 		return -1;
 	}
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Apply EXIF orientation transformation
 	 * Skip for formats that handle orientation natively:
 	 * - TIFF: libtiff applies orientation during decode
 	 * - HEIF/AVIF: libheif applies orientation during decode
 	 */
-	if (mime != MIME_TIFF && mime != MIME_HEIF && mime != MIME_AVIF) {
+	if (mime != IMG2_MIME_TIFF && mime != IMG2_MIME_HEIF && mime != IMG2_MIME_AVIF) {
 		for (int i = 0; i < *out_frame_count; i++) {
 			if (frames[i]->exif != NULL && frames[i]->exif->orientation > 1) {
 				if (!opts->silent) {
 					const char *descriptions[] = { "Normal", "Flip horizontal", "Rotate 180°", "Flip vertical", "Transpose", "Rotate 90° CW", "Transverse", "Rotate 270° CW" };
 					fprintf(stderr, "Applying EXIF orientation: %u (%s)\n", frames[i]->exif->orientation, descriptions[frames[i]->exif->orientation - 1]);
 				}
-				if (image_apply_orientation(frames[i], frames[i]->exif->orientation) < 0) {
+				if (img2_image_orient(frames[i], frames[i]->exif->orientation) < 0) {
 					fprintf(stderr, "Warning: Failed to apply orientation %u, displaying as-is\n", frames[i]->exif->orientation);
 				}
 			}
@@ -539,7 +539,7 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, ima
 /**
  * @brief Scale images to terminal dimensions
  */
-int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts, image_t ***out_scaled)
+int pipeline_scale(img2_image_t **frames, int frame_count, const cli_options_t *opts, img2_image_t ***out_scaled)
 {
 	if (frames == NULL || frame_count <= 0 || opts == NULL || out_scaled == NULL) {
 		fprintf(stderr, "pipeline_scale: invalid parameters\n");
@@ -620,7 +620,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 	}
 
 	/* Allocate scaled frames array */
-	image_t **scaled = malloc(sizeof(image_t *) * frame_count);
+	img2_image_t **scaled = malloc(sizeof(img2_image_t *) * frame_count);
 	if (scaled == NULL) {
 		fprintf(stderr, "pipeline_scale: failed to allocate scaled frames array\n");
 		return -1;
@@ -628,22 +628,22 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
 
 	/* Scale each frame */
 	for (int i = 0; i < frame_count; i++) {
-		image_t *scaled_frame;
+		img2_image_t *scaled_frame;
 
 		if (opts->fit_mode) {
 			/* Fit mode: maintain aspect ratio */
-			scaled_frame = image_scale_fit(frames[i], target.width, target.height);
+			scaled_frame = img2_image_scale_fit(frames[i], target.width, target.height);
 
 		} else {
 			/* Resize mode: exact dimensions */
-			scaled_frame = image_scale_resize(frames[i], target.width, target.height);
+			scaled_frame = img2_image_scale_resize(frames[i], target.width, target.height);
 		}
 
 		if (scaled_frame == NULL) {
 			fprintf(stderr, "pipeline_scale: failed to scale frame %d\n", i);
 			/* Free previously scaled frames */
 			for (int j = 0; j < i; j++) {
-				image_destroy(scaled[j]);
+				img2_image_destroy(scaled[j]);
 			}
 			free(scaled);
 			return -1;
@@ -664,7 +664,7 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
  * @param frame Image frame to render
  * @return 0 on success, -1 on error
  */
-static int render_static_frame(image_t *frame)
+static int render_static_frame(img2_image_t *frame)
 {
 	if (frame == NULL) {
 		fprintf(stderr, "render_static_frame: invalid frame\n");
@@ -709,7 +709,7 @@ static int render_static_frame(image_t *frame)
  * @param opts CLI options (fps, silent)
  * @return 0 on success, -1 on error
  */
-static int render_animated(image_t **frames, int frame_count, const cli_options_t *opts)
+static int render_animated(img2_image_t **frames, int frame_count, const cli_options_t *opts)
 {
 	if (frames == NULL || frame_count <= 0 || opts == NULL) {
 		fprintf(stderr, "render_animated: invalid parameters\n");
@@ -809,7 +809,7 @@ static int render_animated(image_t **frames, int frame_count, const cli_options_
 /**
  * @brief Render frames to terminal
  */
-int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts)
+int pipeline_render(img2_image_t **frames, int frame_count, const cli_options_t *opts)
 {
 	if (frames == NULL || frame_count <= 0 || opts == NULL) {
 		fprintf(stderr, "pipeline_render: invalid parameters\n");

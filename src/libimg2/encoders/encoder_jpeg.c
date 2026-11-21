@@ -34,7 +34,7 @@ struct jpeg_error_mgr_extended {
  * @brief Custom JPEG error handler
  *
  * Called by libjpeg when a fatal error occurs. Uses longjmp to
- * return control to encode_jpeg() instead of calling exit().
+ * return control to img2_encode_jpeg() instead of calling exit().
  */
 static void jpeg_error_exit(j_common_ptr cinfo)
 {
@@ -45,7 +45,7 @@ static void jpeg_error_exit(j_common_ptr cinfo)
 	(*cinfo->err->format_message)(cinfo, buffer);
 	img2_log(IMG2_LOG_ERROR, "Error: libjpeg error: %s", buffer);
 
-	/* Jump back to encode_jpeg() */
+	/* Jump back to img2_encode_jpeg() */
 	longjmp(err->setjmp_buffer, 1);
 }
 
@@ -64,7 +64,7 @@ static void jpeg_error_exit(j_common_ptr cinfo)
  * @note JPEG does not support alpha channel, it will be stripped
  * @note Caller must free *out_data with free() when done
  */
-int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+int img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_jpeg");

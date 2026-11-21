@@ -10,16 +10,21 @@
 
 /* STB image resize implementation */
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
+#define STB_IMAGE_RESIZE_STATIC /* TU-local: no stbir_* globals leak from libimg2 */
+#define STBIR_ASSERT(x) ((void)0)
 #include "image.h"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 #include "stb_image_resize2.h"
+#pragma GCC diagnostic pop
 #include "log.h"
 
 /* EXIF/XMP metadata support */
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
 #endif
 
-bool image_calculate_size(uint32_t width, uint32_t height, size_t *out_size)
+bool img2_image_calc_size(uint32_t width, uint32_t height, size_t *out_size)
 {
 	size_t pixel_count = (size_t)width * (size_t)height;
 	size_t byte_count = pixel_count * 4;
@@ -28,9 +33,9 @@ bool image_calculate_size(uint32_t width, uint32_t height, size_t *out_size)
 		return false;
 	} else if (width == 0 || height == 0) {
 		return false;
-	} else if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
+	} else if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
 		return false;
-	} else if (pixel_count > IMAGE_MAX_PIXELS) {
+	} else if (pixel_count > IMG2_MAX_PIXELS) {
 		return false;
 	} else if (byte_count / 4 != pixel_count) {
 		return false;
@@ -40,17 +45,17 @@ bool image_calculate_size(uint32_t width, uint32_t height, size_t *out_size)
 	return true;
 }
 
-image_t *image_create(uint32_t width, uint32_t height)
+img2_image_t *img2_image_alloc(uint32_t width, uint32_t height)
 {
 	/* Validate dimensions and calculate size */
 	size_t byte_count;
-	if (!image_calculate_size(width, height, &byte_count)) {
+	if (!img2_image_calc_size(width, height, &byte_count)) {
 		img2_log(IMG2_LOG_ERROR, "image_create: invalid dimensions %u×%u", width, height);
 		return NULL;
 	}
 
 	/* Allocate image structure */
-	image_t *img = malloc(sizeof(image_t));
+	img2_image_t *img = malloc(sizeof(img2_image_t));
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "image_create: failed to allocate image_t");
 		return NULL;
@@ -73,7 +78,7 @@ image_t *image_create(uint32_t width, uint32_t height)
 	return img;
 }
 
-void image_destroy(image_t *img)
+void img2_image_destroy(img2_image_t *img)
 {
 	if (img == NULL) {
 		return;
@@ -85,17 +90,17 @@ void image_destroy(image_t *img)
 		img->pixels = NULL;
 	}
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Free EXIF metadata */
 	if (img->exif != NULL) {
-		exif_info_free(img->exif);
+		img2_exif_clear(img->exif);
 		free(img->exif);
 		img->exif = NULL;
 	}
 
 	/* Free XMP metadata */
 	if (img->xmp != NULL) {
-		xmp_info_free(img->xmp);
+		img2_xmp_clear(img->xmp);
 		free(img->xmp);
 		img->xmp = NULL;
 	}
@@ -105,7 +110,7 @@ void image_destroy(image_t *img)
 	free(img);
 }
 
-image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t target_height)
+img2_image_t *img2_image_scale_fit(const img2_image_t *src, uint32_t target_width, uint32_t target_height)
 {
 	if (src == NULL || src->pixels == NULL) {
 		img2_log(IMG2_LOG_ERROR, "image_scale_fit: invalid source image");
@@ -149,7 +154,7 @@ image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t tar
 	}
 
 	/* Create output image */
-	image_t *dst = image_create(new_width, new_height);
+	img2_image_t *dst = img2_image_alloc(new_width, new_height);
 	if (dst == NULL) {
 		img2_log(IMG2_LOG_ERROR, "image_scale_fit: failed to create output image");
 		return NULL;
@@ -158,14 +163,14 @@ image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t tar
 	/* Resize using stb_image_resize2 (SRGB colorspace for natural results) */
 	if (!stbir_resize_uint8_srgb(src->pixels, src->width, src->height, 0, dst->pixels, new_width, new_height, 0, STBIR_RGBA)) {
 		img2_log(IMG2_LOG_ERROR, "image_scale_fit: stbir_resize failed");
-		image_destroy(dst);
+		img2_image_destroy(dst);
 		return NULL;
 	}
 
 	return dst;
 }
 
-image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t target_height)
+img2_image_t *img2_image_scale_resize(const img2_image_t *src, uint32_t target_width, uint32_t target_height)
 {
 	if (src == NULL || src->pixels == NULL) {
 		img2_log(IMG2_LOG_ERROR, "image_scale_resize: invalid source image");
@@ -178,7 +183,7 @@ image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t 
 	}
 
 	/* Create output image with exact dimensions (no aspect ratio preservation) */
-	image_t *dst = image_create(target_width, target_height);
+	img2_image_t *dst = img2_image_alloc(target_width, target_height);
 	if (dst == NULL) {
 		img2_log(IMG2_LOG_ERROR, "image_scale_resize: failed to create output image");
 		return NULL;
@@ -187,14 +192,14 @@ image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t 
 	/* Resize using stb_image_resize2 (SRGB colorspace) */
 	if (!stbir_resize_uint8_srgb(src->pixels, src->width, src->height, 0, dst->pixels, target_width, target_height, 0, STBIR_RGBA)) {
 		img2_log(IMG2_LOG_ERROR, "image_scale_resize: stbir_resize failed");
-		image_destroy(dst);
+		img2_image_destroy(dst);
 		return NULL;
 	}
 
 	return dst;
 }
 
-image_t *convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height)
+img2_image_t *img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height)
 {
 	if (rgb == NULL) {
 		img2_log(IMG2_LOG_ERROR, "convert_rgb_to_rgba: invalid RGB data");
@@ -202,7 +207,7 @@ image_t *convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height
 	}
 
 	/* Create RGBA image */
-	image_t *img = image_create(width, height);
+	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "convert_rgb_to_rgba: failed to create image");
 		return NULL;
@@ -220,7 +225,7 @@ image_t *convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height
 	return img;
 }
 
-image_t *convert_grayscale_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height)
+img2_image_t *img2_convert_gray_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height)
 {
 	if (gray == NULL) {
 		img2_log(IMG2_LOG_ERROR, "convert_grayscale_to_rgba: invalid grayscale data");
@@ -228,7 +233,7 @@ image_t *convert_grayscale_to_rgba(const uint8_t *gray, uint32_t width, uint32_t
 	}
 
 	/* Create RGBA image */
-	image_t *img = image_create(width, height);
+	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "convert_grayscale_to_rgba: failed to create image");
 		return NULL;
@@ -451,7 +456,7 @@ static uint8_t *transform_rotate_270cw(const uint8_t *src, uint32_t width, uint3
 	return dest;
 }
 
-int image_apply_orientation(image_t *img, uint16_t orientation)
+int img2_image_orient(img2_image_t *img, uint16_t orientation)
 {
 	/* Validate input parameters */
 	if (img == NULL) {

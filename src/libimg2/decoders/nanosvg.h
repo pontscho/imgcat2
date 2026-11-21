@@ -29,6 +29,10 @@
 #ifndef NANOSVG_H
 #define NANOSVG_H
 
+#ifndef NSVG_DEF
+#define NSVG_DEF
+#endif
+
 #ifndef NANOSVG_CPLUSPLUS
 #ifdef __cplusplus
 extern "C" {
@@ -174,17 +178,17 @@ typedef struct NSVGimage
 } NSVGimage;
 
 // Parses SVG file from a file, returns SVG image as paths.
-NSVGimage* nsvgParseFromFile(const char* filename, const char* units, float dpi);
+NSVG_DEF NSVGimage* nsvgParseFromFile(const char* filename, const char* units, float dpi);
 
 // Parses SVG file from a null terminated string, returns SVG image as paths.
 // Important note: changes the string.
-NSVGimage* nsvgParse(char* input, const char* units, float dpi);
+NSVG_DEF NSVGimage* nsvgParse(char* input, const char* units, float dpi);
 
 // Duplicates a path.
-NSVGpath* nsvgDuplicatePath(NSVGpath* p);
+NSVG_DEF NSVGpath* nsvgDuplicatePath(NSVGpath* p);
 
 // Deletes an image.
-void nsvgDelete(NSVGimage* image);
+NSVG_DEF void nsvgDelete(NSVGimage* image);
 
 #ifndef NANOSVG_CPLUSPLUS
 #ifdef __cplusplus
@@ -199,7 +203,6 @@ void nsvgDelete(NSVGimage* image);
 #include <stdio.h>
 #include <math.h>
 #include "../text/font_manager.h"
-#include "stb_truetype.h"
 
 #define NSVG_PI (3.14159265358979323846264338327f)
 #define NSVG_KAPPA90 (0.5522847493f)	// Length proportional to radius of a cubic bezier handle for 90deg arcs.
@@ -335,7 +338,7 @@ static void nsvg__parseElement(char* s,
 		(*endelCb)(ud, name);
 }
 
-int nsvg__parseXML(char* input,
+NSVG_DEF int nsvg__parseXML(char* input,
 				   void (*startelCb)(void* ud, const char* el, const char** attr),
 				   void (*endelCb)(void* ud, const char* el),
 				   void (*contentCb)(void* ud, const char* s),
@@ -1318,7 +1321,7 @@ typedef struct NSVGNamedColor {
 	unsigned int color;
 } NSVGNamedColor;
 
-NSVGNamedColor nsvg__colors[] = {
+NSVG_DEF NSVGNamedColor nsvg__colors[] = {
 
 	{ "red", NSVG_RGB(255, 0, 0) },
 	{ "green", NSVG_RGB( 0, 128, 0) },
@@ -2862,7 +2865,7 @@ static int nsvg__decodeUTF8(const char** str)
 /**
  * @brief Measure text width for text-anchor alignment
  */
-static float nsvg__measureText(stbtt_fontinfo* font, const char* text, float scale)
+static float nsvg__measureText(img2_font_face_t* font, const char* text, float scale)
 {
 	float width = 0.0f;
 	const char* ch = text;
@@ -2872,12 +2875,13 @@ static float nsvg__measureText(stbtt_fontinfo* font, const char* text, float sca
 		int cp = nsvg__decodeUTF8(&ch);
 
 		int advance, lsb;
-		stbtt_GetCodepointHMetrics(font, cp, &advance, &lsb);
+		img2_font_face_hmetrics(font, cp, &advance, &lsb);
 		width += advance * scale;
 
 		/* Kerning */
 		if (prev_cp != 0) {
-			int kern = stbtt_GetCodepointKernAdvance(font, prev_cp, cp);
+			/* argument order kept verbatim for byte identity; see docs/libimg2.md */
+			int kern = img2_font_face_kern(font, prev_cp, cp);
 			width += kern * scale;
 		}
 		prev_cp = cp;
@@ -2889,21 +2893,21 @@ static float nsvg__measureText(stbtt_fontinfo* font, const char* text, float sca
 /**
  * @brief Convert glyph outline to cubic Bezier paths
  */
-static void nsvg__addGlyphToPaths(NSVGparser* p, stbtt_vertex* verts, int num_verts,
+static void nsvg__addGlyphToPaths(NSVGparser* p, img2_font_vertex_t* verts, int num_verts,
                                    float offset_x, float baseline, float scale)
 {
 	float cur_x = 0.0f, cur_y = 0.0f;
 	int first_in_contour = 1;
 
 	for (int i = 0; i < num_verts; i++) {
-		stbtt_vertex* v = &verts[i];
+		img2_font_vertex_t* v = &verts[i];
 
 		/* Transform coordinates: scale + offset + flip Y */
 		float x = offset_x + v->x * scale;
 		float y = baseline - v->y * scale;  /* Y-axis flip! */
 
 		switch (v->type) {
-			case STBTT_vmove:
+			case IMG2_FONT_VMOVE:
 				/* Close previous contour if exists */
 				if (!first_in_contour && p->npts > 0) {
 					nsvg__addPath(p, 1); /* closed */
@@ -2915,14 +2919,14 @@ static void nsvg__addGlyphToPaths(NSVGparser* p, stbtt_vertex* verts, int num_ve
 				first_in_contour = 0;
 				break;
 
-			case STBTT_vline:
+			case IMG2_FONT_VLINE:
 				/* Line segment */
 				nsvg__lineTo(p, x, y);
 				cur_x = x;
 				cur_y = y;
 				break;
 
-			case STBTT_vcurve: {
+			case IMG2_FONT_VCURVE: {
 				/* Quadratic Bézier: convert to cubic */
 				float cx = offset_x + v->cx * scale;
 				float cy = baseline - v->cy * scale;
@@ -2939,7 +2943,7 @@ static void nsvg__addGlyphToPaths(NSVGparser* p, stbtt_vertex* verts, int num_ve
 				break;
 			}
 
-			case STBTT_vcubic: {
+			case IMG2_FONT_VCUBIC: {
 				/* Cubic Bézier (rare, but supported in OpenType) */
 				float cx1 = offset_x + v->cx * scale;
 				float cy1 = baseline - v->cy * scale;
@@ -2966,30 +2970,28 @@ static void nsvg__addGlyphToPaths(NSVGparser* p, stbtt_vertex* verts, int num_ve
 static void nsvg__renderTextToPath(NSVGparser* p, const char* text)
 {
 	/* 1. Load font */
-	font_weight_t weight = (p->fontWeight >= 700) ? FONT_WEIGHT_BOLD : FONT_WEIGHT_NORMAL;
-	font_style_t style = (p->fontStyle == 1) ? FONT_STYLE_ITALIC : FONT_STYLE_NORMAL;
+	img2_font_weight_t weight = (p->fontWeight >= 700) ? IMG2_FONT_WEIGHT_BOLD : IMG2_FONT_WEIGHT_NORMAL;
+	img2_font_style_t style = (p->fontStyle == 1) ? IMG2_FONT_STYLE_ITALIC : IMG2_FONT_STYLE_NORMAL;
 
-	font_t* font = font_manager_load(p->textFamily, weight, style);
+	img2_font_t* font = img2_font_find(p->textFamily, weight, style);
 	if (!font) {
 		img2_log(IMG2_LOG_WARN, "Warning: Failed to load font '%s', skipping text", p->textFamily);
 		return;
 	}
 
-	/* 2. Initialize stb_truetype */
-	size_t font_size;
-	const uint8_t* font_data = font_get_data(font, &font_size);
-	stbtt_fontinfo stbtt_font;
-	if (!stbtt_InitFont(&stbtt_font, font_data, 0)) {
-		img2_log(IMG2_LOG_ERROR, "Error: stbtt_InitFont failed");
+	/* 2. Open the font face (stb_truetype lives behind the font_manager wrappers) */
+	img2_font_face_t* face = img2_font_face_open(font);
+	if (!face) {
+		img2_log(IMG2_LOG_ERROR, "Error: stbtt" "_InitFont failed"); /* legacy text, split: no stb_truetype names in headers */
 		return;
 	}
 
 	/* 3. Calculate font scale */
-	float scale = stbtt_ScaleForPixelHeight(&stbtt_font, p->textSize);
+	float scale = img2_font_face_scale_for_pixel_height(face, p->textSize);
 
 	/* 4. Get font metrics */
 	int ascent, descent, line_gap;
-	stbtt_GetFontVMetrics(&stbtt_font, &ascent, &descent, &line_gap);
+	img2_font_face_vmetrics(face, &ascent, &descent, &line_gap);
 	NSVG_NOTUSED(line_gap);
 
 	/* 5. Determine baseline (SVG y is baseline) */
@@ -2998,7 +3000,7 @@ static void nsvg__renderTextToPath(NSVGparser* p, const char* text)
 	/* 6. Calculate text width for text-anchor */
 	float text_width = 0.0f;
 	if (p->textAnchor != 0) {
-		text_width = nsvg__measureText(&stbtt_font, text, scale);
+		text_width = nsvg__measureText(face, text, scale);
 	}
 
 	/* 7. Apply text-anchor offset */
@@ -3015,17 +3017,17 @@ static void nsvg__renderTextToPath(NSVGparser* p, const char* text)
 
 		/* Get glyph metrics */
 		int advance, lsb;
-		stbtt_GetCodepointHMetrics(&stbtt_font, codepoint, &advance, &lsb);
+		img2_font_face_hmetrics(face, codepoint, &advance, &lsb);
 
 		/* Get glyph shape */
-		stbtt_vertex* vertices = NULL;
-		int num_verts = stbtt_GetCodepointShape(&stbtt_font, codepoint, &vertices);
+		img2_font_vertex_t* vertices = NULL;
+		int num_verts = img2_font_face_glyph_shape(face, codepoint, &vertices);
 
 		if (num_verts > 0) {
 			/* Convert glyph to paths */
 			nsvg__addGlyphToPaths(p, vertices, num_verts,
 			                      cursor_x, baseline, scale);
-			stbtt_FreeShape(&stbtt_font, vertices);
+			img2_font_face_free_shape(vertices);
 		}
 
 		/* Advance cursor */
@@ -3033,13 +3035,15 @@ static void nsvg__renderTextToPath(NSVGparser* p, const char* text)
 
 		/* Apply kerning */
 		if (*ch) {
-			int kern = stbtt_GetCodepointKernAdvance(&stbtt_font,
-			                                          codepoint, prev_codepoint);
+			/* argument order kept verbatim for byte identity; see docs/libimg2.md */
+			int kern = img2_font_face_kern(face,
+			                               codepoint, prev_codepoint);
 			cursor_x += kern * scale;
 		}
 
 		prev_codepoint = codepoint;
 	}
+	img2_font_face_close(face);
 
 	/* 9. Finalize shape */
 	nsvg__addShape(p);
@@ -3445,7 +3449,7 @@ static void nsvg__createGradients(NSVGparser* p)
 	}
 }
 
-NSVGimage* nsvgParse(char* input, const char* units, float dpi)
+NSVG_DEF NSVGimage* nsvgParse(char* input, const char* units, float dpi)
 {
 	NSVGparser* p;
 	NSVGimage* ret = 0;
@@ -3472,7 +3476,7 @@ NSVGimage* nsvgParse(char* input, const char* units, float dpi)
 	return ret;
 }
 
-NSVGimage* nsvgParseFromFile(const char* filename, const char* units, float dpi)
+NSVG_DEF NSVGimage* nsvgParseFromFile(const char* filename, const char* units, float dpi)
 {
 	FILE* fp = NULL;
 	size_t size;
@@ -3501,7 +3505,7 @@ error:
 	return NULL;
 }
 
-NSVGpath* nsvgDuplicatePath(NSVGpath* p)
+NSVG_DEF NSVGpath* nsvgDuplicatePath(NSVGpath* p)
 {
     NSVGpath* res = NULL;
 
@@ -3531,7 +3535,7 @@ error:
     return NULL;
 }
 
-void nsvgDelete(NSVGimage* image)
+NSVG_DEF void nsvgDelete(NSVGimage* image)
 {
 	NSVGshape *snext, *shape;
 	if (image == NULL) return;

@@ -2,7 +2,7 @@
  * @file decoder_yuv.c
  * @brief Raw 8-bit YUV decoder (i420, yv12, nv12, nv21, i422, i444, yuyv, uyvy, gray)
  *
- * Raw YUV carries no header, so the geometry comes from yuv_params_t
+ * Raw YUV carries no header, so the geometry comes from img2_yuv_params_t
  * (CLI: --yuv format:w:h[:y_stride][:uv_stride]). See yuv.h for the memory
  * layout contract.
  *
@@ -58,23 +58,23 @@
  */
 static const struct {
 	const char *name;
-	yuv_format_t format;
+	img2_yuv_format_t format;
 } s_yuv_names[] = {
-	{ "i420",    YUV_FMT_I420 },
-	{ "yuv420p", YUV_FMT_I420 },
-	{ "yv12",    YUV_FMT_YV12 },
-	{ "nv12",    YUV_FMT_NV12 },
-	{ "nv21",    YUV_FMT_NV21 },
-	{ "i422",    YUV_FMT_I422 },
-	{ "yuv422p", YUV_FMT_I422 },
-	{ "i444",    YUV_FMT_I444 },
-	{ "yuv444p", YUV_FMT_I444 },
-	{ "yuyv",    YUV_FMT_YUYV },
-	{ "yuy2",    YUV_FMT_YUYV },
-	{ "uyvy",    YUV_FMT_UYVY },
-	{ "gray",    YUV_FMT_GRAY },
-	{ "y8",      YUV_FMT_GRAY },
-	{ "y800",    YUV_FMT_GRAY },
+	{ "i420",    IMG2_YUV_FMT_I420 },
+	{ "yuv420p", IMG2_YUV_FMT_I420 },
+	{ "yv12",    IMG2_YUV_FMT_YV12 },
+	{ "nv12",    IMG2_YUV_FMT_NV12 },
+	{ "nv21",    IMG2_YUV_FMT_NV21 },
+	{ "i422",    IMG2_YUV_FMT_I422 },
+	{ "yuv422p", IMG2_YUV_FMT_I422 },
+	{ "i444",    IMG2_YUV_FMT_I444 },
+	{ "yuv444p", IMG2_YUV_FMT_I444 },
+	{ "yuyv",    IMG2_YUV_FMT_YUYV },
+	{ "yuy2",    IMG2_YUV_FMT_YUYV },
+	{ "uyvy",    IMG2_YUV_FMT_UYVY },
+	{ "gray",    IMG2_YUV_FMT_GRAY },
+	{ "y8",      IMG2_YUV_FMT_GRAY },
+	{ "y800",    IMG2_YUV_FMT_GRAY },
 };
 
 /**
@@ -140,20 +140,20 @@ static bool ascii_iequal(const char *a, const char *b)
 		}                                             \
 	} while (0)
 
-yuv_format_t yuv_format_from_name(const char *name)
+img2_yuv_format_t img2_yuv_format_from_name(const char *name)
 {
 	if (name == NULL) {
-		return YUV_FMT_NONE;
+		return IMG2_YUV_FMT_NONE;
 	}
 	for (size_t i = 0; i < sizeof(s_yuv_names) / sizeof(s_yuv_names[0]); i++) {
 		if (ascii_iequal(name, s_yuv_names[i].name)) {
 			return s_yuv_names[i].format;
 		}
 	}
-	return YUV_FMT_NONE;
+	return IMG2_YUV_FMT_NONE;
 }
 
-const char *yuv_format_name(yuv_format_t fmt)
+const char *img2_yuv_format_name(img2_yuv_format_t fmt)
 {
 	for (size_t i = 0; i < sizeof(s_yuv_names) / sizeof(s_yuv_names[0]); i++) {
 		if (s_yuv_names[i].format == fmt) {
@@ -168,7 +168,7 @@ const char *yuv_format_name(yuv_format_t fmt)
  *
  * @return 0 on success, -1 on invalid parameters (message in err)
  */
-static int yuv_compute_layout(const yuv_params_t *p, yuv_layout_t *L, char *err, size_t err_len)
+static int yuv_compute_layout(const img2_yuv_params_t *p, yuv_layout_t *L, char *err, size_t err_len)
 {
 	if (p == NULL || L == NULL) {
 		YUV_ERR(err, err_len, "missing parameters");
@@ -181,12 +181,12 @@ static int yuv_compute_layout(const yuv_params_t *p, yuv_layout_t *L, char *err,
 		YUV_ERR(err, err_len, "width and height must be greater than 0 (got %ux%u)", p->width, p->height);
 		return -1;
 	}
-	if (p->width > IMAGE_MAX_DIMENSION || p->height > IMAGE_MAX_DIMENSION) {
-		YUV_ERR(err, err_len, "dimensions %ux%u exceed maximum %u per axis", p->width, p->height, (unsigned)IMAGE_MAX_DIMENSION);
+	if (p->width > IMG2_MAX_DIMENSION || p->height > IMG2_MAX_DIMENSION) {
+		YUV_ERR(err, err_len, "dimensions %ux%u exceed maximum %u per axis", p->width, p->height, (unsigned)IMG2_MAX_DIMENSION);
 		return -1;
 	}
-	if ((uint64_t)p->width * (uint64_t)p->height > (uint64_t)IMAGE_MAX_PIXELS) {
-		YUV_ERR(err, err_len, "dimensions %ux%u exceed maximum of %lu pixels", p->width, p->height, (unsigned long)IMAGE_MAX_PIXELS);
+	if ((uint64_t)p->width * (uint64_t)p->height > (uint64_t)IMG2_MAX_PIXELS) {
+		YUV_ERR(err, err_len, "dimensions %ux%u exceed maximum of %lu pixels", p->width, p->height, (unsigned long)IMG2_MAX_PIXELS);
 		return -1;
 	}
 
@@ -195,10 +195,10 @@ static int yuv_compute_layout(const yuv_params_t *p, yuv_layout_t *L, char *err,
 	const size_t half_w = (w + 1) / 2; /* ceil(w/2) */
 	const size_t half_h = (h + 1) / 2; /* ceil(h/2) */
 
-	/* Per-format geometry. Values are bounded by IMAGE_MAX_DIMENSION, no overflow. */
+	/* Per-format geometry. Values are bounded by IMG2_MAX_DIMENSION, no overflow. */
 	switch (p->format) {
-		case YUV_FMT_I420:
-		case YUV_FMT_YV12:
+		case IMG2_YUV_FMT_I420:
+		case IMG2_YUV_FMT_YV12:
 			L->y_row_bytes = w;
 			L->c_planes = 2;
 			L->x_shift = 1;
@@ -207,8 +207,8 @@ static int yuv_compute_layout(const yuv_params_t *p, yuv_layout_t *L, char *err,
 			L->c_rows = half_h;
 			break;
 
-		case YUV_FMT_NV12:
-		case YUV_FMT_NV21:
+		case IMG2_YUV_FMT_NV12:
+		case IMG2_YUV_FMT_NV21:
 			L->y_row_bytes = w;
 			L->c_planes = 1;
 			L->x_shift = 1;
@@ -217,7 +217,7 @@ static int yuv_compute_layout(const yuv_params_t *p, yuv_layout_t *L, char *err,
 			L->c_rows = half_h;
 			break;
 
-		case YUV_FMT_I422:
+		case IMG2_YUV_FMT_I422:
 			L->y_row_bytes = w;
 			L->c_planes = 2;
 			L->x_shift = 1;
@@ -225,41 +225,41 @@ static int yuv_compute_layout(const yuv_params_t *p, yuv_layout_t *L, char *err,
 			L->c_rows = h;
 			break;
 
-		case YUV_FMT_I444:
+		case IMG2_YUV_FMT_I444:
 			L->y_row_bytes = w;
 			L->c_planes = 2;
 			L->c_row_bytes = w;
 			L->c_rows = h;
 			break;
 
-		case YUV_FMT_YUYV:
-		case YUV_FMT_UYVY:
+		case IMG2_YUV_FMT_YUYV:
+		case IMG2_YUV_FMT_UYVY:
 			/* 4-byte macropixel per 2 pixels; odd widths need a full last macropixel */
 			L->y_row_bytes = 4 * half_w;
 			break;
 
-		case YUV_FMT_GRAY: L->y_row_bytes = w; break;
+		case IMG2_YUV_FMT_GRAY: L->y_row_bytes = w; break;
 
-		case YUV_FMT_NONE:
+		case IMG2_YUV_FMT_NONE:
 		default: YUV_ERR(err, err_len, "unknown format (supported: %s)", YUV_SPEC_FORMATS); return -1;
 	}
 
 	/* Strides */
 	L->y_stride = (p->y_stride != 0) ? p->y_stride : L->y_row_bytes;
 	if (L->y_stride < L->y_row_bytes) {
-		YUV_ERR(err, err_len, "y_stride %zu is smaller than the minimum %zu for %s width %u", L->y_stride, L->y_row_bytes, yuv_format_name(p->format), p->width);
+		YUV_ERR(err, err_len, "y_stride %zu is smaller than the minimum %zu for %s width %u", L->y_stride, L->y_row_bytes, img2_yuv_format_name(p->format), p->width);
 		return -1;
 	}
 
 	if (L->c_planes == 0) {
 		if (p->uv_stride != 0) {
-			YUV_ERR(err, err_len, "uv_stride is not applicable to format %s (it has no chroma planes)", yuv_format_name(p->format));
+			YUV_ERR(err, err_len, "uv_stride is not applicable to format %s (it has no chroma planes)", img2_yuv_format_name(p->format));
 			return -1;
 		}
 	} else {
 		L->c_stride = (p->uv_stride != 0) ? p->uv_stride : L->c_row_bytes;
 		if (L->c_stride < L->c_row_bytes) {
-			YUV_ERR(err, err_len, "uv_stride %zu is smaller than the minimum %zu for %s width %u", L->c_stride, L->c_row_bytes, yuv_format_name(p->format), p->width);
+			YUV_ERR(err, err_len, "uv_stride %zu is smaller than the minimum %zu for %s width %u", L->c_stride, L->c_row_bytes, img2_yuv_format_name(p->format), p->width);
 			return -1;
 		}
 	}
@@ -293,7 +293,7 @@ static int yuv_compute_layout(const yuv_params_t *p, yuv_layout_t *L, char *err,
 	return 0;
 }
 
-bool yuv_frame_size(const yuv_params_t *params, size_t *out_size)
+bool img2_yuv_frame_size(const img2_yuv_params_t *params, size_t *out_size)
 {
 	yuv_layout_t L;
 	if (out_size == NULL || yuv_compute_layout(params, &L, NULL, 0) < 0) {
@@ -351,7 +351,7 @@ static int parse_field(const char *field, const char *what, uint64_t max, uint64
 	return 0;
 }
 
-int yuv_parse_spec(const char *spec, yuv_params_t *out, char *err, size_t err_len)
+int img2_yuv_parse_spec(const char *spec, img2_yuv_params_t *out, char *err, size_t err_len)
 {
 	if (spec == NULL || out == NULL) {
 		YUV_ERR(err, err_len, "missing specification");
@@ -399,9 +399,9 @@ int yuv_parse_spec(const char *spec, yuv_params_t *out, char *err, size_t err_le
 		YUV_ERR(err, err_len, "missing format (expected %s)", YUV_SPEC_SYNTAX);
 		return -1;
 	}
-	yuv_params_t p = { 0 };
-	p.format = yuv_format_from_name(fields[0]);
-	if (p.format == YUV_FMT_NONE) {
+	img2_yuv_params_t p = { 0 };
+	p.format = img2_yuv_format_from_name(fields[0]);
+	if (p.format == IMG2_YUV_FMT_NONE) {
 		YUV_ERR(err, err_len, "unknown format '%s' (supported: %s)", fields[0], YUV_SPEC_FORMATS);
 		return -1;
 	}
@@ -517,7 +517,7 @@ static void convert_row_gray(const uint8_t *y_row, uint32_t width, uint8_t *dst)
 	}
 }
 
-image_t **decode_yuv(const uint8_t *data, size_t len, const yuv_params_t *params, int *frame_count)
+img2_image_t **img2_decode_yuv(const uint8_t *data, size_t len, const img2_yuv_params_t *params, int *frame_count)
 {
 	if (frame_count != NULL) {
 		*frame_count = 0;
@@ -535,11 +535,11 @@ image_t **decode_yuv(const uint8_t *data, size_t len, const yuv_params_t *params
 	}
 
 	if (len < L.required) {
-		img2_log(IMG2_LOG_ERROR, "Error: Raw YUV input too short for %s %ux%u: need %zu bytes, have %zu", yuv_format_name(params->format), params->width, params->height, L.required, len);
+		img2_log(IMG2_LOG_ERROR, "Error: Raw YUV input too short for %s %ux%u: need %zu bytes, have %zu", img2_yuv_format_name(params->format), params->width, params->height, L.required, len);
 		return NULL;
 	}
 
-	image_t *img = image_create(params->width, params->height);
+	img2_image_t *img = img2_image_alloc(params->width, params->height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		return NULL;
@@ -552,34 +552,34 @@ image_t **decode_yuv(const uint8_t *data, size_t len, const yuv_params_t *params
 		uint8_t *dst = img->pixels + (size_t)y * w * 4;
 
 		switch (params->format) {
-			case YUV_FMT_I420:
-			case YUV_FMT_I422:
-			case YUV_FMT_I444: convert_row_planar(y_row, data + L.off_c0 + c_off, data + L.off_c1 + c_off, 1, L.x_shift, w, dst); break;
+			case IMG2_YUV_FMT_I420:
+			case IMG2_YUV_FMT_I422:
+			case IMG2_YUV_FMT_I444: convert_row_planar(y_row, data + L.off_c0 + c_off, data + L.off_c1 + c_off, 1, L.x_shift, w, dst); break;
 
-			case YUV_FMT_YV12: convert_row_planar(y_row, data + L.off_c1 + c_off, data + L.off_c0 + c_off, 1, L.x_shift, w, dst); break;
+			case IMG2_YUV_FMT_YV12: convert_row_planar(y_row, data + L.off_c1 + c_off, data + L.off_c0 + c_off, 1, L.x_shift, w, dst); break;
 
-			case YUV_FMT_NV12: convert_row_planar(y_row, data + L.off_c0 + c_off, data + L.off_c0 + c_off + 1, 2, L.x_shift, w, dst); break;
+			case IMG2_YUV_FMT_NV12: convert_row_planar(y_row, data + L.off_c0 + c_off, data + L.off_c0 + c_off + 1, 2, L.x_shift, w, dst); break;
 
-			case YUV_FMT_NV21: convert_row_planar(y_row, data + L.off_c0 + c_off + 1, data + L.off_c0 + c_off, 2, L.x_shift, w, dst); break;
+			case IMG2_YUV_FMT_NV21: convert_row_planar(y_row, data + L.off_c0 + c_off + 1, data + L.off_c0 + c_off, 2, L.x_shift, w, dst); break;
 
-			case YUV_FMT_YUYV: convert_row_packed(y_row, 0, 2, 1, 3, w, dst); break;
+			case IMG2_YUV_FMT_YUYV: convert_row_packed(y_row, 0, 2, 1, 3, w, dst); break;
 
-			case YUV_FMT_UYVY: convert_row_packed(y_row, 1, 3, 0, 2, w, dst); break;
+			case IMG2_YUV_FMT_UYVY: convert_row_packed(y_row, 1, 3, 0, 2, w, dst); break;
 
-			case YUV_FMT_GRAY: convert_row_gray(y_row, w, dst); break;
+			case IMG2_YUV_FMT_GRAY: convert_row_gray(y_row, w, dst); break;
 
-			case YUV_FMT_NONE:
+			case IMG2_YUV_FMT_NONE:
 			default:
 				/* Unreachable: rejected by yuv_compute_layout() */
-				image_destroy(img);
+				img2_image_destroy(img);
 				return NULL;
 		}
 	}
 
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(img);
+		img2_image_destroy(img);
 		return NULL;
 	}
 

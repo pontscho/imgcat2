@@ -20,14 +20,14 @@
 #include "decoder.h"
 #include "../core/log.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
 #endif
 
 /** Maximum number of WebP frames to decode (prevents DoS) */
 #define MAX_WEBP_FRAMES 200
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Extract EXIF metadata from WebP using WebPDemux
  *
@@ -36,9 +36,9 @@
  *
  * @param data Raw WebP file data
  * @param len Length of data in bytes
- * @return Pointer to exif_info_t structure, or NULL if no EXIF found or on error
+ * @return Pointer to img2_exif_t structure, or NULL if no EXIF found or on error
  */
-static exif_info_t *extract_webp_exif(const uint8_t *data, size_t len)
+static img2_exif_t *extract_webp_exif(const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0) {
 		return NULL;
@@ -60,15 +60,15 @@ static exif_info_t *extract_webp_exif(const uint8_t *data, size_t len)
 	if (WebPDemuxGetChunk(demux, "EXIF", 1, &chunk_iter)) {
 		/* EXIF chunk found */
 		if (chunk_iter.chunk.bytes != NULL && chunk_iter.chunk.size > 0) {
-			/* Allocate and initialize exif_info_t */
-			exif_info_t *exif = malloc(sizeof(exif_info_t));
+			/* Allocate and initialize img2_exif_t */
+			img2_exif_t *exif = malloc(sizeof(img2_exif_t));
 			if (exif == NULL) {
 				WebPDemuxReleaseChunkIterator(&chunk_iter);
 				WebPDemuxDelete(demux);
 				return NULL;
 			}
 
-			exif_info_init(exif);
+			img2_exif_init(exif);
 
 			/* Handle WebP EXIF chunk format:
 			 * Some encoders prepend "Exif\0\0" (6 bytes) before TIFF data,
@@ -94,7 +94,7 @@ static exif_info_t *extract_webp_exif(const uint8_t *data, size_t len)
 			}
 
 			/* Parse EXIF data (raw TIFF format) */
-			if (parse_exif_from_tiff(exif, tiff_data, tiff_size) != 0) {
+			if (img2_exif_parse_tiff(exif, tiff_data, tiff_size) != 0) {
 				/* Parse failed */
 				free(exif);
 				exif = NULL;
@@ -120,9 +120,9 @@ static exif_info_t *extract_webp_exif(const uint8_t *data, size_t len)
  *
  * @param data Raw WebP file data
  * @param len Length of data in bytes
- * @return Pointer to xmp_info_t structure, or NULL if no XMP found or on error
+ * @return Pointer to img2_xmp_t structure, or NULL if no XMP found or on error
  */
-static xmp_info_t *extract_webp_xmp(const uint8_t *data, size_t len)
+static img2_xmp_t *extract_webp_xmp(const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0) {
 		return NULL;
@@ -144,20 +144,20 @@ static xmp_info_t *extract_webp_xmp(const uint8_t *data, size_t len)
 	if (WebPDemuxGetChunk(demux, "XMP ", 1, &chunk_iter)) {
 		/* XMP chunk found */
 		if (chunk_iter.chunk.bytes != NULL && chunk_iter.chunk.size > 0) {
-			/* Allocate and initialize xmp_info_t */
-			xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+			/* Allocate and initialize img2_xmp_t */
+			img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 			if (xmp == NULL) {
 				WebPDemuxReleaseChunkIterator(&chunk_iter);
 				WebPDemuxDelete(demux);
 				return NULL;
 			}
 
-			xmp_info_init(xmp);
+			img2_xmp_init(xmp);
 
 			/* Parse XMP data (raw XML string) */
-			if (parse_xmp_from_xml(xmp, (const char *)chunk_iter.chunk.bytes, chunk_iter.chunk.size) != 0) {
+			if (img2_xmp_parse_xml(xmp, (const char *)chunk_iter.chunk.bytes, chunk_iter.chunk.size) != 0) {
 				/* Parse failed */
-				xmp_info_free(xmp);
+				img2_xmp_clear(xmp);
 				free(xmp);
 				xmp = NULL;
 			}
@@ -173,7 +173,7 @@ static xmp_info_t *extract_webp_xmp(const uint8_t *data, size_t len)
 	WebPDemuxDelete(demux);
 	return NULL;
 }
-#endif /* HAVE_EXIF_READER */
+#endif /* IMG2_HAVE_EXIF_READER */
 
 /**
  * @brief Decode static WebP image (single frame)
@@ -184,11 +184,11 @@ static xmp_info_t *extract_webp_xmp(const uint8_t *data, size_t len)
  * @param data Raw WebP file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note Output format is RGBA8888
  */
-static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp_static");
@@ -207,15 +207,15 @@ static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_
 		return NULL;
 	}
 
-	// Create image_t structure
-	image_t *img = image_create((uint32_t)width, (uint32_t)height);
+	// Create img2_image_t structure
+	img2_image_t *img = img2_image_alloc((uint32_t)width, (uint32_t)height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		WebPFree(pixels);
 		return NULL;
 	}
 
-	// Copy pixels to image_t (WebP returns RGBA8888, same as our format)
+	// Copy pixels to img2_image_t (WebP returns RGBA8888, same as our format)
 	size_t pixel_size = (size_t)width * (size_t)height * 4;
 	memcpy(img->pixels, pixels, pixel_size);
 
@@ -223,12 +223,12 @@ static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_
 	WebPFree(pixels);
 
 	// Parse EXIF/XMP metadata
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	// Extract EXIF from EXIF chunk using WebPDemux
-	exif_info_t *exif = extract_webp_exif(data, len);
+	img2_exif_t *exif = extract_webp_exif(data, len);
 
 	// Extract XMP from XMP chunk using WebPDemux
-	xmp_info_t *xmp = extract_webp_xmp(data, len);
+	img2_xmp_t *xmp = extract_webp_xmp(data, len);
 
 	// Store metadata in image structure
 	img->exif = exif;
@@ -236,10 +236,10 @@ static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_
 #endif
 
 	// Allocate frames array (single frame)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(img);
+		img2_image_destroy(img);
 		return NULL;
 	}
 
@@ -263,7 +263,7 @@ static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_
  * @note Returns false if data is invalid or not a WebP
  * @note Does not validate that frames are decodable, only checks for animation flag
  */
-bool webp_is_animated(const uint8_t *data, size_t len)
+bool img2_webp_is_animated(const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0) {
 		return false;
@@ -288,13 +288,13 @@ bool webp_is_animated(const uint8_t *data, size_t len)
  * @param data Raw WebP file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
  * @note Maximum MAX_WEBP_FRAMES frames (200) to prevent DoS
  * @note WebP decoder returns fully composited frames automatically
  * @note Output format is RGBA8888
  */
-static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_webp_animated(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp_animated");
@@ -352,7 +352,7 @@ static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *fram
 	uint32_t canvas_height = anim_info.canvas_height;
 
 	// Allocate frames array
-	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		WebPAnimDecoderDelete(dec);
@@ -376,13 +376,13 @@ static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *fram
 		}
 
 		// Create output frame
-		frames[frame_idx] = image_create(canvas_width, canvas_height);
+		frames[frame_idx] = img2_image_alloc(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", frame_idx);
 			goto cleanup_error;
 		}
 
-		// Copy frame buffer to image_t
+		// Copy frame buffer to img2_image_t
 		// WebP decoder returns fully composited RGBA frames
 		size_t pixel_size = (size_t)canvas_width * (size_t)canvas_height * 4;
 		memcpy(frames[frame_idx]->pixels, frame_buf, pixel_size);
@@ -401,7 +401,7 @@ cleanup_error:
 	// Cleanup on error
 	for (int i = 0; i < num_frames; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);
@@ -418,14 +418,14 @@ cleanup_error:
  * @param data Raw WebP file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (1 for static, N for animated)
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
- * @note Caller must free returned array with decoder_free_frames()
+ * @note Caller must free returned array with img2_decoder_free_frames()
  * @note For static images, frame_count = 1
  * @note For animated images, frame_count = N (max MAX_WEBP_FRAMES)
  * @note Output format is RGBA8888
  */
-image_t **decode_webp(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_webp(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp");
@@ -436,7 +436,7 @@ image_t **decode_webp(const uint8_t *data, size_t len, int *frame_count)
 	*frame_count = 0;
 
 	// Check if animated
-	if (webp_is_animated(data, len)) {
+	if (img2_webp_is_animated(data, len)) {
 		return decode_webp_animated(data, len, frame_count);
 	}
 

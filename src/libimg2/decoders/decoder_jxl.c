@@ -18,7 +18,7 @@
 #include "decoder.h"
 #include "../core/log.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
 #endif
 
@@ -43,9 +43,9 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
  * @param data Raw JXL file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (always 1)
- * @return Array of 1 image_t*, or NULL on error
+ * @return Array of 1 img2_image_t*, or NULL on error
  */
-static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count);
+static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * @brief Decode animated (multi-frame) JXL image
@@ -54,11 +54,11 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
  * @param num_frames Expected number of frames
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  */
-static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames);
+static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Extract EXIF and XMP metadata from JXL boxes
  *
@@ -67,7 +67,7 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
  * @param exif_out Output: EXIF metadata (allocated on success, NULL on failure)
  * @param xmp_out Output: XMP metadata (allocated on success, NULL on failure)
  */
-static void jxl_extract_metadata(const uint8_t *data, size_t len, exif_info_t **exif_out, xmp_info_t **xmp_out);
+static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **exif_out, img2_xmp_t **xmp_out);
 #endif
 
 static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32_t *height, int *num_frames)
@@ -122,7 +122,7 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 			*height = info.ysize;
 
 			// Validate dimensions
-			if (*width > IMAGE_MAX_DIMENSION || *height > IMAGE_MAX_DIMENSION) {
+			if (*width > IMG2_MAX_DIMENSION || *height > IMG2_MAX_DIMENSION) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", *width, *height);
 				JxlDecoderDestroy(dec);
 				return -1;
@@ -173,7 +173,7 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 	return frame_count;
 }
 
-static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl_static");
@@ -215,7 +215,7 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 		.align = 0,
 	};
 
-	image_t *output = NULL;
+	img2_image_t *output = NULL;
 	uint32_t width = 0;
 	uint32_t height = 0;
 
@@ -235,7 +235,7 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 			height = info.ysize;
 
 			// Validate dimensions
-			if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
+			if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", width, height);
 				goto cleanup_error;
 			}
@@ -245,8 +245,8 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 				goto cleanup_error;
 			}
 
-			// Create image_t
-			output = image_create(width, height);
+			// Create img2_image_t
+			output = img2_image_alloc(width, height);
 			if (output == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 				goto cleanup_error;
@@ -295,10 +295,10 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 	JxlDecoderDestroy(dec);
 
 	// Allocate frames array (single frame)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(output);
+		img2_image_destroy(output);
 		return NULL;
 	}
 
@@ -310,12 +310,12 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 cleanup_error:
 	JxlDecoderDestroy(dec);
 	if (output != NULL) {
-		image_destroy(output);
+		img2_image_destroy(output);
 	}
 	return NULL;
 }
 
-static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames)
+static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames)
 {
 	if (data == NULL || len == 0 || frame_count == NULL || num_frames <= 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl_animated");
@@ -326,7 +326,7 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 	*frame_count = 0;
 
 	// Allocate frames array
-	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		return NULL;
@@ -393,7 +393,7 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 			height = info.ysize;
 
 			// Validate dimensions
-			if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
+			if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", width, height);
 				goto cleanup_error;
 			}
@@ -417,8 +417,8 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 				goto cleanup_error;
 			}
 
-			// Allocate image_t for current frame
-			frames[current_frame] = image_create(width, height);
+			// Allocate img2_image_t for current frame
+			frames[current_frame] = img2_image_alloc(width, height);
 			if (frames[current_frame] == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create frame %d", current_frame);
 				goto cleanup_error;
@@ -466,7 +466,7 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 		// Cleanup allocated frames
 		for (int i = 0; i < num_frames; i++) {
 			if (frames[i] != NULL) {
-				image_destroy(frames[i]);
+				img2_image_destroy(frames[i]);
 			}
 		}
 		free(frames);
@@ -482,14 +482,14 @@ cleanup_error:
 	// Cleanup on error
 	for (int i = 0; i < num_frames; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);
 	return NULL;
 }
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Find a box in JXL ISOBMFF container by scanning memory
  *
@@ -536,7 +536,7 @@ static int jxl_find_box(const uint8_t *data, size_t len, const char *box_type, c
 	return -1; // Not found
 }
 
-static void jxl_extract_metadata(const uint8_t *data, size_t len, exif_info_t **exif_out, xmp_info_t **xmp_out)
+static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **exif_out, img2_xmp_t **xmp_out)
 {
 	if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
 		return;
@@ -570,11 +570,11 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, exif_info_t **
 		}
 
 		// Parse EXIF data
-		exif_info_t *exif = malloc(sizeof(exif_info_t));
+		img2_exif_t *exif = malloc(sizeof(img2_exif_t));
 		if (exif != NULL) {
-			exif_info_init(exif);
-			// Call parse_exif_from_tiff with raw TIFF data
-			if (parse_exif_from_tiff(exif, tiff_data, tiff_size) == 0) {
+			img2_exif_init(exif);
+			// Call img2_exif_parse_tiff with raw TIFF data
+			if (img2_exif_parse_tiff(exif, tiff_data, tiff_size) == 0) {
 				*exif_out = exif;
 			} else {
 				// Parse failed
@@ -588,15 +588,15 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, exif_info_t **
 	size_t xmp_size = 0;
 	if (jxl_find_box(data, len, "xml ", &xmp_data, &xmp_size) == 0) {
 		// Parse XMP data
-		xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+		img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 		if (xmp != NULL) {
-			xmp_info_init(xmp);
-			// Call parse_xmp_from_xml with XML data
-			if (parse_xmp_from_xml(xmp, (const char *)xmp_data, xmp_size) == 0) {
+			img2_xmp_init(xmp);
+			// Call img2_xmp_parse_xml with XML data
+			if (img2_xmp_parse_xml(xmp, (const char *)xmp_data, xmp_size) == 0) {
 				*xmp_out = xmp;
 			} else {
 				// Parse failed
-				xmp_info_free(xmp);
+				img2_xmp_clear(xmp);
 				free(xmp);
 			}
 		}
@@ -604,7 +604,7 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, exif_info_t **
 }
 #endif
 
-image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_jxl(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl");
@@ -626,7 +626,7 @@ image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count)
 	}
 
 	// Route to appropriate decoder
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	if (num_frames == 1) {
 		frames = decode_jxl_static(data, len, frame_count);
 	} else {
@@ -634,10 +634,10 @@ image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count)
 	}
 
 	// Extract EXIF/XMP metadata if decoding succeeded
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	if (frames != NULL && *frame_count > 0) {
-		exif_info_t *exif = NULL;
-		xmp_info_t *xmp = NULL;
+		img2_exif_t *exif = NULL;
+		img2_xmp_t *xmp = NULL;
 
 		// Extract metadata from JXL boxes
 		jxl_extract_metadata(data, len, &exif, &xmp);
@@ -652,7 +652,7 @@ image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count)
 				free(exif);
 			}
 			if (xmp != NULL) {
-				xmp_info_free(xmp);
+				img2_xmp_clear(xmp);
 				free(xmp);
 			}
 		}

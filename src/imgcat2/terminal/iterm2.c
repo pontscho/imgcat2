@@ -25,7 +25,7 @@ bool iterm2_is_format_supported(const uint8_t *data, size_t size, cli_options_t 
 	}
 
 	/* Detect MIME type using magic bytes */
-	mime_type_t mime = detect_mime_type(data, size);
+	img2_mime_t mime = img2_detect_mime(data, size);
 
 	/*
 	 * iTerm2 will use decode → scale → encode pipeline for all formats.
@@ -33,34 +33,34 @@ bool iterm2_is_format_supported(const uint8_t *data, size_t size, cli_options_t 
 	 * rendering (following Kitty pattern).
 	 */
 	switch (mime) {
-#ifdef HAVE_WEBP
-		case MIME_WEBP:
-			if (webp_is_animated(data, size) && opts->animate) {
+#ifdef IMG2_HAVE_WEBP
+		case IMG2_MIME_WEBP:
+			if (img2_webp_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
 			}
 			break;
 #endif
 
-#ifdef HAVE_HEIF
-		case MIME_AVIF:
-		case MIME_HEIF:
-			if (heif_is_animated(data, size) && opts->animate) {
+#ifdef IMG2_HAVE_HEIF
+		case IMG2_MIME_AVIF:
+		case IMG2_MIME_HEIF:
+			if (img2_heif_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
 			}
 			break;
 #endif
 
 #ifdef PNG_APNG_SUPPORTED
-		case MIME_PNG:
-			if (png_is_animated(data, size) && opts->animate) {
+		case IMG2_MIME_PNG:
+			if (img2_png_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
 			}
 			break;
 #endif
 
-#ifdef HAVE_GIFLIB
-		case MIME_GIF:
-			if (gif_is_animated(data, size) && opts->animate) {
+#ifdef IMG2_HAVE_GIFLIB
+		case IMG2_MIME_GIF:
+			if (img2_gif_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
 			}
 			break;
@@ -76,7 +76,7 @@ force_ansi:
 	return false;
 }
 
-int iterm2_render(image_t **frames, int frame_count, const cli_options_t *opts, size_t original_size)
+int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *opts, size_t original_size)
 {
 	/* Validate inputs */
 	if (frames == NULL || frame_count <= 0 || opts == NULL) {
@@ -85,7 +85,7 @@ int iterm2_render(image_t **frames, int frame_count, const cli_options_t *opts, 
 	}
 
 	/* Get first frame */
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Task-008: Dimension limit check (8192x8192 max) */
 #define ITERM2_MAX_DIMENSION 8192
@@ -99,10 +99,10 @@ int iterm2_render(image_t **frames, int frame_count, const cli_options_t *opts, 
 	size_t encoded_size = 0;
 	const char *format_name;
 
-	if (opts->iterm2_format == FORMAT_PNG) {
+	if (opts->iterm2_format == IMG2_FORMAT_PNG) {
 		/* PNG encoding with compression level 3 for speed */
 		int compression = 3;
-		if (encode_png(img, compression, &encoded_data, &encoded_size) != 0) {
+		if (img2_encode_png(img, compression, &encoded_data, &encoded_size) != 0) {
 			fprintf(stderr, "Error: Failed to encode PNG for iTerm2\n");
 			return -1;
 		}
@@ -110,7 +110,7 @@ int iterm2_render(image_t **frames, int frame_count, const cli_options_t *opts, 
 
 	} else {
 		/* JPEG encoding with configured quality */
-		if (encode_jpeg(img, opts->jpeg_quality, &encoded_data, &encoded_size) != 0) {
+		if (img2_encode_jpeg(img, opts->jpeg_quality, &encoded_data, &encoded_size) != 0) {
 			fprintf(stderr, "Error: Failed to encode JPEG for iTerm2\n");
 			return -1;
 		}

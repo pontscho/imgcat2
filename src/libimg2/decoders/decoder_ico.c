@@ -52,19 +52,19 @@ typedef struct {
 #pragma pack(pop)
 
 /* Forward declarations for PNG decoder (external) */
-extern image_t **decode_png(const uint8_t *data, size_t len, int *frame_count);
+extern img2_image_t **img2_decode_png(const uint8_t *data, size_t len, int *frame_count);
 
 /* Static helper functions */
 static int find_best_ico_entry(const ico_dir_entry_t *entries, int count);
-static image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_cursor);
-static image_t *decode_dib(const uint8_t *data, size_t len);
+static img2_image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_cursor);
+static img2_image_t *decode_dib(const uint8_t *data, size_t len);
 static bool parse_bmp_header(const uint8_t *data, size_t len, bmp_info_header_t *header);
-static void apply_and_mask(image_t *img, const uint8_t *and_mask, uint32_t width, uint32_t height);
-static void decode_dib_32bit(image_t *img, const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_stride);
-static void decode_dib_24bit(image_t *img, const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_stride);
-static void decode_dib_8bit(image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride);
-static void decode_dib_4bit(image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride);
-static void decode_dib_1bit(image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride);
+static void apply_and_mask(img2_image_t *img, const uint8_t *and_mask, uint32_t width, uint32_t height);
+static void decode_dib_32bit(img2_image_t *img, const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_stride);
+static void decode_dib_24bit(img2_image_t *img, const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_stride);
+static void decode_dib_8bit(img2_image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride);
+static void decode_dib_4bit(img2_image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride);
+static void decode_dib_1bit(img2_image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride);
 
 /**
  * @brief Find best ICO entry (largest area, highest bit depth)
@@ -142,7 +142,7 @@ static bool parse_bmp_header(const uint8_t *data, size_t len, bmp_info_header_t 
  * @param width Image width
  * @param height Image height
  */
-static void apply_and_mask(image_t *img, const uint8_t *and_mask, uint32_t width, uint32_t height)
+static void apply_and_mask(img2_image_t *img, const uint8_t *and_mask, uint32_t width, uint32_t height)
 {
 	// AND mask row stride (1 bit per pixel, 4-byte aligned)
 	uint32_t mask_stride = ((width + 31) / 32) * 4;
@@ -176,7 +176,7 @@ static void apply_and_mask(image_t *img, const uint8_t *and_mask, uint32_t width
  * @param height Image height
  * @param row_stride Bytes per row (4-byte aligned)
  */
-static void decode_dib_32bit(image_t *img, const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_stride)
+static void decode_dib_32bit(img2_image_t *img, const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_stride)
 {
 	for (uint32_t y = 0; y < height; y++) {
 		// Bottom-up to top-down
@@ -206,7 +206,7 @@ static void decode_dib_32bit(image_t *img, const uint8_t *pixels, uint32_t width
  * @param height Image height
  * @param row_stride Bytes per row (4-byte aligned)
  */
-static void decode_dib_24bit(image_t *img, const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_stride)
+static void decode_dib_24bit(img2_image_t *img, const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_stride)
 {
 	for (uint32_t y = 0; y < height; y++) {
 		// Bottom-up to top-down
@@ -237,7 +237,7 @@ static void decode_dib_24bit(image_t *img, const uint8_t *pixels, uint32_t width
  * @param height Image height
  * @param row_stride Bytes per row (4-byte aligned)
  */
-static void decode_dib_8bit(image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride)
+static void decode_dib_8bit(img2_image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride)
 {
 	for (uint32_t y = 0; y < height; y++) {
 		// Bottom-up to top-down
@@ -275,7 +275,7 @@ static void decode_dib_8bit(image_t *img, const uint8_t *pixels, const uint8_t *
  * @param height Image height
  * @param row_stride Bytes per row (4-byte aligned)
  */
-static void decode_dib_4bit(image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride)
+static void decode_dib_4bit(img2_image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride)
 {
 	for (uint32_t y = 0; y < height; y++) {
 		// Bottom-up to top-down
@@ -334,7 +334,7 @@ static void decode_dib_4bit(image_t *img, const uint8_t *pixels, const uint8_t *
  * @param height Image height
  * @param row_stride Bytes per row (4-byte aligned)
  */
-static void decode_dib_1bit(image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride)
+static void decode_dib_1bit(img2_image_t *img, const uint8_t *pixels, const uint8_t *palette, uint32_t palette_size, uint32_t width, uint32_t height, uint32_t row_stride)
 {
 	for (uint32_t y = 0; y < height; y++) {
 		// Bottom-up to top-down
@@ -371,7 +371,7 @@ static void decode_dib_1bit(image_t *img, const uint8_t *pixels, const uint8_t *
  * @param len Length of data buffer
  * @return Decoded image, or NULL on error
  */
-static image_t *decode_dib(const uint8_t *data, size_t len)
+static img2_image_t *decode_dib(const uint8_t *data, size_t len)
 {
 	// Parse BMP header
 	bmp_info_header_t header;
@@ -426,7 +426,7 @@ static image_t *decode_dib(const uint8_t *data, size_t len)
 	const uint8_t *pixels = data + pixel_offset;
 
 	// Create output image
-	image_t *img = image_create(width, height);
+	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image");
 		return NULL;
@@ -441,7 +441,7 @@ static image_t *decode_dib(const uint8_t *data, size_t len)
 		case 1: decode_dib_1bit(img, pixels, palette, palette_size, width, height, row_stride); break;
 		default:
 			img2_log(IMG2_LOG_ERROR, "Error: Unsupported bit depth: %u", header.bit_count);
-			image_destroy(img);
+			img2_image_destroy(img);
 			return NULL;
 	}
 
@@ -468,7 +468,7 @@ static image_t *decode_dib(const uint8_t *data, size_t len)
  * @param is_cursor true if CUR format, false if ICO (currently unused)
  * @return Decoded image, or NULL on error
  */
-static image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_cursor)
+static img2_image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_cursor)
 {
 	(void)is_cursor; // Currently unused - both ICO and CUR decode the same way
 
@@ -477,13 +477,13 @@ static image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_cursor
 	if (len >= 8 && memcmp(data, png_sig, 8) == 0) {
 		// PNG format - use existing decoder
 		int frame_count = 0;
-		image_t **frames = decode_png(data, len, &frame_count);
+		img2_image_t **frames = img2_decode_png(data, len, &frame_count);
 		if (frames == NULL || frame_count < 1) {
 			return NULL;
 		}
 
 		// Extract first frame
-		image_t *img = frames[0];
+		img2_image_t *img = frames[0];
 		free(frames);
 		return img;
 	}
@@ -498,9 +498,9 @@ static image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_cursor
  * @param data Raw ICO/CUR file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  */
-image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_ico(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_ico");
@@ -563,17 +563,17 @@ image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count)
 	size_t entry_size = entry->bytes_in_res;
 	bool is_cursor = (header.type == 2);
 
-	image_t *img = decode_ico_entry(entry_data, entry_size, is_cursor);
+	img2_image_t *img = decode_ico_entry(entry_data, entry_size, is_cursor);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to decode ICO entry");
 		return NULL;
 	}
 
 	// Allocate frames array (single frame)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(img);
+		img2_image_destroy(img);
 		return NULL;
 	}
 

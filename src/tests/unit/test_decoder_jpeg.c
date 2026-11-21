@@ -18,9 +18,9 @@
 #include "../decoder_internal.h"
 
 /**
- * @test Test decode_jpeg() with NULL parameters
+ * @test Test img2_decode_jpeg() with NULL parameters
  *
- * Verifies that decode_jpeg() rejects NULL input gracefully.
+ * Verifies that img2_decode_jpeg() rejects NULL input gracefully.
  */
 CTEST(decoder_jpeg, null_parameters)
 {
@@ -28,35 +28,35 @@ CTEST(decoder_jpeg, null_parameters)
 	uint8_t dummy_data[10] = { 0 };
 
 	/* NULL data pointer */
-	image_t **frames = decode_jpeg(NULL, 100, &frame_count);
+	img2_image_t **frames = img2_decode_jpeg(NULL, 100, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* Zero length */
-	frames = decode_jpeg(dummy_data, 0, &frame_count);
+	frames = img2_decode_jpeg(dummy_data, 0, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* NULL frame_count */
-	frames = decode_jpeg(dummy_data, 10, NULL);
+	frames = img2_decode_jpeg(dummy_data, 10, NULL);
 	ASSERT_NULL(frames);
 }
 
 /**
- * @test Test decode_jpeg() with invalid JPEG data
+ * @test Test img2_decode_jpeg() with invalid JPEG data
  *
- * Verifies that decode_jpeg() rejects invalid data.
+ * Verifies that img2_decode_jpeg() rejects invalid data.
  */
 CTEST(decoder_jpeg, invalid_data)
 {
 	int frame_count;
 	uint8_t invalid_data[] = "This is not a JPEG file";
 
-	image_t **frames = decode_jpeg(invalid_data, sizeof(invalid_data), &frame_count);
+	img2_image_t **frames = img2_decode_jpeg(invalid_data, sizeof(invalid_data), &frame_count);
 	ASSERT_NULL(frames);
 	ASSERT_EQUAL(0, frame_count);
 }
 
 /**
- * @test Test decode_jpeg() with minimal 1x1 JPEG
+ * @test Test img2_decode_jpeg() with minimal 1x1 JPEG
  *
  * Minimal valid JPEG: 1x1 pixel baseline JPEG
  */
@@ -76,7 +76,7 @@ CTEST(decoder_jpeg, decode_minimal_1x1)
 	};
 
 	int frame_count;
-	image_t **frames = decode_jpeg(jpeg_1x1, sizeof(jpeg_1x1), &frame_count);
+	img2_image_t **frames = img2_decode_jpeg(jpeg_1x1, sizeof(jpeg_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -86,15 +86,15 @@ CTEST(decoder_jpeg, decode_minimal_1x1)
 	ASSERT_NOT_NULL(frames[0]->pixels);
 
 	/* JPEG has no alpha channel - should be converted to RGBA with alpha=255 */
-	uint8_t *pixel = image_get_pixel(frames[0], 0, 0);
+	uint8_t *pixel = img2_image_get_pixel(frames[0], 0, 0);
 	ASSERT_NOT_NULL(pixel);
 	ASSERT_EQUAL(255, pixel[3]); /* Alpha should be opaque */
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decode_jpeg() with 2x2 JPEG
+ * @test Test img2_decode_jpeg() with 2x2 JPEG
  *
  * Tests basic JPEG decoding with a small 2x2 image.
  */
@@ -108,7 +108,7 @@ CTEST(decoder_jpeg, decode_2x2)
 		                                0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xD2, 0xFF, 0xD9 };
 
 	int frame_count;
-	image_t **frames = decode_jpeg(jpeg_2x2, sizeof(jpeg_2x2), &frame_count);
+	img2_image_t **frames = img2_decode_jpeg(jpeg_2x2, sizeof(jpeg_2x2), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -120,36 +120,36 @@ CTEST(decoder_jpeg, decode_2x2)
 	/* Verify all 4 pixels exist and have opaque alpha */
 	for (uint32_t y = 0; y < 2; y++) {
 		for (uint32_t x = 0; x < 2; x++) {
-			uint8_t *pixel = image_get_pixel(frames[0], x, y);
+			uint8_t *pixel = img2_image_get_pixel(frames[0], x, y);
 			ASSERT_NOT_NULL(pixel);
 			ASSERT_EQUAL(255, pixel[3]); /* Alpha=255 */
 		}
 	}
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decoder_free_frames() with NULL
+ * @test Test img2_decoder_free_frames() with NULL
  *
- * Verifies that decoder_free_frames() handles NULL gracefully.
+ * Verifies that img2_decoder_free_frames() handles NULL gracefully.
  */
 CTEST(decoder_jpeg, free_frames_null)
 {
 	/* Should not crash */
-	decoder_free_frames(NULL, 0);
-	decoder_free_frames(NULL, 10);
+	img2_decoder_free_frames(NULL, 0);
+	img2_decoder_free_frames(NULL, 10);
 }
 
 /**
  * @test Test JPEG decoder through decoder registry
  *
- * Verifies that JPEG can be decoded through the decoder_decode() API.
+ * Verifies that JPEG can be decoded through the img2_decoder_dispatch() API.
  */
 CTEST(decoder_jpeg, decode_through_registry)
 {
 	/* Initialize decoder registry */
-	decoder_registry_init();
+	img2_decoder_registry_init();
 
 	/* Minimal 1x1 JPEG */
 	static const uint8_t jpeg_1x1[] = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
@@ -159,7 +159,7 @@ CTEST(decoder_jpeg, decode_through_registry)
 		                                0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xD2, 0xFF, 0xD9 };
 
 	int frame_count;
-	image_t **frames = decoder_decode(NULL, jpeg_1x1, sizeof(jpeg_1x1), MIME_JPEG, &frame_count);
+	img2_image_t **frames = img2_decoder_dispatch(NULL, jpeg_1x1, sizeof(jpeg_1x1), IMG2_MIME_JPEG, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -167,21 +167,21 @@ CTEST(decoder_jpeg, decode_through_registry)
 	ASSERT_EQUAL(1, frames[0]->width);
 	ASSERT_EQUAL(1, frames[0]->height);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decoder_find_by_mime() for JPEG
+ * @test Test img2_decoder_find() for JPEG
  *
  * Verifies that JPEG decoder can be found in registry.
  */
 CTEST(decoder_jpeg, find_by_mime)
 {
-	decoder_registry_init();
+	img2_decoder_registry_init();
 
-	const decoder_t *decoder = decoder_find_by_mime(MIME_JPEG);
+	const img2_decoder_entry_t *decoder = img2_decoder_find(IMG2_MIME_JPEG);
 	ASSERT_NOT_NULL(decoder);
-	ASSERT_EQUAL(MIME_JPEG, decoder->mime_type);
+	ASSERT_EQUAL(IMG2_MIME_JPEG, decoder->mime_type);
 	ASSERT_NOT_NULL(decoder->name);
 	ASSERT_NOT_NULL(decoder->decode);
 }
@@ -200,10 +200,10 @@ CTEST(decoder_jpeg, single_frame_only)
 		                                0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xD2, 0xFF, 0xD9 };
 
 	int frame_count = -1;
-	image_t **frames = decode_jpeg(jpeg_1x1, sizeof(jpeg_1x1), &frame_count);
+	img2_image_t **frames = img2_decode_jpeg(jpeg_1x1, sizeof(jpeg_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count); /* JPEG is always single-frame */
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }

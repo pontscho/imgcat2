@@ -19,14 +19,14 @@
 #include "decoder.h"
 #include "../core/log.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
 #endif
 
 // Forward declaration for JPEG decoder (used for thumbnail extraction)
-extern image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count);
+extern img2_image_t **img2_decode_jpeg(const uint8_t *data, size_t len, int *frame_count);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Check if string has meaningful content (not just whitespace)
  */
@@ -47,18 +47,18 @@ static bool has_content(const char *str)
  * @brief Extract EXIF metadata from LibRaw structure
  *
  * Extracts all available EXIF metadata from a parsed LibRaw structure
- * into an exif_info_t. Used by both thumbnail and full processing paths.
+ * into an img2_exif_t. Used by both thumbnail and full processing paths.
  *
  * @param raw LibRaw data structure (after open_buffer)
- * @return Allocated exif_info_t with metadata, or NULL on failure
+ * @return Allocated img2_exif_t with metadata, or NULL on failure
  */
-static exif_info_t *extract_raw_exif(libraw_data_t *raw)
+static img2_exif_t *extract_raw_exif(libraw_data_t *raw)
 {
-	exif_info_t *exif = malloc(sizeof(exif_info_t));
+	img2_exif_t *exif = malloc(sizeof(img2_exif_t));
 	if (!exif) {
 		return NULL;
 	}
-	exif_info_init(exif);
+	img2_exif_init(exif);
 
 	// Camera make/model
 	if (raw->idata.make[0] != '\0') {
@@ -181,23 +181,23 @@ static exif_info_t *extract_raw_exif(libraw_data_t *raw)
  * Parses embedded XMP data from the RAW file if available.
  *
  * @param raw LibRaw data structure (after open_buffer)
- * @return Allocated xmp_info_t with metadata, or NULL if no XMP or failure
+ * @return Allocated img2_xmp_t with metadata, or NULL if no XMP or failure
  */
-static xmp_info_t *extract_raw_xmp(libraw_data_t *raw)
+static img2_xmp_t *extract_raw_xmp(libraw_data_t *raw)
 {
 	// Check if XMP data is available
 	if (!raw->idata.xmpdata || raw->idata.xmplen == 0) {
 		return NULL;
 	}
 
-	xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+	img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 	if (!xmp) {
 		return NULL;
 	}
-	xmp_info_init(xmp);
+	img2_xmp_init(xmp);
 
 	// Parse XMP from raw XML data
-	if (parse_xmp_from_xml(xmp, raw->idata.xmpdata, raw->idata.xmplen) != 0) {
+	if (img2_xmp_parse_xml(xmp, raw->idata.xmpdata, raw->idata.xmplen) != 0) {
 		free(xmp);
 		return NULL;
 	}
@@ -215,12 +215,12 @@ static xmp_info_t *extract_raw_xmp(libraw_data_t *raw)
  * @param data Raw RAW file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note Output format is RGBA8888
  * @note Processing parameters: sRGB color space, camera white balance, AHD demosaicing
  */
-static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_raw_static");
@@ -266,18 +266,18 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 			// 	fprintf(stderr, "Info: Using embedded %s thumbnail (faster)\n", thumb->type == LIBRAW_IMAGE_JPEG ? "JPEG" : "RGB");
 			// }
 
-			image_t *output = NULL;
+			img2_image_t *output = NULL;
 			if (thumb->type == LIBRAW_IMAGE_JPEG) {
 				// Decode JPEG thumbnail
 				int tc = 0;
-				image_t **tf = decode_jpeg(thumb->data, thumb->data_size, &tc);
+				img2_image_t **tf = img2_decode_jpeg(thumb->data, thumb->data_size, &tc);
 				if (tf && tc > 0) {
 					output = tf[0];
 					free(tf);
 				}
 			} else if (thumb->type == LIBRAW_IMAGE_BITMAP) {
 				// Convert RGB bitmap thumbnail
-				output = image_create(thumb->width, thumb->height);
+				output = img2_image_alloc(thumb->width, thumb->height);
 				if (output) {
 					const uint8_t *s = thumb->data;
 					uint8_t *d = output->pixels;
@@ -292,20 +292,20 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 
 			if (output) {
 				// Add EXIF and XMP metadata using helper functions
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 				output->exif = extract_raw_exif(raw);
 				output->xmp = extract_raw_xmp(raw);
 #endif
 				libraw_dcraw_clear_mem(thumb);
 				libraw_close(raw);
 
-				image_t **frames = malloc(sizeof(image_t *));
+				img2_image_t **frames = malloc(sizeof(img2_image_t *));
 				if (frames) {
 					frames[0] = output;
 					*frame_count = 1;
 					return frames;
 				}
-				image_destroy(output);
+				img2_image_destroy(output);
 				return NULL;
 			}
 			libraw_dcraw_clear_mem(thumb);
@@ -362,8 +362,8 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 		return NULL;
 	}
 
-	// Create image_t structure
-	image_t *output = image_create(processed->width, processed->height);
+	// Create img2_image_t structure
+	img2_image_t *output = img2_image_alloc(processed->width, processed->height);
 	if (output == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		libraw_dcraw_clear_mem(processed);
@@ -386,7 +386,7 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	}
 
 	// Extract EXIF and XMP metadata using helper functions
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	output->exif = extract_raw_exif(raw);
 	output->xmp = extract_raw_xmp(raw);
 #endif
@@ -396,10 +396,10 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	libraw_close(raw);
 
 	// Allocate frames array (single frame)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(output);
+		img2_image_destroy(output);
 		return NULL;
 	}
 
@@ -415,9 +415,9 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
  * @param data Raw RAW file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (always 1 for RAW)
- * @return Array of image_t* pointers, or NULL on error
+ * @return Array of img2_image_t* pointers, or NULL on error
  */
-image_t **decode_raw(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_raw(const uint8_t *data, size_t len, int *frame_count)
 {
 	// RAW files are always single images (no animation)
 	return decode_raw_static(data, len, frame_count);

@@ -7,8 +7,8 @@
  * multi-frame (animated) images.
  */
 
-#ifndef IMGCAT2_DECODER_H
-#define IMGCAT2_DECODER_H
+#ifndef IMG2_INTERNAL_DECODERS_DECODER_H
+#define IMG2_INTERNAL_DECODERS_DECODER_H
 
 #include <png.h>
 #include <stddef.h>
@@ -18,72 +18,72 @@
 #include "yuv.h"
 
 /**
- * @typedef decode_func_t
+ * @typedef img2_decode_fn
  * @brief Decoder function pointer type
  *
  * @param data Raw image file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (1 for static, N for animated)
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
- * @note Caller must free returned array with decoder_free_frames()
+ * @note Caller must free returned array with img2_decoder_free_frames()
  * @note For static images, frame_count = 1
  * @note For animated images (e.g., GIF), frame_count = N
  */
-typedef image_t **(*decode_func_t)(const uint8_t *data, size_t len, int *frame_count);
+typedef img2_image_t **(*img2_decode_fn)(const uint8_t *data, size_t len, int *frame_count);
 
 /**
- * @struct decoder_t
+ * @struct img2_decoder_entry_t
  * @brief Decoder registry entry
  *
  * Represents a single image format decoder with metadata and function pointer.
  */
 typedef struct img2_decode_opts {
-	mime_type_t force_mime;          /* MIME_UNKNOWN = detect */
-	const yuv_params_t *yuv;         /* required for MIME_YUV */
+	img2_mime_t force_mime;          /* IMG2_MIME_UNKNOWN = detect */
+	const img2_yuv_params_t *yuv;         /* required for IMG2_MIME_YUV */
 	int max_frames;                  /* <= 0: no extra limit (implemented in S6) */
 	int jpeg_deblock;                /* -1 default (jpegqs if built), 0 off, 1 on (implemented in S6) */
 } img2_decode_opts_t;
 
 typedef struct {
-	mime_type_t mime_type; /**< MIME type this decoder handles */
+	img2_mime_t mime_type; /**< MIME type this decoder handles */
 	const char *name; /**< Human-readable format name (e.g., "PNG", "JPEG") */
-	decode_func_t decode; /**< Decoder function pointer */
-} decoder_t;
+	img2_decode_fn decode; /**< Decoder function pointer */
+} img2_decoder_entry_t;
 
 /**
  * @brief Global decoder registry
  *
  * Array of all registered decoders. Populated at compile-time based on
- * enabled libraries (HAVE_LIBPNG, HAVE_LIBJPEG, etc.).
+ * enabled libraries (IMG2_HAVE_LIBPNG, IMG2_HAVE_LIBJPEG, etc.).
  */
-extern const decoder_t *g_decoder_registry;
+extern const img2_decoder_entry_t *img2_decoder_registry;
 
 /**
  * @brief Number of registered decoders
  */
-extern size_t g_decoder_count;
+extern size_t img2_decoder_registry_size;
 
 /**
  * @brief Initialize decoder registry
  *
  * Populates the global decoder registry with enabled decoders based on
- * compile-time flags (HAVE_LIBPNG, HAVE_LIBJPEG, etc.).
+ * compile-time flags (IMG2_HAVE_LIBPNG, IMG2_HAVE_LIBJPEG, etc.).
  *
  * Must be called once at program startup before any decoding operations.
  *
  * Decoder priority (native libraries preferred over STB fallbacks):
- * 1. PNG: decode_png (libpng) if HAVE_LIBPNG, else decode_stb
- * 2. JPEG: decode_jpeg (libjpeg-turbo) if HAVE_LIBJPEG, else decode_stb
- * 3. GIF: decode_gif (giflib) if HAVE_GIFLIB, else not supported
- * 4. BMP, TGA, PSD, HDR: decode_stb (stb_image always available)
- * 5. PNM/PAM (P1-P7): decode_netpbm (native, always available)
+ * 1. PNG: img2_decode_png (libpng) if IMG2_HAVE_LIBPNG, else img2_decode_stb
+ * 2. JPEG: img2_decode_jpeg (libjpeg-turbo) if IMG2_HAVE_LIBJPEG, else img2_decode_stb
+ * 3. GIF: img2_decode_gif_animated (giflib) if IMG2_HAVE_GIFLIB, else not supported
+ * 4. BMP, TGA, PSD, HDR: img2_decode_stb (stb_image always available)
+ * 5. PNM/PAM (P1-P7): img2_decode_pnm (native, always available)
  *
  * Logs the registered decoders at IMG2_LOG_INFO.
  *
  * @note This function is idempotent (safe to call multiple times)
  */
-void decoder_registry_init(void);
+void img2_decoder_registry_init(void);
 
 /**
  * @brief Find decoder by MIME type
@@ -91,18 +91,18 @@ void decoder_registry_init(void);
  * Looks up a decoder in the registry that can handle the specified MIME type.
  *
  * @param mime MIME type to find decoder for
- * @return Pointer to decoder_t, or NULL if no decoder found
+ * @return Pointer to img2_decoder_entry_t, or NULL if no decoder found
  *
  * @note Returns first matching decoder (priority: native libs > STB fallbacks)
- * @note Must call decoder_registry_init() before using this function
+ * @note Must call img2_decoder_registry_init() before using this function
  *
  * @example
- * const decoder_t* dec = decoder_find_by_mime(MIME_PNG);
+ * const img2_decoder_entry_t* dec = img2_decoder_find(IMG2_MIME_PNG);
  * if (dec != NULL) {
  *     printf("Found decoder: %s\n", dec->name);
  * }
  */
-const decoder_t *decoder_find_by_mime(mime_type_t mime);
+const img2_decoder_entry_t *img2_decoder_find(img2_mime_t mime);
 
 /**
  * @brief Decode image data with automatic format detection
@@ -114,57 +114,57 @@ const decoder_t *decoder_find_by_mime(mime_type_t mime);
  * 4. Validates output frames
  * 5. Returns decoded frames array
  *
- * @param opts Decode options (may be NULL; required with yuv set for MIME_YUV)
+ * @param opts Decode options (may be NULL; required with yuv set for IMG2_MIME_YUV)
  * @param data Raw image file data
  * @param len Length of data in bytes
- * @param mime Detected MIME type (from detect_mime_type()), or MIME_YUV for raw
+ * @param mime Detected MIME type (from img2_detect_mime()), or IMG2_MIME_YUV for raw
  *             YUV input (requires opts->yuv; geometry taken from opts->yuv)
  * @param frame_count Output: number of frames decoded
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
- * @note Caller must free returned array with decoder_free_frames()
+ * @note Caller must free returned array with img2_decoder_free_frames()
  * @note Prints detailed error messages to stderr on failure
- * @note Validates each frame dimensions within IMAGE_MAX_DIMENSION limits
+ * @note Validates each frame dimensions within IMG2_MAX_DIMENSION limits
  *
  * @example
  * uint8_t* data;
  * size_t size;
  * if (read_file_secure("image.png", &data, &size)) {
- *     mime_type_t mime = detect_mime_type(data, size);
+ *     img2_mime_t mime = img2_detect_mime(data, size);
  *     int frame_count;
- *     image_t** frames = decoder_decode(data, size, mime, &frame_count);
+ *     img2_image_t** frames = img2_decoder_dispatch(data, size, mime, &frame_count);
  *     if (frames != NULL) {
  *         // Render frames...
- *         decoder_free_frames(frames, frame_count);
+ *         img2_decoder_free_frames(frames, frame_count);
  *     }
  *     free(data);
  * }
  */
-image_t **decoder_decode(const img2_decode_opts_t *opts, const uint8_t *data, size_t len, mime_type_t mime, int *frame_count);
+img2_image_t **img2_decoder_dispatch(const img2_decode_opts_t *opts, const uint8_t *data, size_t len, img2_mime_t mime, int *frame_count);
 
 /**
  * @brief Free multi-frame decoder output
  *
  * Cleans up memory allocated by decoder functions:
- * - Calls image_destroy() for each frame
+ * - Calls img2_image_destroy() for each frame
  * - Frees the frames array itself
  *
- * @param frames Array of image_t* pointers
+ * @param frames Array of img2_image_t* pointers
  * @param frame_count Number of frames in array
  *
  * @note NULL-safe (checks frames != NULL)
  * @note Safe to call with frame_count = 0
  *
  * @example
- * image_t** frames = decoder_decode(data, size, mime, &frame_count);
+ * img2_image_t** frames = img2_decoder_dispatch(data, size, mime, &frame_count);
  * if (frames != NULL) {
  *     // Use frames...
- *     decoder_free_frames(frames, frame_count);
+ *     img2_decoder_free_frames(frames, frame_count);
  * }
  */
-void decoder_free_frames(image_t **frames, int frame_count);
+void img2_decoder_free_frames(img2_image_t **frames, int frame_count);
 
-#ifdef HAVE_GIFLIB
+#ifdef IMG2_HAVE_GIFLIB
 /**
  * @brief Check if GIF is animated (has multiple frames)
  *
@@ -176,9 +176,9 @@ void decoder_free_frames(image_t **frames, int frame_count);
  * @return true if GIF has more than one frame, false otherwise or on error
  *
  * @note Returns false if data is invalid or not a GIF
- * @note Requires HAVE_GIFLIB to be defined
+ * @note Requires IMG2_HAVE_GIFLIB to be defined
  */
-bool gif_is_animated(const uint8_t *data, size_t size);
+bool img2_gif_is_animated(const uint8_t *data, size_t size);
 #endif
 
 #ifdef PNG_APNG_SUPPORTED
@@ -196,7 +196,7 @@ bool gif_is_animated(const uint8_t *data, size_t size);
  * @note Returns false if PNG_APNG_SUPPORTED not defined
  * @note Returns false if data is invalid or not a PNG
  */
-bool png_is_animated(const uint8_t *data, size_t size);
+bool img2_png_is_animated(const uint8_t *data, size_t size);
 #endif
 
 /**
@@ -213,23 +213,7 @@ bool png_is_animated(const uint8_t *data, size_t size);
  * @note Returns false if data is invalid or not a HEIF
  * @note Does not validate that images are decodable, only checks count
  */
-bool heif_is_animated(const uint8_t *data, size_t len);
-
-/**
- * @brief Check if AVIF is an image sequence (has multiple images)
- *
- * Quickly checks if an AVIF file contains multiple top-level images without
- * fully decoding the image data. Useful for determining whether
- * to use static or animated decoder.
- *
- * @param data Raw AVIF file data
- * @param len Size of data in bytes
- * @return true if AVIF has multiple images, false otherwise or on error
- *
- * @note Returns false if data is invalid or not an AVIF
- * @note Does not validate that images are decodable, only checks count
- */
-bool avif_is_animated(const uint8_t *data, size_t len);
+bool img2_heif_is_animated(const uint8_t *data, size_t len);
 
 /**
  * @brief Check if WebP is animated (has multiple frames)
@@ -245,7 +229,7 @@ bool avif_is_animated(const uint8_t *data, size_t len);
  * @note Returns false if data is invalid or not a WebP
  * @note Does not validate that frames are decodable, only checks for animation flag
  */
-bool webp_is_animated(const uint8_t *data, size_t len);
+bool img2_webp_is_animated(const uint8_t *data, size_t len);
 
 /**
  * @brief Decode SVG image using nanosvg (fallback decoder)
@@ -253,20 +237,20 @@ bool webp_is_animated(const uint8_t *data, size_t len);
  * @param data Raw SVG file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  */
-image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count);
+img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count);
 
-#ifdef HAVE_RESVG
+#ifdef IMG2_HAVE_RESVG
 /**
  * @brief Decode SVG image using resvg (preferred decoder)
  *
  * @param data Raw SVG file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  */
-image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count);
+img2_image_t **img2_decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count);
 #endif
 
-#endif /* IMGCAT2_DECODER_H */
+#endif /* IMG2_INTERNAL_DECODERS_DECODER_H */

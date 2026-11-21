@@ -15,9 +15,9 @@
 #include "../libimg2/decoders/magic.h"
 
 /* Forward declarations for EXIF/XMP structures */
-#ifdef HAVE_EXIF_READER
-struct exif_info_t;
-struct xmp_info_t;
+#ifdef IMG2_HAVE_EXIF_READER
+struct img2_exif;
+struct img2_xmp;
 #endif
 
 /**
@@ -33,7 +33,7 @@ struct xmp_info_t;
  * @param height Image height in pixels
  * @param frame_count Number of frames (1 for static, N for animated)
  */
-void output_metadata_text(mime_type_t mime, uint32_t width, uint32_t height, int frame_count);
+void output_metadata_text(img2_mime_t mime, uint32_t width, uint32_t height, int frame_count);
 
 /**
  * @brief Output image metadata as JSON (single line)
@@ -48,9 +48,9 @@ void output_metadata_text(mime_type_t mime, uint32_t width, uint32_t height, int
  * @param height Image height in pixels
  * @param frame_count Number of frames (1 for static, N for animated)
  */
-void output_metadata_json(mime_type_t mime, uint32_t width, uint32_t height, int frame_count);
+void output_metadata_json(img2_mime_t mime, uint32_t width, uint32_t height, int frame_count);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 /**
  * @brief Output EXIF metadata in human-readable format
  *
@@ -59,7 +59,7 @@ void output_metadata_json(mime_type_t mime, uint32_t width, uint32_t height, int
  *
  * @param exif EXIF metadata structure (can be NULL)
  */
-void output_exif_text(const struct exif_info_t *exif);
+void output_exif_text(const struct img2_exif *exif);
 
 /**
  * @brief Output XMP metadata in human-readable format
@@ -68,7 +68,7 @@ void output_exif_text(const struct exif_info_t *exif);
  *
  * @param xmp XMP metadata structure (can be NULL)
  */
-void output_xmp_text(const struct xmp_info_t *xmp);
+void output_xmp_text(const struct img2_xmp *xmp);
 
 /**
  * @brief Output EXIF metadata as JSON object
@@ -79,7 +79,7 @@ void output_xmp_text(const struct xmp_info_t *xmp);
  * @param exif EXIF metadata structure (can be NULL)
  * @param first Set to false if this is not the first JSON field (adds leading comma)
  */
-void output_exif_json(const struct exif_info_t *exif, bool first);
+void output_exif_json(const struct img2_exif *exif, bool first);
 
 /**
  * @brief Output XMP metadata as JSON object
@@ -90,7 +90,7 @@ void output_exif_json(const struct exif_info_t *exif, bool first);
  * @param xmp XMP metadata structure (can be NULL)
  * @param first Set to false if this is not the first JSON field (adds leading comma)
  */
-void output_xmp_json(const struct xmp_info_t *xmp, bool first);
+void output_xmp_json(const struct img2_xmp *xmp, bool first);
 #endif
 
 #endif /* IMGCAT2_METADATA_H */

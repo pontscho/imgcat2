@@ -67,12 +67,12 @@ CTEST(integration, animation_fps_validation)
 CTEST(integration, animation_multi_frame_array)
 {
 	/* Simulate 3-frame animation */
-	image_t **frames = calloc(3, sizeof(image_t *));
+	img2_image_t **frames = calloc(3, sizeof(img2_image_t *));
 	ASSERT_NOT_NULL(frames);
 
 	/* Create 3 frames */
 	for (int i = 0; i < 3; i++) {
-		frames[i] = image_create(10, 10);
+		frames[i] = img2_image_alloc(10, 10);
 		ASSERT_NOT_NULL(frames[i]);
 	}
 
@@ -85,7 +85,7 @@ CTEST(integration, animation_multi_frame_array)
 
 	/* Cleanup */
 	for (int i = 0; i < 3; i++) {
-		image_destroy(frames[i]);
+		img2_image_destroy(frames[i]);
 	}
 	free(frames);
 }

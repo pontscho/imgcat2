@@ -20,33 +20,43 @@
 typedef struct font_cache_entry_t {
 	char *family;
 	char *path;
-	font_weight_t weight;
-	font_style_t style;
+	img2_font_weight_t weight;
+	img2_font_style_t style;
 	uint8_t *data;
 	size_t data_size;
 	struct font_cache_entry_t *next;
 } font_cache_entry_t;
 
 /* Font structure */
-struct font_t {
+struct img2_font {
 	char *family;
-	font_weight_t weight;
-	font_style_t style;
+	img2_font_weight_t weight;
+	img2_font_style_t style;
 	const uint8_t *data;
 	size_t data_size;
 };
 
 /* Global font cache */
 static font_cache_entry_t *g_font_cache = NULL;
-static font_t *g_fallback_font = NULL;
+static img2_font_t *g_fallback_font = NULL;
 static bool g_initialized = false;
 
 /* Embedded fallback fonts */
 #include "embedded_fonts.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
+#define STBTT_STATIC /* TU-local: nanosvg reaches glyph data via the img2_font_face_* wrappers */
+#define STBTT_assert(x) ((void)0)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 #include "stb_truetype.h"
+#pragma GCC diagnostic pop
 #include "../core/log.h"
+
+/* Parsed font face behind the img2_font_face_* wrappers */
+struct img2_font_face {
+	stbtt_fontinfo info;
+};
 
 /**
  * @brief Platform-specific font search paths
@@ -229,7 +239,7 @@ static char *extract_family_name(const char *filename)
 /**
  * @brief Detect font weight from filename
  */
-static font_weight_t detect_font_weight(const char *filename)
+static img2_font_weight_t detect_font_weight(const char *filename)
 {
 	char buf[256];
 	strncpy(buf, filename, sizeof(buf) - 1);
@@ -241,16 +251,16 @@ static font_weight_t detect_font_weight(const char *filename)
 	}
 
 	if (strstr(buf, "bold") || strstr(buf, "-b.") || strstr(buf, "-b-")) {
-		return FONT_WEIGHT_BOLD;
+		return IMG2_FONT_WEIGHT_BOLD;
 	}
 
-	return FONT_WEIGHT_NORMAL;
+	return IMG2_FONT_WEIGHT_NORMAL;
 }
 
 /**
  * @brief Detect font style from filename
  */
-static font_style_t detect_font_style(const char *filename)
+static img2_font_style_t detect_font_style(const char *filename)
 {
 	char buf[256];
 	strncpy(buf, filename, sizeof(buf) - 1);
@@ -262,10 +272,10 @@ static font_style_t detect_font_style(const char *filename)
 	}
 
 	if (strstr(buf, "italic") || strstr(buf, "oblique") || strstr(buf, "-i.") || strstr(buf, "-i-")) {
-		return FONT_STYLE_ITALIC;
+		return IMG2_FONT_STYLE_ITALIC;
 	}
 
-	return FONT_STYLE_NORMAL;
+	return IMG2_FONT_STYLE_NORMAL;
 }
 
 /**
@@ -317,8 +327,8 @@ static void scan_font_directory(const char *dir_path)
 		}
 
 		/* Detect weight and style from filename */
-		font_weight_t weight = detect_font_weight(entry->d_name);
-		font_style_t style = detect_font_style(entry->d_name);
+		img2_font_weight_t weight = detect_font_weight(entry->d_name);
+		img2_font_style_t style = detect_font_style(entry->d_name);
 
 		/* Add to cache */
 		font_cache_entry_t *cache_entry = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
@@ -344,7 +354,7 @@ static void scan_font_directory(const char *dir_path)
 /**
  * @brief Initialize font manager
  */
-bool font_manager_init(void)
+bool img2_font_manager_init(void)
 {
 	if (g_initialized) {
 		return true;
@@ -365,10 +375,10 @@ bool font_manager_init(void)
 	if (regular != NULL) {
 		regular->family = strdup("DejaVu Sans Mono");
 		regular->path = strdup("[embedded]");
-		regular->weight = FONT_WEIGHT_NORMAL;
-		regular->style = FONT_STYLE_NORMAL;
-		regular->data = (uint8_t *)embedded_dejavu_regular.data;
-		regular->data_size = embedded_dejavu_regular.size;
+		regular->weight = IMG2_FONT_WEIGHT_NORMAL;
+		regular->style = IMG2_FONT_STYLE_NORMAL;
+		regular->data = (uint8_t *)img2_embedded_dejavu_regular.data;
+		regular->data_size = img2_embedded_dejavu_regular.size;
 		regular->next = g_font_cache;
 		g_font_cache = regular;
 	}
@@ -378,10 +388,10 @@ bool font_manager_init(void)
 	if (bold != NULL) {
 		bold->family = strdup("DejaVu Sans Mono");
 		bold->path = strdup("[embedded]");
-		bold->weight = FONT_WEIGHT_BOLD;
-		bold->style = FONT_STYLE_NORMAL;
-		bold->data = (uint8_t *)embedded_dejavu_bold.data;
-		bold->data_size = embedded_dejavu_bold.size;
+		bold->weight = IMG2_FONT_WEIGHT_BOLD;
+		bold->style = IMG2_FONT_STYLE_NORMAL;
+		bold->data = (uint8_t *)img2_embedded_dejavu_bold.data;
+		bold->data_size = img2_embedded_dejavu_bold.size;
 		bold->next = g_font_cache;
 		g_font_cache = bold;
 	}
@@ -391,10 +401,10 @@ bool font_manager_init(void)
 	if (italic != NULL) {
 		italic->family = strdup("DejaVu Sans Mono");
 		italic->path = strdup("[embedded]");
-		italic->weight = FONT_WEIGHT_NORMAL;
-		italic->style = FONT_STYLE_ITALIC;
-		italic->data = (uint8_t *)embedded_dejavu_italic.data;
-		italic->data_size = embedded_dejavu_italic.size;
+		italic->weight = IMG2_FONT_WEIGHT_NORMAL;
+		italic->style = IMG2_FONT_STYLE_ITALIC;
+		italic->data = (uint8_t *)img2_embedded_dejavu_italic.data;
+		italic->data_size = img2_embedded_dejavu_italic.size;
 		italic->next = g_font_cache;
 		g_font_cache = italic;
 	}
@@ -404,22 +414,22 @@ bool font_manager_init(void)
 	if (bold_italic != NULL) {
 		bold_italic->family = strdup("DejaVu Sans Mono");
 		bold_italic->path = strdup("[embedded]");
-		bold_italic->weight = FONT_WEIGHT_BOLD;
-		bold_italic->style = FONT_STYLE_ITALIC;
-		bold_italic->data = (uint8_t *)embedded_dejavu_bold_italic.data;
-		bold_italic->data_size = embedded_dejavu_bold_italic.size;
+		bold_italic->weight = IMG2_FONT_WEIGHT_BOLD;
+		bold_italic->style = IMG2_FONT_STYLE_ITALIC;
+		bold_italic->data = (uint8_t *)img2_embedded_dejavu_bold_italic.data;
+		bold_italic->data_size = img2_embedded_dejavu_bold_italic.size;
 		bold_italic->next = g_font_cache;
 		g_font_cache = bold_italic;
 	}
 
 	/* Keep first embedded font as default fallback */
-	g_fallback_font = (font_t *)malloc(sizeof(font_t));
+	g_fallback_font = (img2_font_t *)malloc(sizeof(img2_font_t));
 	if (g_fallback_font != NULL) {
 		g_fallback_font->family = strdup("DejaVu Sans Mono");
-		g_fallback_font->weight = FONT_WEIGHT_NORMAL;
-		g_fallback_font->style = FONT_STYLE_NORMAL;
-		g_fallback_font->data = embedded_dejavu_regular.data;
-		g_fallback_font->data_size = embedded_dejavu_regular.size;
+		g_fallback_font->weight = IMG2_FONT_WEIGHT_NORMAL;
+		g_fallback_font->style = IMG2_FONT_STYLE_NORMAL;
+		g_fallback_font->data = img2_embedded_dejavu_regular.data;
+		g_fallback_font->data_size = img2_embedded_dejavu_regular.size;
 	}
 
 	/* Count fonts in cache */
@@ -439,7 +449,7 @@ bool font_manager_init(void)
 /**
  * @brief Cleanup font manager
  */
-void font_manager_cleanup(void)
+void img2_font_manager_cleanup(void)
 {
 	if (!g_initialized) {
 		return;
@@ -534,7 +544,7 @@ static const char *map_generic_family(const char *generic)
 /**
  * @brief Find font in cache by exact match
  */
-static font_cache_entry_t *find_exact_match(const char *family, font_weight_t weight, font_style_t style)
+static font_cache_entry_t *find_exact_match(const char *family, img2_font_weight_t weight, img2_font_style_t style)
 {
 	font_cache_entry_t *entry = g_font_cache;
 	while (entry != NULL) {
@@ -562,9 +572,22 @@ static font_cache_entry_t *find_family_match(const char *family)
 }
 
 /**
+ * @brief Load the embedded fallback font
+ */
+static img2_font_t *img2_font_find_fallback(void)
+{
+	if (!g_initialized || g_fallback_font == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Fallback font not available");
+		return NULL;
+	}
+
+	return g_fallback_font;
+}
+
+/**
  * @brief Load a font by family name
  */
-font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t style)
+img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_font_style_t style)
 {
 	if (!g_initialized) {
 		img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
@@ -578,8 +601,8 @@ font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t
 	font_cache_entry_t *entry = find_exact_match(mapped_family, weight, style);
 
 	/* 2. Try family match with regular weight/style */
-	if (entry == NULL && (weight != FONT_WEIGHT_NORMAL || style != FONT_STYLE_NORMAL)) {
-		entry = find_exact_match(mapped_family, FONT_WEIGHT_NORMAL, FONT_STYLE_NORMAL);
+	if (entry == NULL && (weight != IMG2_FONT_WEIGHT_NORMAL || style != IMG2_FONT_STYLE_NORMAL)) {
+		entry = find_exact_match(mapped_family, IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL);
 	}
 
 	/* 3. Try any variant of the family */
@@ -590,23 +613,23 @@ font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t
 	/* 4. If still not found and we tried a mapped name, check fallback font name match */
 	if (entry == NULL && strcmp(mapped_family, "DejaVu Sans Mono") == 0) {
 		/* Use embedded fallback */
-		return font_manager_load_fallback();
+		return img2_font_find_fallback();
 	}
 
 	/* 5. Try fallback as last resort */
 	if (entry == NULL) {
 		// fprintf(stderr, "Warning: Font '%s' not found, using fallback\n", family);
-		return font_manager_load_fallback();
+		return img2_font_find_fallback();
 	}
 
 	/* Load font file if not already loaded */
 	if (!load_font_file(entry)) {
 		img2_log(IMG2_LOG_WARN, "Warning: Failed to load font '%s', using fallback", family);
-		return font_manager_load_fallback();
+		return img2_font_find_fallback();
 	}
 
 	/* Create font handle */
-	font_t *font = (font_t *)malloc(sizeof(font_t));
+	img2_font_t *font = (img2_font_t *)malloc(sizeof(img2_font_t));
 	if (font == NULL) {
 		return NULL;
 	}
@@ -621,22 +644,9 @@ font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t
 }
 
 /**
- * @brief Load the embedded fallback font
- */
-font_t *font_manager_load_fallback(void)
-{
-	if (!g_initialized || g_fallback_font == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Fallback font not available");
-		return NULL;
-	}
-
-	return g_fallback_font;
-}
-
-/**
  * @brief Get TTF font data from a font handle
  */
-const uint8_t *font_get_data(const font_t *font, size_t *size_out)
+const uint8_t *img2_font_get_data(const img2_font_t *font, size_t *size_out)
 {
 	if (font == NULL || size_out == NULL) {
 		return NULL;
@@ -649,7 +659,7 @@ const uint8_t *font_get_data(const font_t *font, size_t *size_out)
 /**
  * @brief Get font family name
  */
-const char *font_get_family(const font_t *font)
+const char *img2_font_get_family(const img2_font_t *font)
 {
 	return font ? font->family : NULL;
 }
@@ -657,11 +667,11 @@ const char *font_get_family(const font_t *font)
 /**
  * @brief Helper to get weight name
  */
-static const char *weight_to_string(font_weight_t weight)
+static const char *weight_to_string(img2_font_weight_t weight)
 {
 	switch (weight) {
-		case FONT_WEIGHT_NORMAL: return "regular";
-		case FONT_WEIGHT_BOLD: return "bold";
+		case IMG2_FONT_WEIGHT_NORMAL: return "regular";
+		case IMG2_FONT_WEIGHT_BOLD: return "bold";
 		default: return "unknown";
 	}
 }
@@ -669,11 +679,11 @@ static const char *weight_to_string(font_weight_t weight)
 /**
  * @brief Helper to get style name
  */
-static const char *style_to_string(font_style_t style)
+static const char *style_to_string(img2_font_style_t style)
 {
 	switch (style) {
-		case FONT_STYLE_NORMAL: return "normal";
-		case FONT_STYLE_ITALIC: return "italic";
+		case IMG2_FONT_STYLE_NORMAL: return "normal";
+		case IMG2_FONT_STYLE_ITALIC: return "italic";
 		default: return "unknown";
 	}
 }
@@ -681,7 +691,7 @@ static const char *style_to_string(font_style_t style)
 /**
  * @brief List all available fonts
  */
-void font_manager_list_fonts(void)
+void img2_font_manager_list_fonts(void)
 {
 	if (!g_initialized) {
 		img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
@@ -762,4 +772,84 @@ void font_manager_list_fonts(void)
 		free(families);
 		families = next;
 	}
+}
+
+img2_font_face_t *img2_font_face_open(const img2_font_t *font)
+{
+	size_t size = 0;
+	const uint8_t *data = img2_font_get_data(font, &size);
+	if (data == NULL) {
+		return NULL;
+	}
+
+	img2_font_face_t *face = malloc(sizeof(*face));
+	if (face == NULL) {
+		return NULL;
+	}
+	if (!stbtt_InitFont(&face->info, data, 0)) {
+		free(face);
+		return NULL;
+	}
+	return face;
+}
+
+void img2_font_face_close(img2_font_face_t *face)
+{
+	free(face);
+}
+
+float img2_font_face_scale_for_pixel_height(const img2_font_face_t *face, float pixels)
+{
+	return stbtt_ScaleForPixelHeight(&face->info, pixels);
+}
+
+void img2_font_face_vmetrics(const img2_font_face_t *face, int *ascent, int *descent, int *line_gap)
+{
+	stbtt_GetFontVMetrics(&face->info, ascent, descent, line_gap);
+}
+
+void img2_font_face_hmetrics(const img2_font_face_t *face, int codepoint, int *advance, int *lsb)
+{
+	stbtt_GetCodepointHMetrics(&face->info, codepoint, advance, lsb);
+}
+
+int img2_font_face_kern(const img2_font_face_t *face, int cp1, int cp2)
+{
+	return stbtt_GetCodepointKernAdvance(&face->info, cp1, cp2);
+}
+
+int img2_font_face_glyph_shape(const img2_font_face_t *face, int codepoint, img2_font_vertex_t **out)
+{
+	*out = NULL;
+
+	stbtt_vertex *verts = NULL;
+	int count = stbtt_GetCodepointShape(&face->info, codepoint, &verts);
+	if (count <= 0 || verts == NULL) {
+		stbtt_FreeShape(&face->info, verts);
+		return 0;
+	}
+
+	img2_font_vertex_t *copy = malloc((size_t)count * sizeof(*copy));
+	if (copy == NULL) {
+		stbtt_FreeShape(&face->info, verts);
+		return 0;
+	}
+	for (int i = 0; i < count; i++) {
+		copy[i].x = verts[i].x;
+		copy[i].y = verts[i].y;
+		copy[i].cx = verts[i].cx;
+		copy[i].cy = verts[i].cy;
+		copy[i].cx1 = verts[i].cx1;
+		copy[i].cy1 = verts[i].cy1;
+		copy[i].type = verts[i].type;
+	}
+	stbtt_FreeShape(&face->info, verts);
+
+	*out = copy;
+	return count;
+}
+
+void img2_font_face_free_shape(img2_font_vertex_t *v)
+{
+	free(v);
 }

@@ -120,7 +120,7 @@ typedef struct {
 } xml_attribute_t;
 
 typedef struct xml_element_node_t {
-	xml_node_t base; /* Inherit from xml_node_t */
+	img2_xml_node_t base; /* Inherit from img2_xml_node_t */
 	char *name;
 	xml_attribute_t *attributes;
 	int attr_count;
@@ -128,26 +128,26 @@ typedef struct xml_element_node_t {
 } xml_element_node_t;
 
 typedef struct xml_text_node_t {
-	xml_node_t base;
+	img2_xml_node_t base;
 	char *text;
 } xml_text_node_t;
 
 typedef struct xml_comment_node_t {
-	xml_node_t base;
+	img2_xml_node_t base;
 	char *comment;
 } xml_comment_node_t;
 
 typedef struct xml_declaration_node_t {
-	xml_node_t base;
+	img2_xml_node_t base;
 	char *version;
 	char *encoding;
 } xml_declaration_node_t;
 
 /* ========== XML Document Structure ========== */
 
-struct xml_document_t {
+struct img2_xml_document {
 	arena_t *arena;
-	xml_node_t *root;
+	img2_xml_node_t *root;
 	char *error_msg;
 };
 
@@ -349,24 +349,24 @@ static char *read_attribute_value(xml_tokenizer_t *tok, arena_t *arena)
 
 /* ========== Virtual Function Implementations ========== */
 
-static const char *element_get_value(const xml_node_t *node)
+static const char *element_get_value(const img2_xml_node_t *node)
 {
-	if (node->type != XML_NODE_ELEMENT) {
+	if (node->type != IMG2_XML_NODE_ELEMENT) {
 		return NULL;
 	}
 	xml_element_node_t *elem = (xml_element_node_t *)node;
 	return elem->name;
 }
 
-static xml_node_t *element_first_child_element(const xml_node_t *node, const char *name)
+static img2_xml_node_t *element_first_child_element(const img2_xml_node_t *node, const char *name)
 {
 	if (!node) {
 		return NULL;
 	}
 
-	xml_node_t *child = node->first_child;
+	img2_xml_node_t *child = node->first_child;
 	while (child) {
-		if (child->type == XML_NODE_ELEMENT) {
+		if (child->type == IMG2_XML_NODE_ELEMENT) {
 			if (!name) {
 				return child;
 			}
@@ -380,9 +380,9 @@ static xml_node_t *element_first_child_element(const xml_node_t *node, const cha
 	return NULL;
 }
 
-static const char *element_get_attribute(const xml_node_t *node, const char *name)
+static const char *element_get_attribute(const img2_xml_node_t *node, const char *name)
 {
-	if (!node || node->type != XML_NODE_ELEMENT || !name) {
+	if (!node || node->type != IMG2_XML_NODE_ELEMENT || !name) {
 		return NULL;
 	}
 
@@ -395,18 +395,18 @@ static const char *element_get_attribute(const xml_node_t *node, const char *nam
 	return NULL;
 }
 
-static const char *text_get_value(const xml_node_t *node)
+static const char *text_get_value(const img2_xml_node_t *node)
 {
-	if (node->type != XML_NODE_TEXT) {
+	if (node->type != IMG2_XML_NODE_TEXT) {
 		return NULL;
 	}
 	xml_text_node_t *text = (xml_text_node_t *)node;
 	return text->text;
 }
 
-static const char *comment_get_value(const xml_node_t *node)
+static const char *comment_get_value(const img2_xml_node_t *node)
 {
-	if (node->type != XML_NODE_COMMENT) {
+	if (node->type != IMG2_XML_NODE_COMMENT) {
 		return NULL;
 	}
 	xml_comment_node_t *comment = (xml_comment_node_t *)node;
@@ -415,7 +415,7 @@ static const char *comment_get_value(const xml_node_t *node)
 
 /* ========== Node Creation ========== */
 
-static xml_node_t *create_element_node(arena_t *arena, const char *name, size_t name_len)
+static img2_xml_node_t *create_element_node(arena_t *arena, const char *name, size_t name_len)
 {
 	xml_element_node_t *elem = arena_alloc(arena, sizeof(xml_element_node_t));
 	if (!elem) {
@@ -423,7 +423,7 @@ static xml_node_t *create_element_node(arena_t *arena, const char *name, size_t 
 	}
 
 	memset(elem, 0, sizeof(xml_element_node_t));
-	elem->base.type = XML_NODE_ELEMENT;
+	elem->base.type = IMG2_XML_NODE_ELEMENT;
 	elem->base.get_value = element_get_value;
 	elem->base.first_child_element = element_first_child_element;
 	elem->base.get_attribute = element_get_attribute;
@@ -431,10 +431,10 @@ static xml_node_t *create_element_node(arena_t *arena, const char *name, size_t 
 	elem->attr_capacity = 4;
 	elem->attributes = arena_alloc(arena, sizeof(xml_attribute_t) * elem->attr_capacity);
 
-	return (xml_node_t *)elem;
+	return (img2_xml_node_t *)elem;
 }
 
-static xml_node_t *create_text_node(arena_t *arena, const char *text, size_t text_len)
+static img2_xml_node_t *create_text_node(arena_t *arena, const char *text, size_t text_len)
 {
 	xml_text_node_t *node = arena_alloc(arena, sizeof(xml_text_node_t));
 	if (!node) {
@@ -442,14 +442,14 @@ static xml_node_t *create_text_node(arena_t *arena, const char *text, size_t tex
 	}
 
 	memset(node, 0, sizeof(xml_text_node_t));
-	node->base.type = XML_NODE_TEXT;
+	node->base.type = IMG2_XML_NODE_TEXT;
 	node->base.get_value = text_get_value;
 	node->text = arena_strdup(arena, text, text_len);
 
-	return (xml_node_t *)node;
+	return (img2_xml_node_t *)node;
 }
 
-static xml_node_t *create_comment_node(arena_t *arena, const char *comment, size_t comment_len)
+static img2_xml_node_t *create_comment_node(arena_t *arena, const char *comment, size_t comment_len)
 {
 	xml_comment_node_t *node = arena_alloc(arena, sizeof(xml_comment_node_t));
 	if (!node) {
@@ -457,14 +457,14 @@ static xml_node_t *create_comment_node(arena_t *arena, const char *comment, size
 	}
 
 	memset(node, 0, sizeof(xml_comment_node_t));
-	node->base.type = XML_NODE_COMMENT;
+	node->base.type = IMG2_XML_NODE_COMMENT;
 	node->base.get_value = comment_get_value;
 	node->comment = arena_strdup(arena, comment, comment_len);
 
-	return (xml_node_t *)node;
+	return (img2_xml_node_t *)node;
 }
 
-static void add_child_node(xml_node_t *parent, xml_node_t *child)
+static void add_child_node(img2_xml_node_t *parent, img2_xml_node_t *child)
 {
 	if (!parent || !child) {
 		return;
@@ -475,7 +475,7 @@ static void add_child_node(xml_node_t *parent, xml_node_t *child)
 	if (!parent->first_child) {
 		parent->first_child = child;
 	} else {
-		xml_node_t *last = parent->first_child;
+		img2_xml_node_t *last = parent->first_child;
 		while (last->next_sibling) {
 			last = last->next_sibling;
 		}
@@ -510,9 +510,9 @@ static int add_attribute(xml_element_node_t *elem, const char *name, size_t name
 
 /* ========== DOM Tree Builder ========== */
 
-static int parse_element(xml_tokenizer_t *tok, xml_document_t *doc, xml_node_t *parent);
+static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent);
 
-static int parse_content(xml_tokenizer_t *tok, xml_document_t *doc, xml_node_t *parent)
+static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent)
 {
 	while (1) {
 		token_type_t token = next_token(tok);
@@ -556,7 +556,7 @@ static int parse_content(xml_tokenizer_t *tok, xml_document_t *doc, xml_node_t *
 			}
 
 			if (text_len > 0) {
-				xml_node_t *text_node = create_text_node(doc->arena, text_start, text_len);
+				img2_xml_node_t *text_node = create_text_node(doc->arena, text_start, text_len);
 				if (!text_node) {
 					return -1;
 				}
@@ -575,7 +575,7 @@ static int parse_content(xml_tokenizer_t *tok, xml_document_t *doc, xml_node_t *
 			}
 			tok->pos += 3; /* Skip --> */
 
-			xml_node_t *comment_node = create_comment_node(doc->arena, comment_text, strlen(comment_text));
+			img2_xml_node_t *comment_node = create_comment_node(doc->arena, comment_text, strlen(comment_text));
 			if (!comment_node) {
 				return -1;
 			}
@@ -587,7 +587,7 @@ static int parse_content(xml_tokenizer_t *tok, xml_document_t *doc, xml_node_t *
 	}
 }
 
-static int parse_element(xml_tokenizer_t *tok, xml_document_t *doc, xml_node_t *parent)
+static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent)
 {
 	/* Expect element name */
 	token_type_t token = next_token(tok);
@@ -595,7 +595,7 @@ static int parse_element(xml_tokenizer_t *tok, xml_document_t *doc, xml_node_t *
 		return -1;
 	}
 
-	xml_node_t *elem = create_element_node(doc->arena, tok->token_start, tok->token_len);
+	img2_xml_node_t *elem = create_element_node(doc->arena, tok->token_start, tok->token_len);
 	if (!elem) {
 		return -1;
 	}
@@ -672,9 +672,9 @@ static int parse_element(xml_tokenizer_t *tok, xml_document_t *doc, xml_node_t *
 
 /* ========== Public API Implementation ========== */
 
-xml_document_t *xml_document_create(void)
+img2_xml_document_t *img2_xml_document_create(void)
 {
-	xml_document_t *doc = malloc(sizeof(xml_document_t));
+	img2_xml_document_t *doc = malloc(sizeof(img2_xml_document_t));
 	if (!doc) {
 		return NULL;
 	}
@@ -691,7 +691,7 @@ xml_document_t *xml_document_create(void)
 	return doc;
 }
 
-void xml_document_destroy(xml_document_t *doc)
+void img2_xml_document_destroy(img2_xml_document_t *doc)
 {
 	if (!doc) {
 		return;
@@ -701,7 +701,7 @@ void xml_document_destroy(xml_document_t *doc)
 	free(doc);
 }
 
-int xml_document_parse(xml_document_t *doc, const char *xml_data, size_t len)
+int img2_xml_document_parse(img2_xml_document_t *doc, const char *xml_data, size_t len)
 {
 	if (!doc || !xml_data) {
 		return -1;
@@ -728,8 +728,8 @@ int xml_document_parse(xml_document_t *doc, const char *xml_data, size_t len)
 	/* Parse root element */
 	if (token == TOKEN_ELEMENT_OPEN) {
 		/* Create temporary root to hold the actual root element */
-		xml_node_t temp_root;
-		memset(&temp_root, 0, sizeof(xml_node_t));
+		img2_xml_node_t temp_root;
+		memset(&temp_root, 0, sizeof(img2_xml_node_t));
 
 		if (parse_element(&tok, doc, &temp_root) != 0) {
 			return -1;
@@ -744,7 +744,7 @@ int xml_document_parse(xml_document_t *doc, const char *xml_data, size_t len)
 	return 0;
 }
 
-xml_node_t *xml_document_root_element(xml_document_t *doc)
+img2_xml_node_t *img2_xml_document_root_element(img2_xml_document_t *doc)
 {
 	if (!doc) {
 		return NULL;
@@ -752,32 +752,32 @@ xml_node_t *xml_document_root_element(xml_document_t *doc)
 	return doc->root;
 }
 
-xml_node_t *xml_element_first_child(const xml_node_t *elem, const char *name)
+img2_xml_node_t *img2_xml_element_first_child(const img2_xml_node_t *elem, const char *name)
 {
-	if (!elem || elem->type != XML_NODE_ELEMENT) {
+	if (!elem || elem->type != IMG2_XML_NODE_ELEMENT) {
 		return NULL;
 	}
 	return element_first_child_element(elem, name);
 }
 
-const char *xml_element_attribute(const xml_node_t *elem, const char *attr_name)
+const char *img2_xml_element_attribute(const img2_xml_node_t *elem, const char *attr_name)
 {
-	if (!elem || elem->type != XML_NODE_ELEMENT || !attr_name) {
+	if (!elem || elem->type != IMG2_XML_NODE_ELEMENT || !attr_name) {
 		return NULL;
 	}
 	return element_get_attribute(elem, attr_name);
 }
 
-const char *xml_element_text(const xml_node_t *elem)
+const char *img2_xml_element_text(const img2_xml_node_t *elem)
 {
-	if (!elem || elem->type != XML_NODE_ELEMENT) {
+	if (!elem || elem->type != IMG2_XML_NODE_ELEMENT) {
 		return NULL;
 	}
 
 	/* Return first text child */
-	xml_node_t *child = elem->first_child;
+	img2_xml_node_t *child = elem->first_child;
 	while (child) {
-		if (child->type == XML_NODE_TEXT) {
+		if (child->type == IMG2_XML_NODE_TEXT) {
 			return text_get_value(child);
 		}
 		child = child->next_sibling;
@@ -786,24 +786,24 @@ const char *xml_element_text(const xml_node_t *elem)
 	return NULL;
 }
 
-const char *xml_element_name(const xml_node_t *elem)
+const char *img2_xml_element_name(const img2_xml_node_t *elem)
 {
-	if (!elem || elem->type != XML_NODE_ELEMENT) {
+	if (!elem || elem->type != IMG2_XML_NODE_ELEMENT) {
 		return NULL;
 	}
 	xml_element_node_t *element = (xml_element_node_t *)elem;
 	return element->name;
 }
 
-xml_node_t *xml_element_next_sibling(const xml_node_t *elem, const char *name)
+img2_xml_node_t *img2_xml_element_next_sibling(const img2_xml_node_t *elem, const char *name)
 {
 	if (!elem) {
 		return NULL;
 	}
 
-	xml_node_t *sibling = elem->next_sibling;
+	img2_xml_node_t *sibling = elem->next_sibling;
 	while (sibling) {
-		if (sibling->type == XML_NODE_ELEMENT) {
+		if (sibling->type == IMG2_XML_NODE_ELEMENT) {
 			if (!name) {
 				return sibling;
 			}

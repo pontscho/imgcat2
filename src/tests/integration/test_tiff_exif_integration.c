@@ -3,7 +3,7 @@
  * @brief Integration test for TIFF decoder with EXIF metadata
  *
  * Tests that the TIFF decoder properly extracts and stores EXIF metadata
- * in the image_t structure during decoding. TIFF files ARE EXIF format
+ * in the img2_image_t structure during decoding. TIFF files ARE EXIF format
  * (TIFF = Tagged Image File Format, EXIF uses TIFF structure).
  */
 
@@ -16,12 +16,12 @@
 #include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
 #endif
 
-/* Forward declaration of decode_tiff from decoder */
-image_t **decode_tiff(const uint8_t *data, size_t len, int *frame_count);
+/* Forward declaration of img2_decode_tiff from decoder */
+img2_image_t **img2_decode_tiff(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Read entire file into memory
@@ -66,20 +66,20 @@ CTEST(tiff_exif_integration, decode_with_exif)
 	ASSERT_TRUE(len > 0);
 
 	int frame_count = 0;
-	image_t **frames = decode_tiff(data, len, &frame_count);
+	img2_image_t **frames = img2_decode_tiff(data, len, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 	ASSERT_NOT_NULL(img->pixels);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted (TIFF IS EXIF format) */
 	ASSERT_NOT_NULL(img->exif);
 
@@ -92,7 +92,7 @@ CTEST(tiff_exif_integration, decode_with_exif)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }
@@ -109,20 +109,20 @@ CTEST(tiff_exif_integration, decode_another_tiff)
 	ASSERT_TRUE(len > 0);
 
 	int frame_count = 0;
-	image_t **frames = decode_tiff(data, len, &frame_count);
+	img2_image_t **frames = img2_decode_tiff(data, len, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 	ASSERT_NOT_NULL(img->pixels);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* EXIF structure should be present (TIFF IS EXIF) */
 	ASSERT_NOT_NULL(img->exif);
 #else
@@ -131,7 +131,7 @@ CTEST(tiff_exif_integration, decode_another_tiff)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }

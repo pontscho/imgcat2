@@ -35,7 +35,7 @@
  * @note WebP preserves alpha channel (supports transparency)
  * @note Caller must free *out_data with free() when done
  */
-int encode_webp(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+int img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_webp");

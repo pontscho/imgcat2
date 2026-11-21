@@ -12,15 +12,15 @@
 
 CTEST(jxl_orientation, apply_orientation_transpose)
 {
-	image_t *img = image_create(4, 4);
+	img2_image_t *img = img2_image_alloc(4, 4);
 	ASSERT_NOT_NULL(img);
 
-	image_set_pixel(img, 0, 0, 255, 0, 0, 255);
+	img2_image_set_pixel(img, 0, 0, 255, 0, 0, 255);
 
-	int result = image_apply_orientation(img, 5);
+	int result = img2_image_orient(img, 5);
 	ASSERT_EQUAL(0, result);
 	ASSERT_EQUAL(4, img->width);
 	ASSERT_EQUAL(4, img->height);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }

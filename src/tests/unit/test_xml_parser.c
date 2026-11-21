@@ -22,24 +22,24 @@
 CTEST(xml_parser, parse_simple_element)
 {
 	const char *xml = "<root>Hello World</root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	const char *name = xml_element_name(root);
+	const char *name = img2_xml_element_name(root);
 	ASSERT_NOT_NULL(name);
 	ASSERT_STR("root", name);
 
-	const char *text = xml_element_text(root);
+	const char *text = img2_xml_element_text(root);
 	ASSERT_NOT_NULL(text);
 	ASSERT_STR("Hello World", text);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -50,25 +50,25 @@ CTEST(xml_parser, parse_simple_element)
 CTEST(xml_parser, parse_nested_elements)
 {
 	const char *xml = "<root><child>Text</child></root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
-	ASSERT_STR("root", xml_element_name(root));
+	ASSERT_STR("root", img2_xml_element_name(root));
 
-	xml_node_t *child = xml_element_first_child(root, "child");
+	img2_xml_node_t *child = img2_xml_element_first_child(root, "child");
 	ASSERT_NOT_NULL(child);
-	ASSERT_STR("child", xml_element_name(child));
+	ASSERT_STR("child", img2_xml_element_name(child));
 
-	const char *text = xml_element_text(child);
+	const char *text = img2_xml_element_text(child);
 	ASSERT_NOT_NULL(text);
 	ASSERT_STR("Text", text);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -79,27 +79,27 @@ CTEST(xml_parser, parse_nested_elements)
 CTEST(xml_parser, parse_attributes)
 {
 	const char *xml = "<root id=\"123\" name=\"test\">Content</root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	const char *id = xml_element_attribute(root, "id");
+	const char *id = img2_xml_element_attribute(root, "id");
 	ASSERT_NOT_NULL(id);
 	ASSERT_STR("123", id);
 
-	const char *name = xml_element_attribute(root, "name");
+	const char *name = img2_xml_element_attribute(root, "name");
 	ASSERT_NOT_NULL(name);
 	ASSERT_STR("test", name);
 
-	const char *missing = xml_element_attribute(root, "missing");
+	const char *missing = img2_xml_element_attribute(root, "missing");
 	ASSERT_NULL(missing);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -110,23 +110,23 @@ CTEST(xml_parser, parse_attributes)
 CTEST(xml_parser, parse_empty_element)
 {
 	const char *xml = "<root><empty/></root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	xml_node_t *empty = xml_element_first_child(root, "empty");
+	img2_xml_node_t *empty = img2_xml_element_first_child(root, "empty");
 	ASSERT_NOT_NULL(empty);
-	ASSERT_STR("empty", xml_element_name(empty));
+	ASSERT_STR("empty", img2_xml_element_name(empty));
 
-	const char *text = xml_element_text(empty);
+	const char *text = img2_xml_element_text(empty);
 	ASSERT_NULL(text); /* Empty element has no text */
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -137,17 +137,17 @@ CTEST(xml_parser, parse_empty_element)
 CTEST(xml_parser, parse_with_declaration)
 {
 	const char *xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><root>Data</root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
-	ASSERT_STR("root", xml_element_name(root));
+	ASSERT_STR("root", img2_xml_element_name(root));
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -158,20 +158,20 @@ CTEST(xml_parser, parse_with_declaration)
 CTEST(xml_parser, parse_with_comments)
 {
 	const char *xml = "<!-- Comment --><root><!-- Another comment --><data>Text</data></root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	xml_node_t *data = xml_element_first_child(root, "data");
+	img2_xml_node_t *data = img2_xml_element_first_child(root, "data");
 	ASSERT_NOT_NULL(data);
-	ASSERT_STR("Text", xml_element_text(data));
+	ASSERT_STR("Text", img2_xml_element_text(data));
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -182,31 +182,31 @@ CTEST(xml_parser, parse_with_comments)
 CTEST(xml_parser, parse_multiple_siblings)
 {
 	const char *xml = "<root><first>A</first><second>B</second><third>C</third></root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	xml_node_t *first = xml_element_first_child(root, "first");
+	img2_xml_node_t *first = img2_xml_element_first_child(root, "first");
 	ASSERT_NOT_NULL(first);
-	ASSERT_STR("A", xml_element_text(first));
+	ASSERT_STR("A", img2_xml_element_text(first));
 
-	xml_node_t *second = xml_element_next_sibling(first, "second");
+	img2_xml_node_t *second = img2_xml_element_next_sibling(first, "second");
 	ASSERT_NOT_NULL(second);
-	ASSERT_STR("B", xml_element_text(second));
+	ASSERT_STR("B", img2_xml_element_text(second));
 
-	xml_node_t *third = xml_element_next_sibling(second, "third");
+	img2_xml_node_t *third = img2_xml_element_next_sibling(second, "third");
 	ASSERT_NOT_NULL(third);
-	ASSERT_STR("C", xml_element_text(third));
+	ASSERT_STR("C", img2_xml_element_text(third));
 
-	xml_node_t *none = xml_element_next_sibling(third, NULL);
+	img2_xml_node_t *none = img2_xml_element_next_sibling(third, NULL);
 	ASSERT_NULL(none);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -226,29 +226,29 @@ CTEST(xml_parser, parse_xmp_structure)
 	                  "</rdf:Description>"
 	                  "</rdf:RDF>";
 
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
 	/* Navigate to Description */
-	xml_node_t *desc = xml_element_first_child(root, NULL);
+	img2_xml_node_t *desc = img2_xml_element_first_child(root, NULL);
 	ASSERT_NOT_NULL(desc);
 
 	/* Find creator */
-	xml_node_t *creator = xml_element_first_child(desc, NULL);
+	img2_xml_node_t *creator = img2_xml_element_first_child(desc, NULL);
 	ASSERT_NOT_NULL(creator);
 
 	/* Check creator value */
-	const char *creator_text = xml_element_text(creator);
+	const char *creator_text = img2_xml_element_text(creator);
 	ASSERT_NOT_NULL(creator_text);
 	ASSERT_STR("John Doe", creator_text);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -259,21 +259,21 @@ CTEST(xml_parser, parse_xmp_structure)
 CTEST(xml_parser, parse_namespaced_elements)
 {
 	const char *xml = "<rdf:RDF><dc:creator>Author</dc:creator></rdf:RDF>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
-	ASSERT_STR("rdf:RDF", xml_element_name(root));
+	ASSERT_STR("rdf:RDF", img2_xml_element_name(root));
 
-	xml_node_t *creator = xml_element_first_child(root, "dc:creator");
+	img2_xml_node_t *creator = img2_xml_element_first_child(root, "dc:creator");
 	ASSERT_NOT_NULL(creator);
-	ASSERT_STR("Author", xml_element_text(creator));
+	ASSERT_STR("Author", img2_xml_element_text(creator));
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -284,20 +284,20 @@ CTEST(xml_parser, parse_namespaced_elements)
 CTEST(xml_parser, parse_whitespace_trimming)
 {
 	const char *xml = "<root>   Trimmed Text   </root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	const char *text = xml_element_text(root);
+	const char *text = img2_xml_element_text(root);
 	ASSERT_NOT_NULL(text);
 	ASSERT_STR("Trimmed Text", text);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -308,24 +308,24 @@ CTEST(xml_parser, parse_whitespace_trimming)
 CTEST(xml_parser, parse_single_quote_attributes)
 {
 	const char *xml = "<root id='test' name='value'>Content</root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	const char *id = xml_element_attribute(root, "id");
+	const char *id = img2_xml_element_attribute(root, "id");
 	ASSERT_NOT_NULL(id);
 	ASSERT_STR("test", id);
 
-	const char *name = xml_element_attribute(root, "name");
+	const char *name = img2_xml_element_attribute(root, "name");
 	ASSERT_NOT_NULL(name);
 	ASSERT_STR("value", name);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -336,13 +336,13 @@ CTEST(xml_parser, parse_single_quote_attributes)
 CTEST(xml_parser, parse_malformed_xml)
 {
 	const char *xml = "<root><unclosed>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_NOT_EQUAL(0, result);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -353,13 +353,13 @@ CTEST(xml_parser, parse_malformed_xml)
 CTEST(xml_parser, parse_mismatched_tags)
 {
 	const char *xml = "<root><child></wrong></root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_NOT_EQUAL(0, result);
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -370,20 +370,20 @@ CTEST(xml_parser, parse_mismatched_tags)
 CTEST(xml_parser, first_child_any_element)
 {
 	const char *xml = "<root><first>A</first><second>B</second></root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	xml_node_t *any_child = xml_element_first_child(root, NULL);
+	img2_xml_node_t *any_child = img2_xml_element_first_child(root, NULL);
 	ASSERT_NOT_NULL(any_child);
-	ASSERT_STR("first", xml_element_name(any_child));
+	ASSERT_STR("first", img2_xml_element_name(any_child));
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -394,30 +394,30 @@ CTEST(xml_parser, first_child_any_element)
 CTEST(xml_parser, parse_deeply_nested)
 {
 	const char *xml = "<a><b><c><d><e>Deep</e></d></c></b></a>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *a = xml_document_root_element(doc);
+	img2_xml_node_t *a = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(a);
 
-	xml_node_t *b = xml_element_first_child(a, "b");
+	img2_xml_node_t *b = img2_xml_element_first_child(a, "b");
 	ASSERT_NOT_NULL(b);
 
-	xml_node_t *c = xml_element_first_child(b, "c");
+	img2_xml_node_t *c = img2_xml_element_first_child(b, "c");
 	ASSERT_NOT_NULL(c);
 
-	xml_node_t *d = xml_element_first_child(c, "d");
+	img2_xml_node_t *d = img2_xml_element_first_child(c, "d");
 	ASSERT_NOT_NULL(d);
 
-	xml_node_t *e = xml_element_first_child(d, "e");
+	img2_xml_node_t *e = img2_xml_element_first_child(d, "e");
 	ASSERT_NOT_NULL(e);
 
-	ASSERT_STR("Deep", xml_element_text(e));
+	ASSERT_STR("Deep", img2_xml_element_text(e));
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }
 
 /**
@@ -428,20 +428,20 @@ CTEST(xml_parser, parse_deeply_nested)
 CTEST(xml_parser, parse_many_attributes)
 {
 	const char *xml = "<root a=\"1\" b=\"2\" c=\"3\" d=\"4\" e=\"5\">Text</root>";
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	ASSERT_NOT_NULL(doc);
 
-	int result = xml_document_parse(doc, xml, strlen(xml));
+	int result = img2_xml_document_parse(doc, xml, strlen(xml));
 	ASSERT_EQUAL(0, result);
 
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	ASSERT_NOT_NULL(root);
 
-	ASSERT_STR("1", xml_element_attribute(root, "a"));
-	ASSERT_STR("2", xml_element_attribute(root, "b"));
-	ASSERT_STR("3", xml_element_attribute(root, "c"));
-	ASSERT_STR("4", xml_element_attribute(root, "d"));
-	ASSERT_STR("5", xml_element_attribute(root, "e"));
+	ASSERT_STR("1", img2_xml_element_attribute(root, "a"));
+	ASSERT_STR("2", img2_xml_element_attribute(root, "b"));
+	ASSERT_STR("3", img2_xml_element_attribute(root, "c"));
+	ASSERT_STR("4", img2_xml_element_attribute(root, "d"));
+	ASSERT_STR("5", img2_xml_element_attribute(root, "e"));
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 }

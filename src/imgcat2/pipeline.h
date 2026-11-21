@@ -24,7 +24,7 @@
  * Securely reads a file into memory with:
  * - Path traversal protection (realpath/GetFullPathName)
  * - ".." component validation
- * - File size validation (≤ IMAGE_MAX_FILE_SIZE from image.h)
+ * - File size validation (≤ IMG2_MAX_FILE_SIZE from image.h)
  * - Safe memory allocation
  *
  * @param path File path to read
@@ -52,7 +52,7 @@ bool read_file_secure(const char *path, uint8_t **out_data, size_t *out_size);
  * Reads stdin into dynamically allocated buffer with:
  * - Chunk-based reading (4KB chunks)
  * - Dynamic buffer growth (realloc strategy)
- * - Size limit enforcement (≤ IMAGE_MAX_FILE_SIZE)
+ * - Size limit enforcement (≤ IMG2_MAX_FILE_SIZE)
  * - Graceful EOF handling
  * - TTY detection (expects piped input)
  *
@@ -128,16 +128,16 @@ int pipeline_read(const cli_options_t *opts, uint8_t **out_data, size_t *out_siz
 /**
  * @brief Determine the MIME type of the input buffer
  *
- * Returns MIME_YUV when raw YUV input was requested (opts->yuv_input), since
+ * Returns IMG2_MIME_YUV when raw YUV input was requested (opts->yuv_input), since
  * headerless YUV cannot be detected; otherwise detects by magic bytes.
  *
  * @param opts CLI options structure (may be NULL)
  * @param buffer Input data buffer
  * @param size Input data size
  *
- * @return Detected or forced MIME type, MIME_UNKNOWN if not recognized
+ * @return Detected or forced MIME type, IMG2_MIME_UNKNOWN if not recognized
  */
-mime_type_t pipeline_input_mime(const cli_options_t *opts, const uint8_t *buffer, size_t size);
+img2_mime_t pipeline_input_mime(const cli_options_t *opts, const uint8_t *buffer, size_t size);
 
 /**
  * @brief Decode image with MIME type detection
@@ -153,7 +153,7 @@ mime_type_t pipeline_input_mime(const cli_options_t *opts, const uint8_t *buffer
  *
  * @return 0 on success, -1 on error
  */
-int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, image_t ***out_frames, int *out_frame_count);
+int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, img2_image_t ***out_frames, int *out_frame_count);
 
 /**
  * @brief Scale images to terminal dimensions
@@ -168,7 +168,7 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, ima
  *
  * @return 0 on success, -1 on error
  */
-int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts, image_t ***out_scaled);
+int pipeline_scale(img2_image_t **frames, int frame_count, const cli_options_t *opts, img2_image_t ***out_scaled);
 
 /**
  * @brief Render frames to terminal
@@ -182,6 +182,6 @@ int pipeline_scale(image_t **frames, int frame_count, const cli_options_t *opts,
  *
  * @return 0 on success, -1 on error
  */
-int pipeline_render(image_t **frames, int frame_count, const cli_options_t *opts);
+int pipeline_render(img2_image_t **frames, int frame_count, const cli_options_t *opts);
 
 #endif /* IMGCAT2_PIPELINE_H */

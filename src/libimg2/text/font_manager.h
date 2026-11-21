@@ -6,8 +6,8 @@
  * Supports Linux, macOS, and Windows font paths.
  */
 
-#ifndef IMGCAT2_FONT_MANAGER_H
-#define IMGCAT2_FONT_MANAGER_H
+#ifndef IMG2_INTERNAL_TEXT_FONT_MANAGER_H
+#define IMG2_INTERNAL_TEXT_FONT_MANAGER_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -21,22 +21,22 @@ extern "C" {
  * @brief Font weight enumeration
  */
 typedef enum {
-	FONT_WEIGHT_NORMAL = 400,
-	FONT_WEIGHT_BOLD = 700
-} font_weight_t;
+	IMG2_FONT_WEIGHT_NORMAL = 400,
+	IMG2_FONT_WEIGHT_BOLD = 700
+} img2_font_weight_t;
 
 /**
  * @brief Font style enumeration
  */
 typedef enum {
-	FONT_STYLE_NORMAL = 0,
-	FONT_STYLE_ITALIC = 1
-} font_style_t;
+	IMG2_FONT_STYLE_NORMAL = 0,
+	IMG2_FONT_STYLE_ITALIC = 1
+} img2_font_style_t;
 
 /**
  * @brief Opaque font handle
  */
-typedef struct font_t font_t;
+typedef struct img2_font img2_font_t;
 
 /**
  * @brief Initialize font manager
@@ -46,7 +46,7 @@ typedef struct font_t font_t;
  *
  * @return true on success, false on failure
  */
-bool font_manager_init(void);
+bool img2_font_manager_init(void);
 
 /**
  * @brief Cleanup font manager
@@ -54,7 +54,7 @@ bool font_manager_init(void);
  * Frees all cached fonts and resources.
  * Should be called at program exit.
  */
-void font_manager_cleanup(void);
+void img2_font_manager_cleanup(void);
 
 /**
  * @brief Load a font by family name
@@ -63,35 +63,25 @@ void font_manager_cleanup(void);
  * The returned font is cached and managed by font_manager.
  *
  * @param family Font family name (e.g., "Arial", "DejaVu Sans")
- * @param weight Font weight (FONT_WEIGHT_NORMAL or FONT_WEIGHT_BOLD)
- * @param style Font style (FONT_STYLE_NORMAL or FONT_STYLE_ITALIC)
+ * @param weight Font weight (IMG2_FONT_WEIGHT_NORMAL or IMG2_FONT_WEIGHT_BOLD)
+ * @param style Font style (IMG2_FONT_STYLE_NORMAL or IMG2_FONT_STYLE_ITALIC)
  * @return Font handle or NULL on failure
  *
  * @note The returned pointer is owned by font_manager, do not free
  */
-font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t style);
-
-/**
- * @brief Load the embedded fallback font
- *
- * Returns a handle to the built-in monospace font.
- * Always succeeds unless font_manager is not initialized.
- *
- * @return Font handle or NULL if not initialized
- */
-font_t *font_manager_load_fallback(void);
+img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_font_style_t style);
 
 /**
  * @brief Get TTF font data from a font handle
  *
  * Returns pointer to the raw TTF data for use with stb_truetype.
- * The data remains valid until font_manager_cleanup() is called.
+ * The data remains valid until img2_font_manager_cleanup() is called.
  *
  * @param font Font handle
  * @param size_out Output: size of font data in bytes
  * @return Pointer to TTF data or NULL on error
  */
-const uint8_t *font_get_data(const font_t *font, size_t *size_out);
+const uint8_t *img2_font_get_data(const img2_font_t *font, size_t *size_out);
 
 /**
  * @brief Get font family name
@@ -99,7 +89,7 @@ const uint8_t *font_get_data(const font_t *font, size_t *size_out);
  * @param font Font handle
  * @return Font family name or NULL on error
  */
-const char *font_get_family(const font_t *font);
+const char *img2_font_get_family(const img2_font_t *font);
 
 /**
  * @brief List all available fonts
@@ -107,10 +97,74 @@ const char *font_get_family(const font_t *font);
  * Prints all available fonts (both system and embedded) to stdout.
  * Each font is printed on a separate line with family name, weight, and style.
  */
-void font_manager_list_fonts(void);
+void img2_font_manager_list_fonts(void);
+
+/**
+ * @brief Opaque parsed font face (wraps stb_truetype inside font_manager.c)
+ */
+typedef struct img2_font_face img2_font_face_t;
+
+/**
+ * @brief One glyph outline vertex (field-for-field copy of the stb_truetype vertex)
+ */
+typedef struct img2_font_vertex {
+	short x, y, cx, cy, cx1, cy1;
+	unsigned char type;
+} img2_font_vertex_t;
+
+/** @brief Glyph vertex types (values equal STBTT_vmove/vline/vcurve/vcubic) */
+enum { IMG2_FONT_VMOVE = 1, IMG2_FONT_VLINE = 2, IMG2_FONT_VCURVE = 3, IMG2_FONT_VCUBIC = 4 };
+
+/**
+ * @brief Parse a font for glyph access
+ *
+ * @param font Font handle
+ * @return Face handle, or NULL if the font cannot be parsed or on OOM
+ */
+img2_font_face_t *img2_font_face_open(const img2_font_t *font);
+
+/**
+ * @brief Free a face returned by img2_font_face_open() (NULL-safe)
+ */
+void img2_font_face_close(img2_font_face_t *face);
+
+/**
+ * @brief Scale factor that maps the font's ascent-descent to @p pixels
+ */
+float img2_font_face_scale_for_pixel_height(const img2_font_face_t *face, float pixels);
+
+/**
+ * @brief Vertical metrics in unscaled font units
+ */
+void img2_font_face_vmetrics(const img2_font_face_t *face, int *ascent, int *descent, int *line_gap);
+
+/**
+ * @brief Horizontal metrics of a codepoint in unscaled font units
+ */
+void img2_font_face_hmetrics(const img2_font_face_t *face, int codepoint, int *advance, int *lsb);
+
+/**
+ * @brief Kerning advance between two codepoints in unscaled font units
+ */
+int img2_font_face_kern(const img2_font_face_t *face, int cp1, int cp2);
+
+/**
+ * @brief Glyph outline of a codepoint
+ *
+ * @param face Face handle
+ * @param codepoint Unicode codepoint
+ * @param out Output: malloc'd vertex array (free with img2_font_face_free_shape()), NULL if none
+ * @return Number of vertices (0 if none or on error)
+ */
+int img2_font_face_glyph_shape(const img2_font_face_t *face, int codepoint, img2_font_vertex_t **out);
+
+/**
+ * @brief Free a vertex array returned by img2_font_face_glyph_shape() (NULL-safe)
+ */
+void img2_font_face_free_shape(img2_font_vertex_t *v);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* IMGCAT2_FONT_MANAGER_H */
+#endif /* IMG2_INTERNAL_TEXT_FONT_MANAGER_H */

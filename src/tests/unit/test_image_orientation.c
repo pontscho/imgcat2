@@ -2,7 +2,7 @@
  * @file test_image_orientation.c
  * @brief Unit tests for image orientation transformation
  *
- * Tests image_apply_orientation() for all 8 EXIF orientation values
+ * Tests img2_image_orient() for all 8 EXIF orientation values
  * and verifies correct transformation of pixel data.
  */
 
@@ -29,9 +29,9 @@
  * @param height Image height in pixels
  * @return New test pattern image, or NULL on error
  */
-static image_t *create_test_pattern(uint32_t width, uint32_t height)
+static img2_image_t *create_test_pattern(uint32_t width, uint32_t height)
 {
-	image_t *img = image_create(width, height);
+	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		return NULL;
 	}
@@ -39,15 +39,15 @@ static image_t *create_test_pattern(uint32_t width, uint32_t height)
 	/* Fill with gray center */
 	for (uint32_t y = 0; y < height; y++) {
 		for (uint32_t x = 0; x < width; x++) {
-			image_set_pixel(img, x, y, 128, 128, 128, 255);
+			img2_image_set_pixel(img, x, y, 128, 128, 128, 255);
 		}
 	}
 
 	/* Set corner colors for easy verification */
-	image_set_pixel(img, 0, 0, 255, 0, 0, 255); /* Top-left: Red */
-	image_set_pixel(img, width - 1, 0, 0, 255, 0, 255); /* Top-right: Green */
-	image_set_pixel(img, 0, height - 1, 0, 0, 255, 255); /* Bottom-left: Blue */
-	image_set_pixel(img, width - 1, height - 1, 255, 255, 0, 255); /* Bottom-right: Yellow */
+	img2_image_set_pixel(img, 0, 0, 255, 0, 0, 255); /* Top-left: Red */
+	img2_image_set_pixel(img, width - 1, 0, 0, 255, 0, 255); /* Top-right: Green */
+	img2_image_set_pixel(img, 0, height - 1, 0, 0, 255, 255); /* Bottom-left: Blue */
+	img2_image_set_pixel(img, width - 1, height - 1, 255, 255, 0, 255); /* Bottom-right: Yellow */
 
 	return img;
 }
@@ -55,9 +55,9 @@ static image_t *create_test_pattern(uint32_t width, uint32_t height)
 /**
  * @brief Helper to check if pixel matches expected RGBA values
  */
-static bool check_pixel(const image_t *img, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+static bool check_pixel(const img2_image_t *img, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
-	uint8_t *pixel = image_get_pixel(img, x, y);
+	uint8_t *pixel = img2_image_get_pixel(img, x, y);
 	if (pixel == NULL) {
 		return false;
 	}
@@ -71,15 +71,15 @@ static bool check_pixel(const image_t *img, uint32_t x, uint32_t y, uint8_t r, u
  */
 CTEST(image_orientation, orientation_1_normal)
 {
-	image_t *img = create_test_pattern(4, 4);
+	img2_image_t *img = create_test_pattern(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Store original corner values */
-	uint8_t *tl = image_get_pixel(img, 0, 0);
+	uint8_t *tl = img2_image_get_pixel(img, 0, 0);
 	uint8_t orig_tl[4] = { tl[0], tl[1], tl[2], tl[3] };
 
 	/* Apply orientation 1 (should do nothing) */
-	int result = image_apply_orientation(img, 1);
+	int result = img2_image_orient(img, 1);
 	ASSERT_EQUAL(0, result);
 
 	/* Verify dimensions unchanged */
@@ -93,7 +93,7 @@ CTEST(image_orientation, orientation_1_normal)
 	ASSERT_TRUE(check_pixel(img, 0, 3, 0, 0, 255, 255)); /* Bottom-left: Blue */
 	ASSERT_TRUE(check_pixel(img, 3, 3, 255, 255, 0, 255)); /* Bottom-right: Yellow */
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -103,11 +103,11 @@ CTEST(image_orientation, orientation_1_normal)
  */
 CTEST(image_orientation, orientation_2_flip_horizontal)
 {
-	image_t *img = create_test_pattern(4, 4);
+	img2_image_t *img = create_test_pattern(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Apply orientation 2 (flip horizontal) */
-	int result = image_apply_orientation(img, 2);
+	int result = img2_image_orient(img, 2);
 	ASSERT_EQUAL(0, result);
 
 	/* Verify dimensions unchanged */
@@ -120,7 +120,7 @@ CTEST(image_orientation, orientation_2_flip_horizontal)
 	ASSERT_TRUE(check_pixel(img, 0, 3, 255, 255, 0, 255)); /* Bottom-left now has Yellow (was bottom-right) */
 	ASSERT_TRUE(check_pixel(img, 3, 3, 0, 0, 255, 255)); /* Bottom-right now has Blue (was bottom-left) */
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -130,11 +130,11 @@ CTEST(image_orientation, orientation_2_flip_horizontal)
  */
 CTEST(image_orientation, orientation_3_rotate_180)
 {
-	image_t *img = create_test_pattern(4, 4);
+	img2_image_t *img = create_test_pattern(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Apply orientation 3 (rotate 180°) */
-	int result = image_apply_orientation(img, 3);
+	int result = img2_image_orient(img, 3);
 	ASSERT_EQUAL(0, result);
 
 	/* Verify dimensions unchanged */
@@ -147,7 +147,7 @@ CTEST(image_orientation, orientation_3_rotate_180)
 	ASSERT_TRUE(check_pixel(img, 0, 3, 0, 255, 0, 255)); /* Bottom-left now has Green (was top-right) */
 	ASSERT_TRUE(check_pixel(img, 3, 3, 255, 0, 0, 255)); /* Bottom-right now has Red (was top-left) */
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -157,11 +157,11 @@ CTEST(image_orientation, orientation_3_rotate_180)
  */
 CTEST(image_orientation, orientation_4_flip_vertical)
 {
-	image_t *img = create_test_pattern(4, 4);
+	img2_image_t *img = create_test_pattern(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Apply orientation 4 (flip vertical) */
-	int result = image_apply_orientation(img, 4);
+	int result = img2_image_orient(img, 4);
 	ASSERT_EQUAL(0, result);
 
 	/* Verify dimensions unchanged */
@@ -174,7 +174,7 @@ CTEST(image_orientation, orientation_4_flip_vertical)
 	ASSERT_TRUE(check_pixel(img, 0, 3, 255, 0, 0, 255)); /* Bottom-left now has Red (was top-left) */
 	ASSERT_TRUE(check_pixel(img, 3, 3, 0, 255, 0, 255)); /* Bottom-right now has Green (was top-right) */
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -185,11 +185,11 @@ CTEST(image_orientation, orientation_4_flip_vertical)
  */
 CTEST(image_orientation, orientation_5_transpose)
 {
-	image_t *img = create_test_pattern(4, 4);
+	img2_image_t *img = create_test_pattern(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Apply orientation 5 (transpose) */
-	int result = image_apply_orientation(img, 5);
+	int result = img2_image_orient(img, 5);
 	ASSERT_EQUAL(0, result);
 
 	/* Verify dimensions unchanged for square image */
@@ -202,7 +202,7 @@ CTEST(image_orientation, orientation_5_transpose)
 	ASSERT_TRUE(check_pixel(img, 0, 3, 0, 255, 0, 255)); /* Bottom-left: Green */
 	ASSERT_TRUE(check_pixel(img, 3, 3, 255, 255, 0, 255)); /* Bottom-right: Yellow */
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -214,11 +214,11 @@ CTEST(image_orientation, orientation_5_transpose)
 CTEST(image_orientation, orientation_6_rotate_90cw)
 {
 	/* Test with non-square image to verify dimension swap */
-	image_t *img = create_test_pattern(6, 4);
+	img2_image_t *img = create_test_pattern(6, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Apply orientation 6 (rotate 90° CW) */
-	int result = image_apply_orientation(img, 6);
+	int result = img2_image_orient(img, 6);
 	ASSERT_EQUAL(0, result);
 
 	/* Verify dimensions swapped: 6x4 → 4x6 */
@@ -231,7 +231,7 @@ CTEST(image_orientation, orientation_6_rotate_90cw)
 	ASSERT_TRUE(check_pixel(img, 0, 5, 255, 255, 0, 255)); /* Bottom-left (was bottom-right) */
 	ASSERT_TRUE(check_pixel(img, 3, 5, 0, 255, 0, 255)); /* Bottom-right (was top-right) */
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -242,11 +242,11 @@ CTEST(image_orientation, orientation_6_rotate_90cw)
  */
 CTEST(image_orientation, orientation_7_transverse)
 {
-	image_t *img = create_test_pattern(4, 4);
+	img2_image_t *img = create_test_pattern(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Apply orientation 7 (transverse) */
-	int result = image_apply_orientation(img, 7);
+	int result = img2_image_orient(img, 7);
 	ASSERT_EQUAL(0, result);
 
 	/* Verify dimensions unchanged for square image */
@@ -259,7 +259,7 @@ CTEST(image_orientation, orientation_7_transverse)
 	ASSERT_TRUE(check_pixel(img, 0, 3, 0, 0, 255, 255)); /* Bottom-left: Blue */
 	ASSERT_TRUE(check_pixel(img, 3, 3, 255, 0, 0, 255)); /* Bottom-right: Red */
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -271,11 +271,11 @@ CTEST(image_orientation, orientation_7_transverse)
 CTEST(image_orientation, orientation_8_rotate_270cw)
 {
 	/* Test with non-square image to verify dimension swap */
-	image_t *img = create_test_pattern(6, 4);
+	img2_image_t *img = create_test_pattern(6, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Apply orientation 8 (rotate 270° CW) */
-	int result = image_apply_orientation(img, 8);
+	int result = img2_image_orient(img, 8);
 	ASSERT_EQUAL(0, result);
 
 	/* Verify dimensions swapped: 6x4 → 4x6 */
@@ -288,7 +288,7 @@ CTEST(image_orientation, orientation_8_rotate_270cw)
 	ASSERT_TRUE(check_pixel(img, 0, 5, 255, 0, 0, 255)); /* Bottom-left (was top-left) */
 	ASSERT_TRUE(check_pixel(img, 3, 5, 0, 0, 255, 255)); /* Bottom-right (was bottom-left) */
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -298,11 +298,11 @@ CTEST(image_orientation, orientation_8_rotate_270cw)
  */
 CTEST(image_orientation, invalid_orientation_value)
 {
-	image_t *img = create_test_pattern(4, 4);
+	img2_image_t *img = create_test_pattern(4, 4);
 	ASSERT_NOT_NULL(img);
 
 	/* Test orientation=0 (invalid) */
-	int result = image_apply_orientation(img, 0);
+	int result = img2_image_orient(img, 0);
 	ASSERT_EQUAL(-1, result);
 
 	/* Verify image unchanged */
@@ -311,14 +311,14 @@ CTEST(image_orientation, invalid_orientation_value)
 	ASSERT_TRUE(check_pixel(img, 0, 0, 255, 0, 0, 255)); /* Top-left: Red */
 
 	/* Test orientation=9 (invalid) */
-	result = image_apply_orientation(img, 9);
+	result = img2_image_orient(img, 9);
 	ASSERT_EQUAL(-1, result);
 
 	/* Test orientation=255 (invalid) */
-	result = image_apply_orientation(img, 255);
+	result = img2_image_orient(img, 255);
 	ASSERT_EQUAL(-1, result);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -329,7 +329,7 @@ CTEST(image_orientation, invalid_orientation_value)
 CTEST(image_orientation, null_image_pointer)
 {
 	/* Call with NULL image should return -1 */
-	int result = image_apply_orientation(NULL, 6);
+	int result = img2_image_orient(NULL, 6);
 	ASSERT_EQUAL(-1, result);
 }
 
@@ -341,7 +341,7 @@ CTEST(image_orientation, null_image_pointer)
 CTEST(image_orientation, null_pixel_buffer)
 {
 	/* Create image structure with NULL pixels */
-	image_t img;
+	img2_image_t img;
 	img.width = 4;
 	img.height = 4;
 	img.pixels = NULL;
@@ -349,6 +349,6 @@ CTEST(image_orientation, null_pixel_buffer)
 	img.xmp = NULL;
 
 	/* Call should return -1 */
-	int result = image_apply_orientation(&img, 6);
+	int result = img2_image_orient(&img, 6);
 	ASSERT_EQUAL(-1, result);
 }

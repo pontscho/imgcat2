@@ -16,12 +16,12 @@
 #include "../ctest.h"
 
 /* Forward declaration for HEIF encoder function */
-extern int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+extern int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 
 /**
- * @test Test encode_heif() with NULL parameters
+ * @test Test img2_encode_heif() with NULL parameters
  *
- * Verifies that encode_heif() rejects NULL input gracefully.
+ * Verifies that img2_encode_heif() rejects NULL input gracefully.
  */
 CTEST(encoder_heif, null_inputs)
 {
@@ -29,38 +29,38 @@ CTEST(encoder_heif, null_inputs)
 	size_t out_size = 0;
 
 	/* Create minimal valid image */
-	image_t *img = image_create(1, 1);
+	img2_image_t *img = img2_image_alloc(1, 1);
 	ASSERT_NOT_NULL(img);
 
 	/* NULL image pointer */
-	int result = encode_heif(NULL, 80, &out_data, &out_size);
+	int result = img2_encode_heif(NULL, 80, &out_data, &out_size);
 	ASSERT_EQUAL(-1, result);
 	ASSERT_NULL(out_data);
 	ASSERT_EQUAL(0, out_size);
 
 	/* NULL out_data pointer */
-	result = encode_heif(img, 80, NULL, &out_size);
+	result = img2_encode_heif(img, 80, NULL, &out_size);
 	ASSERT_EQUAL(-1, result);
 
 	/* NULL out_size pointer */
-	result = encode_heif(img, 80, &out_data, NULL);
+	result = img2_encode_heif(img, 80, &out_data, NULL);
 	ASSERT_EQUAL(-1, result);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
- * @test Test encode_heif() with minimal 1x1 image
+ * @test Test img2_encode_heif() with minimal 1x1 image
  *
  * Verifies that HEIF encoder can encode the smallest possible image.
  */
 CTEST(encoder_heif, encode_1x1_image)
 {
 	/* Create 1x1 red image */
-	image_t *img = image_create(1, 1);
+	img2_image_t *img = img2_image_alloc(1, 1);
 	ASSERT_NOT_NULL(img);
 
-	uint8_t *pixel = image_get_pixel(img, 0, 0);
+	uint8_t *pixel = img2_image_get_pixel(img, 0, 0);
 	ASSERT_NOT_NULL(pixel);
 	pixel[0] = 255; /* R */
 	pixel[1] = 0; /* G */
@@ -70,7 +70,7 @@ CTEST(encoder_heif, encode_1x1_image)
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
 
-	int result = encode_heif(img, 80, &out_data, &out_size);
+	int result = img2_encode_heif(img, 80, &out_data, &out_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data);
 	ASSERT_TRUE(out_size > 0);
@@ -84,24 +84,24 @@ CTEST(encoder_heif, encode_1x1_image)
 	ASSERT_EQUAL('p', out_data[7]);
 
 	free(out_data);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
- * @test Test encode_heif() with 10x10 RGBA image
+ * @test Test img2_encode_heif() with 10x10 RGBA image
  *
  * Verifies that HEIF encoder can encode a small image.
  */
 CTEST(encoder_heif, encode_10x10_image)
 {
 	/* Create 10x10 gradient image */
-	image_t *img = image_create(10, 10);
+	img2_image_t *img = img2_image_alloc(10, 10);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with red-to-green gradient */
 	for (uint32_t y = 0; y < 10; y++) {
 		for (uint32_t x = 0; x < 10; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			ASSERT_NOT_NULL(pixel);
 			pixel[0] = 255 - (x * 255 / 10); /* R: decreases left-to-right */
 			pixel[1] = (x * 255 / 10); /* G: increases left-to-right */
@@ -113,7 +113,7 @@ CTEST(encoder_heif, encode_10x10_image)
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
 
-	int result = encode_heif(img, 80, &out_data, &out_size);
+	int result = img2_encode_heif(img, 80, &out_data, &out_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data);
 	ASSERT_TRUE(out_size > 0);
@@ -130,11 +130,11 @@ CTEST(encoder_heif, encode_10x10_image)
 	ASSERT_TRUE(out_size <= 10000);
 
 	free(out_data);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
- * @test Test encode_heif() with different quality levels
+ * @test Test img2_encode_heif() with different quality levels
  *
  * Verifies that quality parameter affects output size as expected.
  * Higher quality should produce larger files.
@@ -142,13 +142,13 @@ CTEST(encoder_heif, encode_10x10_image)
 CTEST(encoder_heif, quality_levels)
 {
 	/* Create 100x100 gradient image */
-	image_t *img = image_create(100, 100);
+	img2_image_t *img = img2_image_alloc(100, 100);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with gradient */
 	for (uint32_t y = 0; y < 100; y++) {
 		for (uint32_t x = 0; x < 100; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 100);
 			pixel[1] = (y * 255 / 100);
 			pixel[2] = 128;
@@ -164,19 +164,19 @@ CTEST(encoder_heif, quality_levels)
 	size_t out_size_q90 = 0;
 
 	/* Encode with quality 10 (low) */
-	int result = encode_heif(img, 10, &out_data_q10, &out_size_q10);
+	int result = img2_encode_heif(img, 10, &out_data_q10, &out_size_q10);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data_q10);
 	ASSERT_TRUE(out_size_q10 > 0);
 
 	/* Encode with quality 50 (medium) */
-	result = encode_heif(img, 50, &out_data_q50, &out_size_q50);
+	result = img2_encode_heif(img, 50, &out_data_q50, &out_size_q50);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data_q50);
 	ASSERT_TRUE(out_size_q50 > 0);
 
 	/* Encode with quality 90 (high) */
-	result = encode_heif(img, 90, &out_data_q90, &out_size_q90);
+	result = img2_encode_heif(img, 90, &out_data_q90, &out_size_q90);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data_q90);
 	ASSERT_TRUE(out_size_q90 > 0);
@@ -196,7 +196,7 @@ CTEST(encoder_heif, quality_levels)
 	free(out_data_q10);
 	free(out_data_q50);
 	free(out_data_q90);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -207,13 +207,13 @@ CTEST(encoder_heif, quality_levels)
 CTEST(encoder_heif, transparency)
 {
 	/* Create 50x50 image with varying alpha */
-	image_t *img = image_create(50, 50);
+	img2_image_t *img = img2_image_alloc(50, 50);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with pattern: left half opaque, right half transparent */
 	for (uint32_t y = 0; y < 50; y++) {
 		for (uint32_t x = 0; x < 50; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = 255; /* R */
 			pixel[1] = 0; /* G */
 			pixel[2] = 0; /* B */
@@ -230,7 +230,7 @@ CTEST(encoder_heif, transparency)
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
 
-	int result = encode_heif(img, 80, &out_data, &out_size);
+	int result = img2_encode_heif(img, 80, &out_data, &out_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data);
 	ASSERT_TRUE(out_size > 0);
@@ -247,7 +247,7 @@ CTEST(encoder_heif, transparency)
 	ASSERT_TRUE(out_size <= 50000);
 
 	free(out_data);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -258,13 +258,13 @@ CTEST(encoder_heif, transparency)
 CTEST(encoder_heif, magic_bytes)
 {
 	/* Create 50x50 image */
-	image_t *img = image_create(50, 50);
+	img2_image_t *img = img2_image_alloc(50, 50);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with pattern */
 	for (uint32_t y = 0; y < 50; y++) {
 		for (uint32_t x = 0; x < 50; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x + y) % 256;
 			pixel[1] = (x * 2) % 256;
 			pixel[2] = (y * 2) % 256;
@@ -275,7 +275,7 @@ CTEST(encoder_heif, magic_bytes)
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
 
-	int result = encode_heif(img, 75, &out_data, &out_size);
+	int result = img2_encode_heif(img, 75, &out_data, &out_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data);
 	ASSERT_TRUE(out_size >= 12); /* Must have at least 12 bytes for ftyp box */
@@ -287,5 +287,5 @@ CTEST(encoder_heif, magic_bytes)
 	ASSERT_EQUAL('p', out_data[7]);
 
 	free(out_data);
-	image_destroy(img);
+	img2_image_destroy(img);
 }

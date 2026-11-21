@@ -18,24 +18,24 @@
  * to satisfy the registry structure.
  */
 
-#ifdef HAVE_LIBJPEG
-extern int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#ifdef IMG2_HAVE_LIBJPEG
+extern int img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 #endif
 
-#ifdef HAVE_LIBPNG
-extern int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#ifdef IMG2_HAVE_LIBPNG
+extern int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 #endif
 
-#ifdef HAVE_WEBP
-extern int encode_webp(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#ifdef IMG2_HAVE_WEBP
+extern int img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 #endif
 
-#ifdef HAVE_HEIF
-extern int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#ifdef IMG2_HAVE_HEIF
+extern int img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 #endif
 
-#ifdef HAVE_JXL
-extern int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+#ifdef IMG2_HAVE_JXL
+extern int img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 #endif
 
 /**
@@ -44,33 +44,33 @@ extern int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_
  * Populated at compile-time based on HAVE_* preprocessor flags.
  * Conditional compilation ensures only available encoders are registered.
  */
-static const encoder_t s_encoder_registry[] = {
-#ifdef HAVE_LIBJPEG
-	{ FORMAT_JPEG, "JPEG (libjpeg)", ".jpg",  encode_jpeg },
+static const img2_encoder_entry_t s_encoder_registry[] = {
+#ifdef IMG2_HAVE_LIBJPEG
+	{ IMG2_FORMAT_JPEG, "JPEG (libjpeg)", ".jpg",  img2_encode_jpeg },
 #endif
 
-#ifdef HAVE_LIBPNG
-	{ FORMAT_PNG,  "PNG (libpng)",   ".png",  encode_png  },
+#ifdef IMG2_HAVE_LIBPNG
+	{ IMG2_FORMAT_PNG,  "PNG (libpng)",   ".png",  img2_encode_png  },
 #endif
 
-#ifdef HAVE_HEIF
-	{ FORMAT_HEIF, "HEIF (libheif)", ".heif", encode_heif },
+#ifdef IMG2_HAVE_HEIF
+	{ IMG2_FORMAT_HEIF, "HEIF (libheif)", ".heif", img2_encode_heif },
 #endif
 
-#ifdef HAVE_WEBP
-	{ FORMAT_WEBP, "WebP (libwebp)", ".webp", encode_webp },
+#ifdef IMG2_HAVE_WEBP
+	{ IMG2_FORMAT_WEBP, "WebP (libwebp)", ".webp", img2_encode_webp },
 #endif
 
-#ifdef HAVE_JXL
-	{ FORMAT_JXL,  "JXL (libjxl)",   ".jxl",  encode_jxl  },
+#ifdef IMG2_HAVE_JXL
+	{ IMG2_FORMAT_JXL,  "JXL (libjxl)",   ".jxl",  img2_encode_jxl  },
 #endif
 };
 
 /**
  * @brief Global registry pointer and count
  */
-const encoder_t *g_encoder_registry = NULL;
-size_t g_encoder_count = 0;
+const img2_encoder_entry_t *img2_encoder_registry = NULL;
+size_t img2_encoder_registry_size = 0;
 
 /**
  * @brief Initialize encoder registry
@@ -78,18 +78,18 @@ size_t g_encoder_count = 0;
  * Sets up the global registry pointers. This function is idempotent
  * and safe to call multiple times.
  */
-void encoder_registry_init(void)
+void img2_encoder_registry_init(void)
 {
-	if (g_encoder_registry != NULL) {
+	if (img2_encoder_registry != NULL) {
 		/* Already initialized */
 		return;
 	}
 
-	g_encoder_registry = s_encoder_registry;
-	g_encoder_count = sizeof(s_encoder_registry) / sizeof(encoder_t);
+	img2_encoder_registry = s_encoder_registry;
+	img2_encoder_registry_size = sizeof(s_encoder_registry) / sizeof(img2_encoder_entry_t);
 
-	img2_log(IMG2_LOG_INFO, "Encoder registry initialized with %zu encoders:", g_encoder_count);
-	for (size_t i = 0; i < g_encoder_count; i++) {
+	img2_log(IMG2_LOG_INFO, "Encoder registry initialized with %zu encoders:", img2_encoder_registry_size);
+	for (size_t i = 0; i < img2_encoder_registry_size; i++) {
 		img2_log(IMG2_LOG_INFO, "  [%zu] %s (%s)", i, s_encoder_registry[i].name, s_encoder_registry[i].extension);
 	}
 }
@@ -100,22 +100,22 @@ void encoder_registry_init(void)
  * Performs linear search through the registry to find an encoder
  * that handles the specified output format.
  */
-const encoder_t *encoder_find_by_format(output_format_t format)
+const img2_encoder_entry_t *img2_encoder_find(img2_format_t format)
 {
-	if (g_encoder_registry == NULL) {
+	if (img2_encoder_registry == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Encoder registry not initialized (call encoder_registry_init())");
 		return NULL;
 	}
 
 	/* Linear search through registry */
-	for (size_t i = 0; i < g_encoder_count; i++) {
-		if (g_encoder_registry[i].format == format) {
-			return &g_encoder_registry[i];
+	for (size_t i = 0; i < img2_encoder_registry_size; i++) {
+		if (img2_encoder_registry[i].format == format) {
+			return &img2_encoder_registry[i];
 		}
 	}
 
 	/* No encoder found */
-	const char *format_name = (format == FORMAT_JPEG) ? "JPEG" : (format == FORMAT_PNG) ? "PNG" : (format == FORMAT_HEIF) ? "HEIF" : (format == FORMAT_WEBP) ? "WebP" : (format == FORMAT_JXL) ? "JXL" : "UNKNOWN";
+	const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
 	img2_log(IMG2_LOG_ERROR, "Error: No encoder found for format: %s", format_name);
 	return NULL;
 }
@@ -125,7 +125,7 @@ const encoder_t *encoder_find_by_format(output_format_t format)
  *
  * Main encoding dispatcher with comprehensive error checking and validation.
  */
-int encoder_encode(const image_t *img, output_format_t format, int quality, uint8_t **out_data, size_t *out_size)
+int img2_encoder_dispatch(const img2_image_t *img, img2_format_t format, int quality, uint8_t **out_data, size_t *out_size)
 {
 	/* Validate inputs */
 	if (img == NULL || out_data == NULL || out_size == NULL) {
@@ -138,13 +138,13 @@ int encoder_encode(const image_t *img, output_format_t format, int quality, uint
 	*out_size = 0;
 
 	/* Validate format */
-	if (format == FORMAT_NONE) {
+	if (format == IMG2_FORMAT_NONE) {
 		img2_log(IMG2_LOG_ERROR, "Error: No output format specified");
 		return -1;
 	}
 
 	/* Find appropriate encoder */
-	const encoder_t *encoder = encoder_find_by_format(format);
+	const img2_encoder_entry_t *encoder = img2_encoder_find(format);
 	if (encoder == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: No encoder available for format");
 		return -1;

@@ -82,3 +82,8 @@ img2_add_test(test_tiff_orientation KIND integration SOURCES integration/test_ti
 add_test(NAME img2_layering_lib COMMAND ${CMAKE_COMMAND} -DMODE=lib -DROOT=${PROJECT_SOURCE_DIR}
 	-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_layering.cmake)
 set_tests_properties(img2_layering_lib PROPERTIES LABELS guard)
+if(CMAKE_NM AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	add_test(NAME img2_symbols COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} -DPREFIX=img2_
+		-DARCHIVE=$<TARGET_FILE:img2> -P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_symbols.cmake)
+	set_tests_properties(img2_symbols PROPERTIES LABELS guard)
+endif()

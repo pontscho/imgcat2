@@ -19,11 +19,16 @@
 #include "decoder.h"
 #include "../core/log.h"
 
-/* NanoSVG implementation */
+/* NanoSVG implementation (TU-local: NSVG_DEF/NSVGRAST_DEF give the API internal linkage) */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#define NSVG_DEF static
+#define NSVGRAST_DEF static
 #define NANOSVG_IMPLEMENTATION
 #include "nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
 #include "nanosvgrast.h"
+#pragma GCC diagnostic pop
 
 /**
  * @brief Simple CSS class to inline style converter for SVG
@@ -229,12 +234,12 @@ static char *inline_svg_styles(const char *svg_data)
  * @param data Raw SVG file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note Output format is RGBA8888
  * @note SVGs without explicit dimensions use 512x512 default
  */
-image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_svg_nanosvg");
@@ -265,7 +270,7 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	// Initialize font manager (for text rendering)
 	static bool font_mgr_initialized = false;
 	if (!font_mgr_initialized) {
-		if (font_manager_init()) {
+		if (img2_font_manager_init()) {
 			font_mgr_initialized = true;
 		}
 	}
@@ -299,16 +304,16 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 		return NULL;
 	}
 
-	if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
-		img2_log(IMG2_LOG_ERROR, "Error: SVG dimensions exceed maximum (%u): %ux%u", IMAGE_MAX_DIMENSION, width, height);
+	if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
+		img2_log(IMG2_LOG_ERROR, "Error: SVG dimensions exceed maximum (%u): %ux%u", IMG2_MAX_DIMENSION, width, height);
 		nsvgDelete(svg_image);
 		return NULL;
 	}
 
 	// Check pixel count limit
 	uint64_t pixel_count = (uint64_t)width * (uint64_t)height;
-	if (pixel_count > IMAGE_MAX_PIXELS) {
-		img2_log(IMG2_LOG_ERROR, "Error: SVG pixel count exceeds maximum (%lu): %llu", (unsigned long)IMAGE_MAX_PIXELS, (unsigned long long)pixel_count);
+	if (pixel_count > IMG2_MAX_PIXELS) {
+		img2_log(IMG2_LOG_ERROR, "Error: SVG pixel count exceeds maximum (%lu): %llu", (unsigned long)IMG2_MAX_PIXELS, (unsigned long long)pixel_count);
 		nsvgDelete(svg_image);
 		return NULL;
 	}
@@ -321,8 +326,8 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 		return NULL;
 	}
 
-	// Create image_t structure
-	image_t *output = image_create(width, height);
+	// Create img2_image_t structure
+	img2_image_t *output = img2_image_alloc(width, height);
 	if (output == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		nsvgDeleteRasterizer(rast);
@@ -339,10 +344,10 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	nsvgDelete(svg_image);
 
 	// Allocate frames array (single frame)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(output);
+		img2_image_destroy(output);
 		return NULL;
 	}
 

@@ -371,7 +371,7 @@ static bool pnm_parse_pam_header(pnm_reader_t *r, pnm_header_t *hdr)
  *
  * @note Caller must have verified that the full raster is available
  */
-static void pnm_decode_binary(pnm_reader_t *r, const pnm_header_t *hdr, image_t *img)
+static void pnm_decode_binary(pnm_reader_t *r, const pnm_header_t *hdr, img2_image_t *img)
 {
 	size_t bps = (hdr->maxval < 256) ? 1 : 2;
 	size_t pixel_count = (size_t)hdr->width * (size_t)hdr->height;
@@ -404,7 +404,7 @@ static void pnm_decode_binary(pnm_reader_t *r, const pnm_header_t *hdr, image_t 
  * @param hdr Parsed header
  * @param img Destination image
  */
-static void pnm_decode_p4(pnm_reader_t *r, const pnm_header_t *hdr, image_t *img)
+static void pnm_decode_p4(pnm_reader_t *r, const pnm_header_t *hdr, img2_image_t *img)
 {
 	size_t row_bytes = ((size_t)hdr->width + 7) / 8;
 	const uint8_t *row = r->data + r->pos;
@@ -430,7 +430,7 @@ static void pnm_decode_p4(pnm_reader_t *r, const pnm_header_t *hdr, image_t *img
  * @param img Destination image
  * @return true on success, false on truncated or malformed raster
  */
-static bool pnm_decode_ascii(pnm_reader_t *r, const pnm_header_t *hdr, image_t *img)
+static bool pnm_decode_ascii(pnm_reader_t *r, const pnm_header_t *hdr, img2_image_t *img)
 {
 	size_t pixel_count = (size_t)hdr->width * (size_t)hdr->height;
 	uint8_t *dst = img->pixels;
@@ -469,12 +469,12 @@ static bool pnm_decode_ascii(pnm_reader_t *r, const pnm_header_t *hdr, image_t *
  * @param data Raw Netpbm file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (always 1)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note Output format is RGBA8888
  * @note Only the first image of a multi-image stream is decoded
  */
-image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_pnm(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		return NULL;
@@ -506,7 +506,7 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: invalid dimensions %ux%u", hdr.width, hdr.height);
 		return NULL;
 	}
-	if (hdr.width > IMAGE_MAX_DIMENSION || hdr.height > IMAGE_MAX_DIMENSION) {
+	if (hdr.width > IMG2_MAX_DIMENSION || hdr.height > IMG2_MAX_DIMENSION) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: dimensions %ux%u exceed limit", hdr.width, hdr.height);
 		return NULL;
 	}
@@ -542,7 +542,7 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 		return NULL;
 	}
 
-	image_t *img = image_create(hdr.width, hdr.height);
+	img2_image_t *img = img2_image_alloc(hdr.width, hdr.height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		return NULL;
@@ -566,14 +566,14 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 
 	if (!ok) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNM: truncated or malformed raster data");
-		image_destroy(img);
+		img2_image_destroy(img);
 		return NULL;
 	}
 
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(img);
+		img2_image_destroy(img);
 		return NULL;
 	}
 

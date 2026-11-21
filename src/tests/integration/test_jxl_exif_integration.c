@@ -3,7 +3,7 @@
  * @brief Integration test for JXL decoder with EXIF/XMP metadata
  *
  * Tests that the JXL decoder properly extracts and stores EXIF/XMP metadata
- * in the image_t structure during decoding.
+ * in the img2_image_t structure during decoding.
  */
 
 #include <stdbool.h>
@@ -13,12 +13,12 @@
 #include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
 #endif
 
-/* Forward declaration of decode_jxl from decoder */
-image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count);
+/* Forward declaration of img2_decode_jxl from decoder */
+img2_image_t **img2_decode_jxl(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Minimal valid JXL with EXIF metadata
@@ -147,7 +147,7 @@ static const uint8_t jxl_with_exif[] = {
 CTEST(jxl_exif_integration, decode_with_exif)
 {
 	int frame_count = 0;
-	image_t **frames = decode_jxl(jxl_with_exif, sizeof(jxl_with_exif), &frame_count);
+	img2_image_t **frames = img2_decode_jxl(jxl_with_exif, sizeof(jxl_with_exif), &frame_count);
 
 	// Note: This test may fail if the JXL data above is not valid
 	// The actual implementation would need a valid JXL file with EXIF box
@@ -161,14 +161,14 @@ CTEST(jxl_exif_integration, decode_with_exif)
 	ASSERT_TRUE(frame_count >= 1);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 	ASSERT_NOT_NULL(img->pixels);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted */
 	if (img->exif != NULL) {
 		ASSERT_STR("Canon", img->exif->make);
@@ -186,7 +186,7 @@ CTEST(jxl_exif_integration, decode_with_exif)
 	/* Cleanup */
 	for (int i = 0; i < frame_count; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);
@@ -234,7 +234,7 @@ CTEST(jxl_exif_integration, decode_without_exif)
 	};
 
 	int frame_count = 0;
-	image_t **frames = decode_jxl(jxl_no_exif, sizeof(jxl_no_exif), &frame_count);
+	img2_image_t **frames = img2_decode_jxl(jxl_no_exif, sizeof(jxl_no_exif), &frame_count);
 
 	// Note: This test may fail if the JXL data above is not valid
 	if (frames == NULL) {
@@ -247,7 +247,7 @@ CTEST(jxl_exif_integration, decode_without_exif)
 	ASSERT_TRUE(frame_count >= 1);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Image should be decoded successfully */
 	ASSERT_TRUE(img->width > 0);
@@ -260,7 +260,7 @@ CTEST(jxl_exif_integration, decode_without_exif)
 	/* Cleanup */
 	for (int i = 0; i < frame_count; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);
@@ -372,7 +372,7 @@ CTEST(jxl_exif_integration, decode_with_xmp)
 	};
 
 	int frame_count = 0;
-	image_t **frames = decode_jxl(jxl_with_xmp, sizeof(jxl_with_xmp), &frame_count);
+	img2_image_t **frames = img2_decode_jxl(jxl_with_xmp, sizeof(jxl_with_xmp), &frame_count);
 
 	// Note: This test may fail if the JXL data above is not valid
 	if (frames == NULL) {
@@ -384,8 +384,8 @@ CTEST(jxl_exif_integration, decode_with_xmp)
 	ASSERT_NOT_NULL(frames);
 	ASSERT_TRUE(frame_count >= 1);
 
-#ifdef HAVE_EXIF_READER
-	image_t *img = frames[0];
+#ifdef IMG2_HAVE_EXIF_READER
+	img2_image_t *img = frames[0];
 	if (img->xmp != NULL) {
 		/* Verify XMP was extracted */
 		ASSERT_NOT_NULL(img->xmp);
@@ -396,7 +396,7 @@ CTEST(jxl_exif_integration, decode_with_xmp)
 	/* Cleanup */
 	for (int i = 0; i < frame_count; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);

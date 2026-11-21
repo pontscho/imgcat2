@@ -3,7 +3,7 @@
  * @brief Integration test for RAW decoder with EXIF metadata
  *
  * Tests that the RAW decoder (libraw) properly extracts and stores EXIF metadata
- * in the image_t structure during decoding.
+ * in the img2_image_t structure during decoding.
  */
 
 #include <stdbool.h>
@@ -16,12 +16,12 @@
 #include "../../imgcat2/pipeline.h"
 #include "../ctest.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
 #endif
 
-/* Forward declaration of decode_raw from decoder */
-image_t **decode_raw(const uint8_t *data, size_t len, int *frame_count);
+/* Forward declaration of img2_decode_raw from decoder */
+img2_image_t **img2_decode_raw(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Helper function to load test file
@@ -52,20 +52,20 @@ CTEST(raw_exif_integration, decode_dng_canon)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_raw(data, file_size, &frame_count);
+	img2_image_t **frames = img2_decode_raw(data, file_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 	ASSERT_NOT_NULL(img->pixels);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted */
 	ASSERT_NOT_NULL(img->exif);
 	ASSERT_STR("Canon", img->exif->make);
@@ -76,7 +76,7 @@ CTEST(raw_exif_integration, decode_dng_canon)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }
@@ -91,20 +91,20 @@ CTEST(raw_exif_integration, decode_nef_nikon)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_raw(data, file_size, &frame_count);
+	img2_image_t **frames = img2_decode_raw(data, file_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 	ASSERT_NOT_NULL(img->pixels);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted */
 	ASSERT_NOT_NULL(img->exif);
 	ASSERT_STR("Nikon", img->exif->make);
@@ -116,7 +116,7 @@ CTEST(raw_exif_integration, decode_nef_nikon)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }
@@ -131,20 +131,20 @@ CTEST(raw_exif_integration, decode_arw_sony)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_raw(data, file_size, &frame_count);
+	img2_image_t **frames = img2_decode_raw(data, file_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 	ASSERT_NOT_NULL(img->pixels);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted */
 	ASSERT_NOT_NULL(img->exif);
 	ASSERT_STR("Sony", img->exif->make);
@@ -160,7 +160,7 @@ CTEST(raw_exif_integration, decode_arw_sony)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }

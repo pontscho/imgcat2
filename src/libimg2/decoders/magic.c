@@ -15,75 +15,65 @@
  */
 
 /* PNG: 89 50 4E 47 0D 0A 1A 0A */
-const uint8_t MAGIC_PNG[8] = { 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n' };
+static const uint8_t MAGIC_PNG[8] = { 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n' };
 
 /* JPEG: FF D8 FF (SOI + start of frame marker) */
-const uint8_t MAGIC_JPEG[3] = { 0xFF, 0xD8, 0xFF };
+static const uint8_t MAGIC_JPEG[3] = { 0xFF, 0xD8, 0xFF };
 
 /* GIF signatures */
-const char MAGIC_GIF87A[6] = "GIF87a";
-const char MAGIC_GIF89A[6] = "GIF89a";
+static const char MAGIC_GIF87A[6] = "GIF87a";
+static const char MAGIC_GIF89A[6] = "GIF89a";
 
 /* BMP: "BM" */
-const char MAGIC_BMP[2] = "BM";
+static const char MAGIC_BMP[2] = "BM";
 
 /* PSD: "8BPS" */
-const char MAGIC_PSD[4] = "8BPS";
+static const char MAGIC_PSD[4] = "8BPS";
 
 /* HDR signatures */
-const char MAGIC_HDR_RADIANCE[10] = "#?RADIANCE";
-const char MAGIC_HDR_RGBE[6] = "#?RGBE";
-
-/* PNM signatures */
-const char MAGIC_PNM_P5[2] = "P5"; /* Grayscale */
-const char MAGIC_PNM_P6[2] = "P6"; /* RGB */
+static const char MAGIC_HDR_RADIANCE[10] = "#?RADIANCE";
+static const char MAGIC_HDR_RGBE[6] = "#?RGBE";
 
 /* WebP signatures */
-const uint8_t MAGIC_WEBP_RIFF[4] = "RIFF";
-const uint8_t MAGIC_WEBP_WEBP[4] = "WEBP";
+static const uint8_t MAGIC_WEBP_RIFF[4] = "RIFF";
+static const uint8_t MAGIC_WEBP_WEBP[4] = "WEBP";
 
 /* HEIF signatures */
-const uint8_t MAGIC_HEIF_FTYP[4] = "ftyp";
-const uint8_t MAGIC_HEIF_HEIC[4] = "heic";
-const uint8_t MAGIC_HEIF_HEIX[4] = "heix";
-const uint8_t MAGIC_HEIF_HEVC[4] = "hevc";
-const uint8_t MAGIC_HEIF_HEVX[4] = "hevx";
-const uint8_t MAGIC_HEIF_MIF1[4] = "mif1";
-const uint8_t MAGIC_HEIF_J2KI[4] = "j2ki"; /* JPEG 2000 in HEIF: image */
-const uint8_t MAGIC_HEIF_J2IS[4] = "j2is"; /* JPEG 2000 in HEIF: image sequence */
+static const uint8_t MAGIC_HEIF_FTYP[4] = "ftyp";
+static const uint8_t MAGIC_HEIF_HEIC[4] = "heic";
+static const uint8_t MAGIC_HEIF_HEIX[4] = "heix";
+static const uint8_t MAGIC_HEIF_HEVC[4] = "hevc";
+static const uint8_t MAGIC_HEIF_HEVX[4] = "hevx";
+static const uint8_t MAGIC_HEIF_MIF1[4] = "mif1";
+static const uint8_t MAGIC_HEIF_J2KI[4] = "j2ki"; /* JPEG 2000 in HEIF: image */
+static const uint8_t MAGIC_HEIF_J2IS[4] = "j2is"; /* JPEG 2000 in HEIF: image sequence */
 
 /* AVIF signatures */
-const uint8_t MAGIC_AVIF_AVIF[4] = "avif"; /* AVIF: AV1 Image File Format */
-const uint8_t MAGIC_AVIF_AVIS[4] = "avis"; /* AVIS: AVIF Image Sequence */
+static const uint8_t MAGIC_AVIF_AVIF[4] = "avif"; /* AVIF: AV1 Image File Format */
+static const uint8_t MAGIC_AVIF_AVIS[4] = "avis"; /* AVIS: AVIF Image Sequence */
 
 /* TIFF signatures */
-const uint8_t MAGIC_TIFF_LE[4] = { 0x49, 0x49, 0x2A, 0x00 }; // "II*\0" little-endian
-const uint8_t MAGIC_TIFF_BE[4] = { 0x4D, 0x4D, 0x00, 0x2A }; // "MM\0*" big-endian
+static const uint8_t MAGIC_TIFF_LE[4] = { 0x49, 0x49, 0x2A, 0x00 }; // "II*\0" little-endian
+static const uint8_t MAGIC_TIFF_BE[4] = { 0x4D, 0x4D, 0x00, 0x2A }; // "MM\0*" big-endian
 
 /* RAW format signatures */
-const uint8_t MAGIC_RAW_RAF[16] = "FUJIFILMCCD-RAW"; /* Fuji RAF */
-const uint8_t MAGIC_RAW_ORF_IIRO[4] = "IIRO"; /* Olympus ORF variant 1 */
-const uint8_t MAGIC_RAW_ORF_IIRS[4] = "IIRS"; /* Olympus ORF variant 2 */
-const uint8_t MAGIC_RAW_RW2[4] = { 'I', 'I', 'U', 0x00 }; /* Panasonic RW2 */
-const uint8_t MAGIC_RAW_CR2[4] = { 'C', 'R', 0x02, 0x00 }; /* Canon CR2 marker at offset 8 */
+static const uint8_t MAGIC_RAW_RAF[16] = "FUJIFILMCCD-RAW"; /* Fuji RAF */
+static const uint8_t MAGIC_RAW_ORF_IIRO[4] = "IIRO"; /* Olympus ORF variant 1 */
+static const uint8_t MAGIC_RAW_ORF_IIRS[4] = "IIRS"; /* Olympus ORF variant 2 */
+static const uint8_t MAGIC_RAW_RW2[4] = { 'I', 'I', 'U', 0x00 }; /* Panasonic RW2 */
+static const uint8_t MAGIC_RAW_CR2[4] = { 'C', 'R', 0x02, 0x00 }; /* Canon CR2 marker at offset 8 */
 
 /* QOI signature */
-const uint8_t MAGIC_QOI[4] = "qoif"; /* QOI: Quite OK Image format */
-
-/* ICO signature */
-const uint8_t MAGIC_ICO[4] = { 0x00, 0x00, 0x01, 0x00 }; /* ICO: Windows Icon format */
-
-/* CUR signature */
-const uint8_t MAGIC_CUR[4] = { 0x00, 0x00, 0x02, 0x00 }; /* CUR: Windows Cursor format */
+static const uint8_t MAGIC_QOI[4] = "qoif"; /* QOI: Quite OK Image format */
 
 /* JXL signatures */
-const uint8_t MAGIC_JXL_BARE[2] = { 0xff, 0x0a }; /* Bare codestream */
-const uint8_t MAGIC_JXL_CONTAINER[12] = { 0x00, 0x00, 0x00, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a }; /* ISOBMFF container */
+static const uint8_t MAGIC_JXL_BARE[2] = { 0xff, 0x0a }; /* Bare codestream */
+static const uint8_t MAGIC_JXL_CONTAINER[12] = { 0x00, 0x00, 0x00, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a }; /* ISOBMFF container */
 
 /* SVG signatures */
-const uint8_t MAGIC_SVG_XML[5] = "<?xml"; /* XML declaration */
-const uint8_t MAGIC_SVG_ROOT[4] = "<svg"; /* Direct SVG root */
-const uint8_t MAGIC_SVG_BOM_XML[8] = { 0xEF, 0xBB, 0xBF, '<', '?', 'x', 'm', 'l' }; /* BOM + XML */
+static const uint8_t MAGIC_SVG_XML[5] = "<?xml"; /* XML declaration */
+static const uint8_t MAGIC_SVG_ROOT[4] = "<svg"; /* Direct SVG root */
+static const uint8_t MAGIC_SVG_BOM_XML[8] = { 0xEF, 0xBB, 0xBF, '<', '?', 'x', 'm', 'l' }; /* BOM + XML */
 
 /**
  * @brief Check if TIFF data is actually a TIFF-based RAW format
@@ -188,46 +178,46 @@ static bool is_heif_j2k_ftyp(const uint8_t *data, size_t len)
  * Performs priority-based signature matching to identify image format.
  * Priority order ensures most common formats are checked first.
  */
-mime_type_t detect_mime_type(const uint8_t *data, size_t len)
+img2_mime_t img2_detect_mime(const uint8_t *data, size_t len)
 {
 	// Validate input
 	if (data == NULL || len < 8) {
-		return MIME_UNKNOWN;
+		return IMG2_MIME_UNKNOWN;
 	}
 
 	// Priority 1: PNG (exact 8 byte match)
 	if (memcmp(data, MAGIC_PNG, 8) == 0) {
-		return MIME_PNG;
+		return IMG2_MIME_PNG;
 	}
 
 	// Priority 2: JPEG (3 byte match)
 	if (len >= 3 && memcmp(data, MAGIC_JPEG, 3) == 0) {
-		return MIME_JPEG;
+		return IMG2_MIME_JPEG;
 	}
 
 	// Priority 3: GIF (6 byte match, check GIF87a or GIF89a)
 	if (len >= 6) {
 		if (memcmp(data, MAGIC_GIF87A, 6) == 0 || memcmp(data, MAGIC_GIF89A, 6) == 0) {
-			return MIME_GIF;
+			return IMG2_MIME_GIF;
 		}
 	}
 
 	// Priority 3.5: WebP (12 byte match - RIFF + WEBP)
 	if (len >= 12) {
 		if (memcmp(data, MAGIC_WEBP_RIFF, 4) == 0 && memcmp(data + 8, MAGIC_WEBP_WEBP, 4) == 0) {
-			return MIME_WEBP;
+			return IMG2_MIME_WEBP;
 		}
 	}
 
 	// Priority 3.6: JXL (JPEG XL) - check container first, then bare
 	if (len >= 12) {
 		if (memcmp(data, MAGIC_JXL_CONTAINER, 12) == 0) {
-			return MIME_JXL;
+			return IMG2_MIME_JXL;
 		}
 	}
 	if (len >= 2) {
 		if (memcmp(data, MAGIC_JXL_BARE, 2) == 0) {
-			return MIME_JXL;
+			return IMG2_MIME_JXL;
 		}
 	}
 
@@ -235,14 +225,14 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	// Check for direct <svg root tag first (most common in standalone SVG files)
 	if (len >= 4) {
 		if (memcmp(data, MAGIC_SVG_ROOT, 4) == 0) {
-			return MIME_SVG;
+			return IMG2_MIME_SVG;
 		}
 	}
 	// BOM + XML check (8 bytes, for SVG files with XML declaration)
 	if (len >= 8) {
 		if (memcmp(data, MAGIC_SVG_BOM_XML, 8) == 0 || memcmp(data, MAGIC_SVG_XML, 5) == 0) {
 			if (memmem(data, len, MAGIC_SVG_ROOT, 4) != NULL) {
-				return MIME_SVG;
+				return IMG2_MIME_SVG;
 			}
 		}
 	}
@@ -253,12 +243,12 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 			// Check major brand at offset 8
 			const uint8_t *brand = data + 8;
 			if (memcmp(brand, MAGIC_HEIF_HEIC, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEIX, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEVC, 4) == 0 || memcmp(brand, MAGIC_HEIF_HEVX, 4) == 0 || memcmp(brand, MAGIC_HEIF_MIF1, 4) == 0) {
-				return MIME_HEIF;
+				return IMG2_MIME_HEIF;
 			}
 		}
 		// JPEG 2000 in HEIF ('j2ki' / 'j2is' major or compatible brand)
 		if (is_heif_j2k_ftyp(data, len)) {
-			return MIME_HEIF;
+			return IMG2_MIME_HEIF;
 		}
 	}
 
@@ -268,7 +258,7 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 			// Check major brand at offset 8
 			const uint8_t *brand = data + 8;
 			if (memcmp(brand, MAGIC_AVIF_AVIF, 4) == 0 || memcmp(brand, MAGIC_AVIF_AVIS, 4) == 0) {
-				return MIME_AVIF;
+				return IMG2_MIME_AVIF;
 			}
 		}
 	}
@@ -278,10 +268,10 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 		if (memcmp(data, MAGIC_TIFF_LE, 4) == 0 || memcmp(data, MAGIC_TIFF_BE, 4) == 0) {
 			// Check if this is a TIFF-based RAW format (CR2, NEF, ARW, DNG)
 			if (is_tiff_based_raw(data, len)) {
-				return MIME_RAW;
+				return IMG2_MIME_RAW;
 			}
 			// Regular TIFF file
-			return MIME_TIFF;
+			return IMG2_MIME_TIFF;
 		}
 	}
 
@@ -289,30 +279,30 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	if (len >= 16) {
 		// Fuji RAF - 16 byte signature
 		if (memcmp(data, MAGIC_RAW_RAF, 16) == 0) {
-			return MIME_RAW;
+			return IMG2_MIME_RAW;
 		}
 	}
 
 	if (len >= 4) {
 		// Olympus ORF - 4 byte signature (two variants)
 		if (memcmp(data, MAGIC_RAW_ORF_IIRO, 4) == 0 || memcmp(data, MAGIC_RAW_ORF_IIRS, 4) == 0) {
-			return MIME_RAW;
+			return IMG2_MIME_RAW;
 		}
 
 		// Panasonic RW2 - 4 byte signature
 		if (memcmp(data, MAGIC_RAW_RW2, 4) == 0) {
-			return MIME_RAW;
+			return IMG2_MIME_RAW;
 		}
 
 		// QOI - 4 byte signature "qoif"
 		if (memcmp(data, MAGIC_QOI, 4) == 0) {
-			return MIME_QOI;
+			return IMG2_MIME_QOI;
 		}
 	}
 
 	// Priority 4: BMP (2 byte match "BM")
 	if (len >= 2 && memcmp(data, MAGIC_BMP, 2) == 0) {
-		return MIME_BMP;
+		return IMG2_MIME_BMP;
 	}
 
 	// Priority 4.5: ICO/CUR (with type field discrimination)
@@ -325,9 +315,9 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 
 		if (count > 0 && count < 256) {
 			if (type == 1) {
-				return MIME_ICO; // Icon
+				return IMG2_MIME_ICO; // Icon
 			} else if (type == 2) {
-				return MIME_CUR; // Cursor
+				return IMG2_MIME_CUR; // Cursor
 			}
 		}
 	}
@@ -339,7 +329,7 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 	if (len >= 3 && data[0] == 'P' && data[1] >= '1' && data[1] <= '7') {
 		uint8_t c = data[2];
 		if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f') {
-			return MIME_PNM;
+			return IMG2_MIME_PNM;
 		}
 	}
 
@@ -352,54 +342,54 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len)
 			// Additional validation: byte[16] is pixel depth (should be 8, 16, 24, or 32)
 			uint8_t pixel_depth = data[16];
 			if (pixel_depth == 8 || pixel_depth == 16 || pixel_depth == 24 || pixel_depth == 32) {
-				return MIME_TGA;
+				return IMG2_MIME_TGA;
 			}
 		}
 	}
 
 	// Priority 6: PSD (4 byte match "8BPS")
 	if (len >= 4 && memcmp(data, MAGIC_PSD, 4) == 0) {
-		return MIME_PSD;
+		return IMG2_MIME_PSD;
 	}
 
 	// Priority 7: HDR (10 byte or 6 byte match)
 	if (len >= 10 && memcmp(data, MAGIC_HDR_RADIANCE, 10) == 0) {
-		return MIME_HDR;
+		return IMG2_MIME_HDR;
 	}
 	if (len >= 6 && memcmp(data, MAGIC_HDR_RGBE, 6) == 0) {
-		return MIME_HDR;
+		return IMG2_MIME_HDR;
 	}
 
 	// No match found
-	return MIME_UNKNOWN;
+	return IMG2_MIME_UNKNOWN;
 }
 
 /**
  * @brief Get human-readable name for MIME type
  */
-const char *mime_type_name(mime_type_t mime)
+const char *img2_mime_name(img2_mime_t mime)
 {
 	switch (mime) {
-		case MIME_PNG: return "PNG";
-		case MIME_JPEG: return "JPEG";
-		case MIME_GIF: return "GIF";
-		case MIME_BMP: return "BMP";
-		case MIME_TGA: return "TGA";
-		case MIME_PSD: return "PSD";
-		case MIME_HDR: return "HDR";
-		case MIME_PNM: return "PNM";
-		case MIME_WEBP: return "WEBP";
-		case MIME_HEIF: return "HEIF";
-		case MIME_AVIF: return "AVIF";
-		case MIME_TIFF: return "TIFF";
-		case MIME_RAW: return "RAW";
-		case MIME_QOI: return "QOI";
-		case MIME_ICO: return "ICO";
-		case MIME_CUR: return "CUR";
-		case MIME_JXL: return "JXL";
-		case MIME_SVG: return "SVG";
-		case MIME_YUV: return "YUV";
-		case MIME_UNKNOWN:
+		case IMG2_MIME_PNG: return "PNG";
+		case IMG2_MIME_JPEG: return "JPEG";
+		case IMG2_MIME_GIF: return "GIF";
+		case IMG2_MIME_BMP: return "BMP";
+		case IMG2_MIME_TGA: return "TGA";
+		case IMG2_MIME_PSD: return "PSD";
+		case IMG2_MIME_HDR: return "HDR";
+		case IMG2_MIME_PNM: return "PNM";
+		case IMG2_MIME_WEBP: return "WEBP";
+		case IMG2_MIME_HEIF: return "HEIF";
+		case IMG2_MIME_AVIF: return "AVIF";
+		case IMG2_MIME_TIFF: return "TIFF";
+		case IMG2_MIME_RAW: return "RAW";
+		case IMG2_MIME_QOI: return "QOI";
+		case IMG2_MIME_ICO: return "ICO";
+		case IMG2_MIME_CUR: return "CUR";
+		case IMG2_MIME_JXL: return "JXL";
+		case IMG2_MIME_SVG: return "SVG";
+		case IMG2_MIME_YUV: return "YUV";
+		case IMG2_MIME_UNKNOWN:
 		default: return "UNKNOWN";
 	}
 }
@@ -409,27 +399,27 @@ const char *mime_type_name(mime_type_t mime)
  *
  * Returns standard MIME type strings for supported image formats.
  */
-const char *get_mime_string(mime_type_t mime)
+const char *img2_mime_string(img2_mime_t mime)
 {
 	switch (mime) {
-		case MIME_PNG: return "image/png";
-		case MIME_JPEG: return "image/jpeg";
-		case MIME_GIF: return "image/gif";
-		case MIME_BMP: return "image/bmp";
-		case MIME_WEBP: return "image/webp";
-		case MIME_HEIF: return "image/heif";
-		case MIME_AVIF: return "image/avif";
-		case MIME_JXL: return "image/jxl";
-		case MIME_QOI: return "image/qoi";
-		case MIME_ICO: return "image/vnd.microsoft.icon";
-		case MIME_CUR: return "image/x-win-bitmap";
-		case MIME_SVG: return "image/svg+xml";
-		case MIME_TIFF: return "image/tiff";
-		case MIME_TGA: return "image/x-tga";
-		case MIME_PSD: return "image/vnd.adobe.photoshop";
-		case MIME_HDR: return "image/vnd.radiance";
-		case MIME_PNM: return "image/x-portable-anymap";
-		case MIME_YUV: return "application/octet-stream"; /* headerless raw frame, no registered image type */
+		case IMG2_MIME_PNG: return "image/png";
+		case IMG2_MIME_JPEG: return "image/jpeg";
+		case IMG2_MIME_GIF: return "image/gif";
+		case IMG2_MIME_BMP: return "image/bmp";
+		case IMG2_MIME_WEBP: return "image/webp";
+		case IMG2_MIME_HEIF: return "image/heif";
+		case IMG2_MIME_AVIF: return "image/avif";
+		case IMG2_MIME_JXL: return "image/jxl";
+		case IMG2_MIME_QOI: return "image/qoi";
+		case IMG2_MIME_ICO: return "image/vnd.microsoft.icon";
+		case IMG2_MIME_CUR: return "image/x-win-bitmap";
+		case IMG2_MIME_SVG: return "image/svg+xml";
+		case IMG2_MIME_TIFF: return "image/tiff";
+		case IMG2_MIME_TGA: return "image/x-tga";
+		case IMG2_MIME_PSD: return "image/vnd.adobe.photoshop";
+		case IMG2_MIME_HDR: return "image/vnd.radiance";
+		case IMG2_MIME_PNM: return "image/x-portable-anymap";
+		case IMG2_MIME_YUV: return "application/octet-stream"; /* headerless raw frame, no registered image type */
 		default: return "application/octet-stream";
 	}
 }

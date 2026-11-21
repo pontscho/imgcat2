@@ -39,8 +39,8 @@ typedef struct {
 
 	/* Conversion/encoder options */
 	bool convert_mode; /**< true = convert to file instead of terminal rendering */
-	output_format_t output_format; /**< Target output format (FORMAT_JPEG, FORMAT_PNG) */
-	output_format_t iterm2_format; /**< Format for iTerm2 encoding: FORMAT_PNG or FORMAT_JPEG */
+	img2_format_t output_format; /**< Target output format (IMG2_FORMAT_JPEG, IMG2_FORMAT_PNG) */
+	img2_format_t iterm2_format; /**< Format for iTerm2 encoding: IMG2_FORMAT_PNG or IMG2_FORMAT_JPEG */
 	char *output_file; /**< Output file path, or NULL for stdout */
 	int jpeg_quality; /**< JPEG quality 0-100 (default: 90) */
 	int png_compression; /**< PNG compression 0-9 (default: 6) */
@@ -51,7 +51,7 @@ typedef struct {
 
 	/* Raw input options */
 	bool yuv_input; /**< true = input is raw YUV described by yuv (bypasses magic detection) */
-	yuv_params_t yuv; /**< Raw YUV geometry (valid when yuv_input), strides resolved */
+	img2_yuv_params_t yuv; /**< Raw YUV geometry (valid when yuv_input), strides resolved */
 
 	/* internal options */
 	struct {

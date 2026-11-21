@@ -3,7 +3,7 @@
  * @brief Integration test for WebP decoder with EXIF/XMP metadata
  *
  * Tests that the WebP decoder properly extracts and stores EXIF/XMP metadata
- * in the image_t structure during decoding.
+ * in the img2_image_t structure during decoding.
  */
 
 #include <stdbool.h>
@@ -15,12 +15,12 @@
 #include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
 #endif
 
-/* Forward declaration of decode_webp from decoder */
-image_t **decode_webp(const uint8_t *data, size_t len, int *frame_count);
+/* Forward declaration of img2_decode_webp from decoder */
+img2_image_t **img2_decode_webp(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Helper function to load file into memory
@@ -70,20 +70,20 @@ CTEST(webp_exif_integration, decode_with_exif)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_webp(data, data_size, &frame_count);
+	img2_image_t **frames = img2_decode_webp(data, data_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_NOT_NULL(img->pixels);
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted */
 	ASSERT_NOT_NULL(img->exif);
 
@@ -97,7 +97,7 @@ CTEST(webp_exif_integration, decode_with_exif)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }
@@ -113,13 +113,13 @@ CTEST(webp_exif_integration, decode_without_exif)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_webp(data, data_size, &frame_count);
+	img2_image_t **frames = img2_decode_webp(data, data_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Image should be decoded successfully */
 	ASSERT_NOT_NULL(img->pixels);
@@ -127,7 +127,7 @@ CTEST(webp_exif_integration, decode_without_exif)
 	ASSERT_TRUE(img->height > 0);
 
 	/* example.webp has EXIF metadata (Samsung Galaxy Nexus) */
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* EXIF should be present and populated */
 	ASSERT_NOT_NULL(img->exif);
 	ASSERT_TRUE(strlen(img->exif->make) > 0);
@@ -139,7 +139,7 @@ CTEST(webp_exif_integration, decode_without_exif)
 	ASSERT_NULL(img->xmp);
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }

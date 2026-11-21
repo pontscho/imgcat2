@@ -204,7 +204,7 @@ typedef struct {
 /**
  * @brief Parse IFD entry and populate EXIF info
  */
-static void parse_ifd_entry(tiff_context_t *ctx, exif_info_t *exif, uint16_t tag, uint16_t type, uint32_t count, uint32_t value_offset)
+static void parse_ifd_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag, uint16_t type, uint32_t count, uint32_t value_offset)
 {
 	const uint8_t *tiff = ctx->tiff_data;
 	size_t tiff_len = ctx->tiff_len;
@@ -484,7 +484,7 @@ static void parse_ifd_entry(tiff_context_t *ctx, exif_info_t *exif, uint16_t tag
 /**
  * @brief Parse GPS IFD entry
  */
-static void parse_gps_entry(tiff_context_t *ctx, exif_info_t *exif, uint16_t tag, uint16_t type, uint32_t count, uint32_t value_offset)
+static void parse_gps_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag, uint16_t type, uint32_t count, uint32_t value_offset)
 {
 	const uint8_t *tiff = ctx->tiff_data;
 	size_t tiff_len = ctx->tiff_len;
@@ -578,7 +578,7 @@ static void parse_gps_entry(tiff_context_t *ctx, exif_info_t *exif, uint16_t tag
 /**
  * @brief Parse IFD (Image File Directory)
  */
-static void parse_ifd(tiff_context_t *ctx, exif_info_t *exif, uint32_t ifd_offset, bool is_gps)
+static void parse_ifd(tiff_context_t *ctx, img2_exif_t *exif, uint32_t ifd_offset, bool is_gps)
 {
 	const uint8_t *tiff = ctx->tiff_data;
 	size_t tiff_len = ctx->tiff_len;
@@ -621,23 +621,23 @@ static void parse_ifd(tiff_context_t *ctx, exif_info_t *exif, uint32_t ifd_offse
 
 /* ========== Public API Implementation ========== */
 
-void exif_info_init(exif_info_t *exif)
+void img2_exif_init(img2_exif_t *exif)
 {
 	if (!exif) {
 		return;
 	}
-	memset(exif, 0, sizeof(exif_info_t));
+	memset(exif, 0, sizeof(img2_exif_t));
 }
 
-void xmp_info_init(xmp_info_t *xmp)
+void img2_xmp_init(img2_xmp_t *xmp)
 {
 	if (!xmp) {
 		return;
 	}
-	memset(xmp, 0, sizeof(xmp_info_t));
+	memset(xmp, 0, sizeof(img2_xmp_t));
 }
 
-int parse_exif_from_tiff(exif_info_t *exif, const uint8_t *tiff_data, size_t len)
+int img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, size_t len)
 {
 	if (!exif || !tiff_data) {
 		return -1;
@@ -678,12 +678,12 @@ int parse_exif_from_tiff(exif_info_t *exif, const uint8_t *tiff_data, size_t len
 	return 0;
 }
 
-int parse_exif(exif_info_t *exif, const uint8_t *jpeg_data, size_t len)
+int img2_exif_parse(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len)
 {
-	return parse_exif_from_jpeg(exif, jpeg_data, len);
+	return img2_exif_parse_jpeg(exif, jpeg_data, len);
 }
 
-int parse_exif_from_jpeg(exif_info_t *exif, const uint8_t *jpeg_data, size_t len)
+int img2_exif_parse_jpeg(img2_exif_t *exif, const uint8_t *jpeg_data, size_t len)
 {
 	if (!exif || !jpeg_data) {
 		return -1;
@@ -696,46 +696,46 @@ int parse_exif_from_jpeg(exif_info_t *exif, const uint8_t *jpeg_data, size_t len
 		return -1;
 	}
 
-	/* Call parse_exif_from_tiff() with extracted TIFF data */
-	return parse_exif_from_tiff(exif, tiff_data, tiff_len);
+	/* Call img2_exif_parse_tiff() with extracted TIFF data */
+	return img2_exif_parse_tiff(exif, tiff_data, tiff_len);
 }
 
-int parse_xmp_from_xml(xmp_info_t *xmp, const char *xml_data, size_t len)
+int img2_xmp_parse_xml(img2_xmp_t *xmp, const char *xml_data, size_t len)
 {
 	if (!xmp || !xml_data) {
 		return -1;
 	}
 
 	/* Parse XML */
-	xml_document_t *doc = xml_document_create();
+	img2_xml_document_t *doc = img2_xml_document_create();
 	if (!doc) {
 		return -1;
 	}
 
-	if (xml_document_parse(doc, xml_data, len) != 0) {
-		xml_document_destroy(doc);
+	if (img2_xml_document_parse(doc, xml_data, len) != 0) {
+		img2_xml_document_destroy(doc);
 		return -1;
 	}
 
 	/* Navigate XMP structure: rdf:RDF -> rdf:Description */
-	xml_node_t *root = xml_document_root_element(doc);
+	img2_xml_node_t *root = img2_xml_document_root_element(doc);
 	if (!root) {
-		xml_document_destroy(doc);
+		img2_xml_document_destroy(doc);
 		return -1;
 	}
 
-	xml_node_t *desc = xml_element_first_child(root, NULL);
+	img2_xml_node_t *desc = img2_xml_element_first_child(root, NULL);
 	if (!desc) {
-		xml_document_destroy(doc);
+		img2_xml_document_destroy(doc);
 		return -1;
 	}
 
 	/* Extract Dublin Core, XMP Basic, and IPTC/Photoshop fields */
-	xml_node_t *child = desc->first_child;
+	img2_xml_node_t *child = desc->first_child;
 	while (child) {
-		const char *name = xml_element_name(child);
+		const char *name = img2_xml_element_name(child);
 		if (name) {
-			const char *text = xml_element_text(child);
+			const char *text = img2_xml_element_text(child);
 
 			if (strstr(name, "creator") && text) {
 				snprintf(xmp->creator, sizeof(xmp->creator), "%s", text);
@@ -764,15 +764,15 @@ int parse_xmp_from_xml(xmp_info_t *xmp, const char *xml_data, size_t len)
 				snprintf(xmp->source, sizeof(xmp->source), "%s", text);
 			} else if (strstr(name, "subject")) {
 				/* Keywords - may be in a Bag/Seq structure */
-				xml_node_t *bag = xml_element_first_child(child, NULL);
+				img2_xml_node_t *bag = img2_xml_element_first_child(child, NULL);
 				if (bag) {
 					/* Collect all keywords */
 					char keywords_buf[1024] = { 0 };
 					size_t keywords_len = 0;
 
-					xml_node_t *item = bag->first_child;
+					img2_xml_node_t *item = bag->first_child;
 					while (item) {
-						const char *keyword = xml_element_text(item);
+						const char *keyword = img2_xml_element_text(item);
 						if (keyword && keywords_len + strlen(keyword) + 2 < sizeof(keywords_buf)) {
 							if (keywords_len > 0) {
 								keywords_buf[keywords_len++] = ',';
@@ -781,7 +781,7 @@ int parse_xmp_from_xml(xmp_info_t *xmp, const char *xml_data, size_t len)
 							strcpy(keywords_buf + keywords_len, keyword);
 							keywords_len += strlen(keyword);
 						}
-						item = xml_element_next_sibling(item, NULL);
+						item = img2_xml_element_next_sibling(item, NULL);
 					}
 
 					if (keywords_len > 0) {
@@ -798,16 +798,16 @@ int parse_xmp_from_xml(xmp_info_t *xmp, const char *xml_data, size_t len)
 		child = child->next_sibling;
 	}
 
-	xml_document_destroy(doc);
+	img2_xml_document_destroy(doc);
 	return 0;
 }
 
-int parse_xmp(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
+int img2_xmp_parse(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len)
 {
-	return parse_xmp_from_jpeg(xmp, jpeg_data, len);
+	return img2_xmp_parse_jpeg(xmp, jpeg_data, len);
 }
 
-int parse_xmp_from_jpeg(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
+int img2_xmp_parse_jpeg(img2_xmp_t *xmp, const uint8_t *jpeg_data, size_t len)
 {
 	if (!xmp || !jpeg_data) {
 		return -1;
@@ -820,17 +820,17 @@ int parse_xmp_from_jpeg(xmp_info_t *xmp, const uint8_t *jpeg_data, size_t len)
 		return -1;
 	}
 
-	/* Call parse_xmp_from_xml() with extracted XML data */
-	return parse_xmp_from_xml(xmp, (const char *)xml_data, xml_len);
+	/* Call img2_xmp_parse_xml() with extracted XML data */
+	return img2_xmp_parse_xml(xmp, (const char *)xml_data, xml_len);
 }
 
-void exif_info_free(exif_info_t *exif)
+void img2_exif_clear(img2_exif_t *exif)
 {
-	/* No dynamic allocations in exif_info_t currently */
+	/* No dynamic allocations in img2_exif_t currently */
 	(void)exif;
 }
 
-void xmp_info_free(xmp_info_t *xmp)
+void img2_xmp_clear(img2_xmp_t *xmp)
 {
 	if (!xmp) {
 		return;

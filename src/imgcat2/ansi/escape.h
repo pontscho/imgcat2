@@ -51,7 +51,7 @@ void escape_cache_init(void);
  * @note Pixels with alpha < 128 are treated as transparent
  * @note Line ends with ANSI_RESET + newline
  */
-char *generate_line_ansi(const image_t *img, uint32_t y_top, char *line_buffer);
+char *generate_line_ansi(const img2_image_t *img, uint32_t y_top, char *line_buffer);
 
 /**
  * @brief Generate ANSI escape sequences for entire frame
@@ -67,7 +67,7 @@ char *generate_line_ansi(const image_t *img, uint32_t y_top, char *line_buffer);
  * @note Each line is a dynamically allocated string (MAX_LINE_BUFFER_SIZE)
  * @note Line count = img->height / 2 (rounds down to even height)
  */
-char **generate_frame_ansi(const image_t *img, size_t *line_count);
+char **generate_frame_ansi(const img2_image_t *img, size_t *line_count);
 
 /**
  * @brief Free frame line buffers

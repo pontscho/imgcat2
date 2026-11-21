@@ -73,7 +73,7 @@ bool iterm2_is_format_supported(const uint8_t *data, size_t size, cli_options_t 
  * @note Automatically handles tmux environments with DCS wrapping
  * @note Outputs to stdout
  */
-int iterm2_render(image_t **frames, int frame_count, const cli_options_t *opts, size_t original_size);
+int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *opts, size_t original_size);
 
 /**
  * @brief Check if running inside tmux

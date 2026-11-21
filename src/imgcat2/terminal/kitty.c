@@ -27,7 +27,7 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 	}
 
 	/* Detect MIME type using magic bytes */
-	mime_type_t mime = detect_mime_type(data, size);
+	img2_mime_t mime = img2_detect_mime(data, size);
 
 	/*
 	 * Kitty graphics protocol officially supports:
@@ -42,34 +42,34 @@ bool kitty_is_format_supported(const uint8_t *data, size_t size, cli_options_t *
 	 * - Animated GIF: NOT supported (fall back to ANSI rendering)
 	 */
 	switch (mime) {
-#ifdef HAVE_WEBP
-		case MIME_WEBP:
-			if (webp_is_animated(data, size) && opts->animate) {
+#ifdef IMG2_HAVE_WEBP
+		case IMG2_MIME_WEBP:
+			if (img2_webp_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
 			}
 			break;
 #endif
 
-#ifdef HAVE_HEIF
-		case MIME_AVIF:
-		case MIME_HEIF:
-			if (heif_is_animated(data, size) && opts->animate) {
+#ifdef IMG2_HAVE_HEIF
+		case IMG2_MIME_AVIF:
+		case IMG2_MIME_HEIF:
+			if (img2_heif_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
 			}
 			break;
 #endif
 
 #ifdef PNG_APNG_SUPPORTED
-		case MIME_PNG:
-			if (png_is_animated(data, size) && opts->animate) {
+		case IMG2_MIME_PNG:
+			if (img2_png_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
 			}
 			break;
 #endif
 
-#ifdef HAVE_GIFLIB
-		case MIME_GIF:
-			if (gif_is_animated(data, size) && opts->animate) {
+#ifdef IMG2_HAVE_GIFLIB
+		case IMG2_MIME_GIF:
+			if (img2_gif_is_animated(data, size) && opts->animate) {
 				goto force_ansi;
 			}
 			break;
@@ -85,10 +85,10 @@ force_ansi:
 	return false;
 }
 
-int kitty_render(image_t **frames, int frame_count, const cli_options_t *opts)
+int kitty_render(img2_image_t **frames, int frame_count, const cli_options_t *opts)
 {
 	/* Get first frame */
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Calculate RGBA data size */
 	size_t raw_size = (size_t)img->width * img->height * 4;
@@ -98,7 +98,7 @@ int kitty_render(image_t **frames, int frame_count, const cli_options_t *opts)
 	char *encoded = base64_encode(img->pixels, raw_size, &encoded_size);
 	if (encoded == NULL) {
 		fprintf(stderr, "Error: Failed to base64 encode RGBA data\n");
-		decoder_free_frames(frames, frame_count);
+		img2_decoder_free_frames(frames, frame_count);
 		return -1;
 	}
 

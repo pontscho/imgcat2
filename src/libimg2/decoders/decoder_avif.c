@@ -18,7 +18,7 @@
 #include "decoder.h"
 #include "../core/log.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
 #endif
 
@@ -39,7 +39,7 @@
  * @note Returns false if data is invalid or not an AVIF
  * @note Does not validate that images are decodable, only checks count
  */
-bool avif_is_animated(const uint8_t *data, size_t len)
+static bool img2_avif_is_animated(const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0) {
 		return false;
@@ -77,11 +77,11 @@ bool avif_is_animated(const uint8_t *data, size_t len)
  * @param data Raw AVIF file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note Output format is RGBA8888
  */
-static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_avif_static");
@@ -140,8 +140,8 @@ static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_
 		return NULL;
 	}
 
-	// Create image_t structure
-	image_t *output = image_create((uint32_t)width, (uint32_t)height);
+	// Create img2_image_t structure
+	img2_image_t *output = img2_image_alloc((uint32_t)width, (uint32_t)height);
 	if (output == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		heif_image_release(img);
@@ -158,13 +158,13 @@ static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_
 	}
 
 	// Parse EXIF/XMP metadata (Phase 4)
-#ifdef HAVE_EXIF_READER
-	exif_info_t *exif = malloc(sizeof(exif_info_t));
-	xmp_info_t *xmp = malloc(sizeof(xmp_info_t));
+#ifdef IMG2_HAVE_EXIF_READER
+	img2_exif_t *exif = malloc(sizeof(img2_exif_t));
+	img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 
 	if (exif && xmp) {
-		exif_info_init(exif);
-		xmp_info_init(xmp);
+		img2_exif_init(exif);
+		img2_xmp_init(xmp);
 
 		// Get list of metadata block IDs
 		int num_metadata = heif_image_handle_get_number_of_metadata_blocks(handle, NULL);
@@ -219,7 +219,7 @@ static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_
 									}
 
 									// Parse EXIF from TIFF data
-									if (parse_exif_from_tiff(exif, tiff_data, tiff_size) != 0) {
+									if (img2_exif_parse_tiff(exif, tiff_data, tiff_size) != 0) {
 										free(exif);
 										exif = NULL;
 									}
@@ -240,8 +240,8 @@ static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_
 									struct heif_error err = heif_image_handle_get_metadata(handle, metadata_ids[i], xmp_data);
 									if (err.code == heif_error_Ok) {
 										xmp_data[xmp_size] = '\0'; // Null-terminate XML string
-										if (parse_xmp_from_xml(xmp, xmp_data, xmp_size) != 0) {
-											xmp_info_free(xmp);
+										if (img2_xmp_parse_xml(xmp, xmp_data, xmp_size) != 0) {
+											img2_xmp_clear(xmp);
 											free(xmp);
 											xmp = NULL;
 										}
@@ -275,7 +275,7 @@ static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_
 		if (xmp != NULL && (strlen(xmp->creator) > 0 || strlen(xmp->title) > 0)) {
 			output->xmp = xmp;
 		} else {
-			xmp_info_free(xmp);
+			img2_xmp_clear(xmp);
 			free(xmp);
 			output->xmp = NULL;
 		}
@@ -286,7 +286,7 @@ static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_
 			free(exif);
 		}
 		if (xmp) {
-			xmp_info_free(xmp);
+			img2_xmp_clear(xmp);
 			free(xmp);
 		}
 		output->exif = NULL;
@@ -300,10 +300,10 @@ static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_
 	heif_context_free(ctx);
 
 	// Allocate frames array (single frame)
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(output);
+		img2_image_destroy(output);
 		return NULL;
 	}
 
@@ -322,13 +322,13 @@ static image_t **decode_avif_static(const uint8_t *data, size_t len, int *frame_
  * @param data Raw AVIF file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
  * @note Maximum MAX_AVIF_FRAMES frames (200) to prevent DoS
  * @note AVIF sequences may have timing info in metadata
  * @note Output format is RGBA8888
  */
-static image_t **decode_avif_animated(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_avif_animated(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_avif_animated");
@@ -384,7 +384,7 @@ static image_t **decode_avif_animated(const uint8_t *data, size_t len, int *fram
 	}
 
 	// Allocate frames array
-	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_images);
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_images);
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		free(image_ids);
@@ -431,7 +431,7 @@ static image_t **decode_avif_animated(const uint8_t *data, size_t len, int *fram
 		}
 
 		// Create output frame
-		frames[i] = image_create((uint32_t)width, (uint32_t)height);
+		frames[i] = img2_image_alloc((uint32_t)width, (uint32_t)height);
 		if (frames[i] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", i);
 			heif_image_release(img);
@@ -463,7 +463,7 @@ cleanup_error:
 	// Cleanup on error
 	for (int i = 0; i < num_images; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);
@@ -481,14 +481,14 @@ cleanup_error:
  * @param data Raw AVIF file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (1 for static, N for sequence)
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
- * @note Caller must free returned array with decoder_free_frames()
+ * @note Caller must free returned array with img2_decoder_free_frames()
  * @note For static images, frame_count = 1
  * @note For image sequences, frame_count = N (max MAX_AVIF_FRAMES)
  * @note Output format is RGBA8888
  */
-image_t **decode_avif(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_avif(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_avif");
@@ -499,7 +499,7 @@ image_t **decode_avif(const uint8_t *data, size_t len, int *frame_count)
 	*frame_count = 0;
 
 	// Check if image sequence
-	if (avif_is_animated(data, len)) {
+	if (img2_avif_is_animated(data, len)) {
 		return decode_avif_animated(data, len, frame_count);
 	}
 

@@ -12,27 +12,27 @@
 
 CTEST(png_orientation, apply_orientation_90cw)
 {
-	image_t *img = image_create(4, 4);
+	img2_image_t *img = img2_image_alloc(4, 4);
 	ASSERT_NOT_NULL(img);
 
-	image_set_pixel(img, 0, 0, 255, 0, 0, 255);
-	int result = image_apply_orientation(img, 6);
+	img2_image_set_pixel(img, 0, 0, 255, 0, 0, 255);
+	int result = img2_image_orient(img, 6);
 	ASSERT_EQUAL(0, result);
 	ASSERT_EQUAL(4, img->width);
 	ASSERT_EQUAL(4, img->height);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 CTEST(png_orientation, non_square_dimension_swap)
 {
-	image_t *img = image_create(8, 6);
+	img2_image_t *img = img2_image_alloc(8, 6);
 	ASSERT_NOT_NULL(img);
 
-	int result = image_apply_orientation(img, 6);
+	int result = img2_image_orient(img, 6);
 	ASSERT_EQUAL(0, result);
 	ASSERT_EQUAL(6, img->width);
 	ASSERT_EQUAL(8, img->height);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }

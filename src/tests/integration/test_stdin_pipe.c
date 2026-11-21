@@ -91,12 +91,12 @@ CTEST(integration, stdin_pipeline_read_dispatch)
 /**
  * @test Test stdin size limit protection
  *
- * Verifies that IMAGE_MAX_FILE_SIZE applies to stdin.
+ * Verifies that IMG2_MAX_FILE_SIZE applies to stdin.
  */
 CTEST(integration, stdin_size_limit)
 {
 	/* Verify that the size limit constant exists */
-	size_t max_size = IMAGE_MAX_FILE_SIZE;
+	size_t max_size = IMG2_MAX_FILE_SIZE;
 	ASSERT_EQUAL(1073741824UL, max_size); /* 1GiB */
 
 	/* Any stdin read should respect this limit */
@@ -118,7 +118,7 @@ CTEST(integration, stdin_empty_input)
 	size_t size = 0;
 
 	/* pipeline_decode should fail with empty data */
-	image_t **frames = NULL;
+	img2_image_t **frames = NULL;
 	int frame_count = 0;
 	int result = pipeline_decode(NULL, empty_data, size, &frames, &frame_count);
 

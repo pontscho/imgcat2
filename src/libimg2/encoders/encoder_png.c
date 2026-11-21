@@ -89,7 +89,7 @@ static void png_memory_flush_func(png_structp png_ptr)
  * @brief PNG error handler
  *
  * Called by libpng when a fatal error occurs. Uses longjmp to
- * return control to encode_png() instead of calling abort().
+ * return control to img2_encode_png() instead of calling abort().
  *
  * @param png_ptr PNG write structure
  * @param error_msg Error message
@@ -98,7 +98,7 @@ static void png_error_handler(png_structp png_ptr, png_const_charp error_msg)
 {
 	img2_log(IMG2_LOG_ERROR, "Error: libpng error: %s", error_msg);
 
-	/* Jump back to encode_png() */
+	/* Jump back to img2_encode_png() */
 	jmp_buf *jmpbuf = (jmp_buf *)png_get_error_ptr(png_ptr);
 	if (jmpbuf != NULL) {
 		longjmp(*jmpbuf, 1);
@@ -134,7 +134,7 @@ static void png_warning_handler(png_structp png_ptr, png_const_charp warning_msg
  * @note PNG preserves alpha channel (supports transparency)
  * @note Caller must free *out_data with free() when done
  */
-int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+int img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_png");

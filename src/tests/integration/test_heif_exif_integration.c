@@ -3,7 +3,7 @@
  * @brief Integration test for HEIF decoder with EXIF/XMP metadata
  *
  * Tests that the HEIF decoder properly extracts and stores EXIF/XMP metadata
- * in the image_t structure during decoding.
+ * in the img2_image_t structure during decoding.
  */
 
 #include <stdbool.h>
@@ -15,12 +15,12 @@
 #include "../../libimg2/core/image.h"
 #include "../ctest.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../../libimg2/metadata/exif_reader.h"
 #endif
 
-/* Forward declaration of decode_heif from decoder */
-image_t **decode_heif(const uint8_t *data, size_t len, int *frame_count);
+/* Forward declaration of img2_decode_heif from decoder */
+img2_image_t **img2_decode_heif(const uint8_t *data, size_t len, int *frame_count);
 
 /**
  * Helper function to load file into memory
@@ -70,20 +70,20 @@ CTEST(heif_exif_integration, decode_with_exif)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_heif(data, data_size, &frame_count);
+	img2_image_t **frames = img2_decode_heif(data, data_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Verify image was decoded */
 	ASSERT_NOT_NULL(img->pixels);
 	ASSERT_TRUE(img->width > 0);
 	ASSERT_TRUE(img->height > 0);
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted */
 	ASSERT_NOT_NULL(img->exif);
 
@@ -97,7 +97,7 @@ CTEST(heif_exif_integration, decode_with_exif)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }
@@ -119,13 +119,13 @@ CTEST(heif_exif_integration, decode_without_exif)
 	}
 
 	int frame_count = 0;
-	image_t **frames = decode_heif(data, data_size, &frame_count);
+	img2_image_t **frames = img2_decode_heif(data, data_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
 	/* Image should be decoded successfully */
 	ASSERT_NOT_NULL(img->pixels);
@@ -137,7 +137,7 @@ CTEST(heif_exif_integration, decode_without_exif)
 	ASSERT_NULL(img->xmp);
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }
@@ -153,14 +153,14 @@ CTEST(heif_exif_integration, decode_with_exif_offset_prefix)
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
-	image_t **frames = decode_heif(data, data_size, &frame_count);
+	img2_image_t **frames = img2_decode_heif(data, data_size, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_NOT_NULL(frames[0]);
 
-	image_t *img = frames[0];
+	img2_image_t *img = frames[0];
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 	/* Verify EXIF metadata was extracted correctly
 	 * This tests that the 4-byte offset prefix is handled properly */
 	ASSERT_NOT_NULL(img->exif);
@@ -171,7 +171,7 @@ CTEST(heif_exif_integration, decode_with_exif_offset_prefix)
 #endif
 
 	/* Cleanup */
-	image_destroy(img);
+	img2_image_destroy(img);
 	free(frames);
 	free(data);
 }

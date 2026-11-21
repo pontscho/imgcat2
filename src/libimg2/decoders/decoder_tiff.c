@@ -18,7 +18,7 @@
 #include "decoder.h"
 #include "../core/log.h"
 
-#ifdef HAVE_EXIF_READER
+#ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
 #endif
 
@@ -180,12 +180,12 @@ static bool tiff_is_multipage(const uint8_t *data, size_t len)
  * @param data Raw TIFF file data
  * @param len Length of data in bytes
  * @param frame_count Output: always 1 (single frame)
- * @return Array with single image_t*, or NULL on error
+ * @return Array with single img2_image_t*, or NULL on error
  *
  * @note Output format is RGBA8888
  * @note Handles all TIFF format variations (CMYK, YCbCr, palette, etc.)
  */
-static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_static");
@@ -222,8 +222,8 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 		return NULL;
 	}
 
-	// Create image_t
-	image_t *img = image_create(width, height);
+	// Create img2_image_t
+	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t");
 		_TIFFfree(raster);
@@ -244,13 +244,13 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 	TIFFClose(tif);
 
 	// Parse EXIF metadata - TIFF IS EXIF format (direct pass-through)
-#ifdef HAVE_EXIF_READER
-	exif_info_t *exif = malloc(sizeof(exif_info_t));
+#ifdef IMG2_HAVE_EXIF_READER
+	img2_exif_t *exif = malloc(sizeof(img2_exif_t));
 	if (exif) {
-		exif_info_init(exif);
+		img2_exif_init(exif);
 
 		// Pass entire TIFF file to parser (TIFF file = valid IFD structure)
-		if (parse_exif_from_tiff(exif, data, len) != 0) {
+		if (img2_exif_parse_tiff(exif, data, len) != 0) {
 			// No EXIF data or parse failed
 			free(exif);
 			exif = NULL;
@@ -262,10 +262,10 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 #endif
 
 	// Allocate frames array
-	image_t **frames = (image_t **)malloc(sizeof(image_t *));
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *));
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
-		image_destroy(img);
+		img2_image_destroy(img);
 		return NULL;
 	}
 
@@ -283,13 +283,13 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
  * @param data Raw TIFF file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
  * @note Maximum MAX_TIFF_FRAMES frames (200) to prevent DoS
  * @note TIFF pages have no timing info - uniform frame rate
  * @note Output format is RGBA8888
  */
-static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *frame_count)
+static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_multipage");
@@ -321,7 +321,7 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 	}
 
 	// Allocate frames array
-	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
+	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
 	if (frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		TIFFClose(tif);
@@ -356,7 +356,7 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 			goto cleanup_error;
 		}
 
-		frames[i] = image_create(width, height);
+		frames[i] = img2_image_alloc(width, height);
 		if (frames[i] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t for page %d", i);
 			_TIFFfree(raster);
@@ -378,13 +378,13 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 	TIFFClose(tif);
 
 	// Parse EXIF metadata from first frame - TIFF IS EXIF format (direct pass-through)
-#ifdef HAVE_EXIF_READER
-	exif_info_t *exif = malloc(sizeof(exif_info_t));
+#ifdef IMG2_HAVE_EXIF_READER
+	img2_exif_t *exif = malloc(sizeof(img2_exif_t));
 	if (exif) {
-		exif_info_init(exif);
+		img2_exif_init(exif);
 
 		// Pass entire TIFF file to parser (TIFF file = valid IFD structure)
-		if (parse_exif_from_tiff(exif, data, len) != 0) {
+		if (img2_exif_parse_tiff(exif, data, len) != 0) {
 			// No EXIF data or parse failed
 			free(exif);
 			exif = NULL;
@@ -403,7 +403,7 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 cleanup_error:
 	for (int i = 0; i < num_frames; i++) {
 		if (frames[i] != NULL) {
-			image_destroy(frames[i]);
+			img2_image_destroy(frames[i]);
 		}
 	}
 	free(frames);
@@ -420,14 +420,14 @@ cleanup_error:
  * @param data Raw TIFF file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded (1 for static, N for multi-page)
- * @return Array of image_t* frames, or NULL on error
+ * @return Array of img2_image_t* frames, or NULL on error
  *
- * @note Caller must free returned array with decoder_free_frames()
+ * @note Caller must free returned array with img2_decoder_free_frames()
  * @note For static images, frame_count = 1
  * @note For multi-page images, frame_count = N (max MAX_TIFF_FRAMES)
  * @note Output format is RGBA8888
  */
-image_t **decode_tiff(const uint8_t *data, size_t len, int *frame_count)
+img2_image_t **img2_decode_tiff(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff");

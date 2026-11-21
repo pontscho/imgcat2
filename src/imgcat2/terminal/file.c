@@ -104,7 +104,7 @@ static bool validate_path_safe(const char *path, char *canonical_out)
  *
  * Main file rendering function that encodes image and writes to file/stdout.
  */
-int file_render(image_t **frames, int frame_count, const cli_options_t *opts)
+int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opts)
 {
 	/* Validate inputs */
 	if (frames == NULL || frame_count <= 0 || opts == NULL) {
@@ -113,7 +113,7 @@ int file_render(image_t **frames, int frame_count, const cli_options_t *opts)
 	}
 
 	/* Check output format is specified */
-	if (opts->output_format == FORMAT_NONE) {
+	if (opts->output_format == IMG2_FORMAT_NONE) {
 		fprintf(stderr, "Error: No output format specified (use --jpeg or --png)\n");
 		return -1;
 	}
@@ -134,7 +134,7 @@ int file_render(image_t **frames, int frame_count, const cli_options_t *opts)
 	}
 
 	/* Get frame to encode */
-	image_t *img = frames[frame_index];
+	img2_image_t *img = frames[frame_index];
 	if (img == NULL) {
 		fprintf(stderr, "Error: Frame %d is NULL\n", frame_index);
 		return -1;
@@ -142,15 +142,15 @@ int file_render(image_t **frames, int frame_count, const cli_options_t *opts)
 
 	/* Determine quality parameter based on format */
 	int quality = 0;
-	if (opts->output_format == FORMAT_JPEG) {
+	if (opts->output_format == IMG2_FORMAT_JPEG) {
 		quality = opts->jpeg_quality;
-	} else if (opts->output_format == FORMAT_PNG) {
+	} else if (opts->output_format == IMG2_FORMAT_PNG) {
 		quality = opts->png_compression;
-	} else if (opts->output_format == FORMAT_HEIF) {
+	} else if (opts->output_format == IMG2_FORMAT_HEIF) {
 		quality = opts->heif_quality;
-	} else if (opts->output_format == FORMAT_WEBP) {
+	} else if (opts->output_format == IMG2_FORMAT_WEBP) {
 		quality = opts->webp_quality;
-	} else if (opts->output_format == FORMAT_JXL) {
+	} else if (opts->output_format == IMG2_FORMAT_JXL) {
 		quality = opts->jxl_quality;
 	}
 
@@ -158,7 +158,7 @@ int file_render(image_t **frames, int frame_count, const cli_options_t *opts)
 	uint8_t *encoded_data = NULL;
 	size_t encoded_size = 0;
 
-	if (encoder_encode(img, opts->output_format, quality, &encoded_data, &encoded_size) != 0) {
+	if (img2_encoder_dispatch(img, opts->output_format, quality, &encoded_data, &encoded_size) != 0) {
 		fprintf(stderr, "Error: Failed to encode image\n");
 		return -1;
 	}

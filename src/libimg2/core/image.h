@@ -6,8 +6,8 @@
  * allocation, deallocation, and pixel access operations.
  */
 
-#ifndef IMGCAT2_IMAGE_H
-#define IMGCAT2_IMAGE_H
+#ifndef IMG2_INTERNAL_CORE_IMAGE_H
+#define IMG2_INTERNAL_CORE_IMAGE_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -19,52 +19,52 @@
  */
 
 /** Maximum width or height per axis (65536 pixels) */
-#define IMAGE_MAX_DIMENSION 65536
+#define IMG2_MAX_DIMENSION 65536
 
 /** Maximum total pixels (200 megapixels) */
-#define IMAGE_MAX_PIXELS 200000000UL
+#define IMG2_MAX_PIXELS 200000000UL
 
 /** Maximum file size for input (1GiB; uncompressed 200MP RGBA fits) */
-#define IMAGE_MAX_FILE_SIZE 1073741824UL
+#define IMG2_MAX_FILE_SIZE 1073741824UL
 
 /** @} */
 
 /* Forward declarations for EXIF/XMP metadata structures (defined in exif_reader.h) */
-typedef struct exif_info_t exif_info_t;
-typedef struct xmp_info_t xmp_info_t;
+typedef struct img2_exif img2_exif_t;
+typedef struct img2_xmp img2_xmp_t;
 
 /**
- * @struct image_t
+ * @struct img2_image_t
  * @brief RGBA8888 image representation
  *
  * Memory layout: row-major, top-to-bottom
  * Pixel format: R, G, B, A (4 bytes per pixel)
  * Offset calculation: pixels[(y * width + x) * 4 + channel]
  */
-typedef struct {
+typedef struct img2_image {
 	uint32_t width; /**< Image width in pixels */
 	uint32_t height; /**< Image height in pixels */
 	uint8_t *pixels; /**< RGBA8888 pixel data: width × height × 4 bytes */
 
 	/* EXIF/XMP metadata (JPEG only) */
-	exif_info_t *exif; /**< EXIF metadata, NULL if not JPEG or no EXIF */
-	xmp_info_t *xmp; /**< XMP metadata, NULL if no XMP */
-} image_t;
+	img2_exif_t *exif; /**< EXIF metadata, NULL if not JPEG or no EXIF */
+	img2_xmp_t *xmp; /**< XMP metadata, NULL if no XMP */
+} img2_image_t;
 
 /**
  * @brief Create a new image with specified dimensions
  *
- * Allocates an image_t structure and pixel buffer with overflow checks.
+ * Allocates an img2_image_t structure and pixel buffer with overflow checks.
  * The pixel buffer is initialized to zero (transparent black).
  *
- * @param width Image width in pixels (must be > 0 and <= IMAGE_MAX_DIMENSION)
- * @param height Image height in pixels (must be > 0 and <= IMAGE_MAX_DIMENSION)
- * @return Pointer to allocated image_t, or NULL on failure
+ * @param width Image width in pixels (must be > 0 and <= IMG2_MAX_DIMENSION)
+ * @param height Image height in pixels (must be > 0 and <= IMG2_MAX_DIMENSION)
+ * @return Pointer to allocated img2_image_t, or NULL on failure
  *
- * @note Caller must free with image_destroy()
+ * @note Caller must free with img2_image_destroy()
  * @note Returns NULL if dimensions exceed limits or allocation fails
  */
-image_t *image_create(uint32_t width, uint32_t height);
+img2_image_t *img2_image_alloc(uint32_t width, uint32_t height);
 
 /**
  * @brief Destroy an image and free all resources
@@ -73,7 +73,7 @@ image_t *image_create(uint32_t width, uint32_t height);
  *
  * @param img Image to destroy (can be NULL)
  */
-void image_destroy(image_t *img);
+void img2_image_destroy(img2_image_t *img);
 
 /**
  * @brief Get pointer to pixel at specified coordinates
@@ -88,7 +88,7 @@ void image_destroy(image_t *img);
  *
  * @note Inline function for performance
  */
-static inline uint8_t *image_get_pixel(const image_t *img, uint32_t x, uint32_t y)
+static inline uint8_t *img2_image_get_pixel(const img2_image_t *img, uint32_t x, uint32_t y)
 {
 	if (img == NULL || x >= img->width || y >= img->height) {
 		return NULL;
@@ -110,9 +110,9 @@ static inline uint8_t *image_get_pixel(const image_t *img, uint32_t x, uint32_t 
  * @param a Alpha channel (0-255, 0=transparent, 255=opaque)
  * @return true if successful, false if coordinates out of bounds
  */
-static inline bool image_set_pixel(image_t *img, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+static inline bool img2_image_set_pixel(img2_image_t *img, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
-	uint8_t *pixel = image_get_pixel(img, x, y);
+	uint8_t *pixel = img2_image_get_pixel(img, x, y);
 	if (pixel == NULL) {
 		return false;
 	}
@@ -133,7 +133,7 @@ static inline bool image_set_pixel(image_t *img, uint32_t x, uint32_t y, uint8_t
  * @param out_size Output parameter for computed size
  * @return true if calculation succeeded, false on overflow
  */
-bool image_calculate_size(uint32_t width, uint32_t height, size_t *out_size);
+bool img2_image_calc_size(uint32_t width, uint32_t height, size_t *out_size);
 
 /**
  * @brief Scale image to fit within target dimensions (maintain aspect ratio)
@@ -147,11 +147,11 @@ bool image_calculate_size(uint32_t width, uint32_t height, size_t *out_size);
  * @param target_height Maximum height of scaled image
  * @return Scaled image, or NULL on error
  *
- * @note Caller must free with image_destroy()
+ * @note Caller must free with img2_image_destroy()
  * @note Uses high-quality resampling (Mitchell filter for downsampling)
  * @note Returns NULL if src is NULL or allocation fails
  */
-image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t target_height);
+img2_image_t *img2_image_scale_fit(const img2_image_t *src, uint32_t target_width, uint32_t target_height);
 
 /**
  * @brief Scale image to exact dimensions (may distort aspect ratio)
@@ -164,11 +164,11 @@ image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t tar
  * @param target_height Exact height of scaled image
  * @return Scaled image, or NULL on error
  *
- * @note Caller must free with image_destroy()
+ * @note Caller must free with img2_image_destroy()
  * @note Uses high-quality resampling
  * @note Returns NULL if src is NULL or allocation fails
  */
-image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t target_height);
+img2_image_t *img2_image_scale_resize(const img2_image_t *src, uint32_t target_width, uint32_t target_height);
 
 /**
  * @brief Apply EXIF orientation transformation to image
@@ -194,7 +194,7 @@ image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t 
  * @note Invalid orientation values (not 1-8) return -1
  * @note NULL img or NULL img->pixels return -1
  */
-int image_apply_orientation(image_t *img, uint16_t orientation);
+int img2_image_orient(img2_image_t *img, uint16_t orientation);
 
 /**
  * @brief Convert RGB pixel data to RGBA
@@ -205,12 +205,12 @@ int image_apply_orientation(image_t *img, uint16_t orientation);
  * @param rgb Source RGB pixel data (width × height × 3 bytes)
  * @param width Image width in pixels
  * @param height Image height in pixels
- * @return New image_t with RGBA data, or NULL on error
+ * @return New img2_image_t with RGBA data, or NULL on error
  *
- * @note Caller must free with image_destroy()
+ * @note Caller must free with img2_image_destroy()
  * @note Alpha channel is set to 255 (opaque) for all pixels
  */
-image_t *convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height);
+img2_image_t *img2_convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height);
 
 /**
  * @brief Convert grayscale pixel data to RGBA
@@ -221,11 +221,11 @@ image_t *convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height
  * @param gray Source grayscale pixel data (width × height bytes)
  * @param width Image width in pixels
  * @param height Image height in pixels
- * @return New image_t with RGBA data, or NULL on error
+ * @return New img2_image_t with RGBA data, or NULL on error
  *
- * @note Caller must free with image_destroy()
+ * @note Caller must free with img2_image_destroy()
  * @note Alpha channel is set to 255 (opaque) for all pixels
  */
-image_t *convert_grayscale_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height);
+img2_image_t *img2_convert_gray_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height);
 
-#endif /* IMGCAT2_IMAGE_H */
+#endif /* IMG2_INTERNAL_CORE_IMAGE_H */

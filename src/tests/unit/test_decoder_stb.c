@@ -18,9 +18,9 @@
 #include "../decoder_internal.h"
 
 /**
- * @test Test decode_stb() with NULL parameters
+ * @test Test img2_decode_stb() with NULL parameters
  *
- * Verifies that decode_stb() rejects NULL input gracefully.
+ * Verifies that img2_decode_stb() rejects NULL input gracefully.
  */
 CTEST(decoder_stb, null_parameters)
 {
@@ -28,35 +28,35 @@ CTEST(decoder_stb, null_parameters)
 	uint8_t dummy_data[10] = { 0 };
 
 	/* NULL data pointer */
-	image_t **frames = decode_stb(NULL, 100, &frame_count);
+	img2_image_t **frames = img2_decode_stb(NULL, 100, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* Zero length */
-	frames = decode_stb(dummy_data, 0, &frame_count);
+	frames = img2_decode_stb(dummy_data, 0, &frame_count);
 	ASSERT_NULL(frames);
 
 	/* NULL frame_count */
-	frames = decode_stb(dummy_data, 10, NULL);
+	frames = img2_decode_stb(dummy_data, 10, NULL);
 	ASSERT_NULL(frames);
 }
 
 /**
- * @test Test decode_stb() with invalid data
+ * @test Test img2_decode_stb() with invalid data
  *
- * Verifies that decode_stb() rejects invalid image data.
+ * Verifies that img2_decode_stb() rejects invalid image data.
  */
 CTEST(decoder_stb, invalid_data)
 {
 	int frame_count;
 	uint8_t invalid_data[] = "This is not a valid image file";
 
-	image_t **frames = decode_stb(invalid_data, sizeof(invalid_data), &frame_count);
+	img2_image_t **frames = img2_decode_stb(invalid_data, sizeof(invalid_data), &frame_count);
 	ASSERT_NULL(frames);
 	ASSERT_EQUAL(0, frame_count);
 }
 
 /**
- * @test Test decode_stb() with minimal 1x1 BMP
+ * @test Test img2_decode_stb() with minimal 1x1 BMP
  *
  * Tests BMP decoding with a minimal 1x1 24-bit BMP.
  */
@@ -71,7 +71,7 @@ CTEST(decoder_stb, decode_bmp_1x1)
 		                               0x00, 0x00 };
 
 	int frame_count;
-	image_t **frames = decode_stb(bmp_1x1, sizeof(bmp_1x1), &frame_count);
+	img2_image_t **frames = img2_decode_stb(bmp_1x1, sizeof(bmp_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -81,15 +81,15 @@ CTEST(decoder_stb, decode_bmp_1x1)
 	ASSERT_NOT_NULL(frames[0]->pixels);
 
 	/* BMP should be converted to RGBA */
-	uint8_t *pixel = image_get_pixel(frames[0], 0, 0);
+	uint8_t *pixel = img2_image_get_pixel(frames[0], 0, 0);
 	ASSERT_NOT_NULL(pixel);
 	ASSERT_EQUAL(255, pixel[3]); /* Alpha should be opaque */
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decode_stb() with 2x2 BMP
+ * @test Test img2_decode_stb() with 2x2 BMP
  *
  * Tests BMP decoding with a small 2x2 24-bit BMP.
  */
@@ -171,7 +171,7 @@ CTEST(decoder_stb, decode_bmp_2x2)
 	};
 
 	int frame_count;
-	image_t **frames = decode_stb(bmp_2x2, sizeof(bmp_2x2), &frame_count);
+	img2_image_t **frames = img2_decode_stb(bmp_2x2, sizeof(bmp_2x2), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -182,17 +182,17 @@ CTEST(decoder_stb, decode_bmp_2x2)
 	/* Verify all 4 pixels exist and have opaque alpha */
 	for (uint32_t y = 0; y < 2; y++) {
 		for (uint32_t x = 0; x < 2; x++) {
-			uint8_t *pixel = image_get_pixel(frames[0], x, y);
+			uint8_t *pixel = img2_image_get_pixel(frames[0], x, y);
 			ASSERT_NOT_NULL(pixel);
 			ASSERT_EQUAL(255, pixel[3]); /* Alpha=255 */
 		}
 	}
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decode_stb() with minimal TGA
+ * @test Test img2_decode_stb() with minimal TGA
  *
  * Tests TGA (Targa) format decoding.
  */
@@ -206,7 +206,7 @@ CTEST(decoder_stb, decode_tga)
 	};
 
 	int frame_count;
-	image_t **frames = decode_stb(tga_1x1, sizeof(tga_1x1), &frame_count);
+	img2_image_t **frames = img2_decode_stb(tga_1x1, sizeof(tga_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -214,15 +214,15 @@ CTEST(decoder_stb, decode_tga)
 	ASSERT_EQUAL(1, frames[0]->width);
 	ASSERT_EQUAL(1, frames[0]->height);
 
-	uint8_t *pixel = image_get_pixel(frames[0], 0, 0);
+	uint8_t *pixel = img2_image_get_pixel(frames[0], 0, 0);
 	ASSERT_NOT_NULL(pixel);
 	ASSERT_EQUAL(255, pixel[3]); /* Alpha=255 */
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decode_stb() with PPM (Portable Pixmap)
+ * @test Test img2_decode_stb() with PPM (Portable Pixmap)
  *
  * Tests PPM format (PNM family) decoding.
  */
@@ -238,7 +238,7 @@ CTEST(decoder_stb, decode_ppm)
 	};
 
 	int frame_count;
-	image_t **frames = decode_stb(ppm_2x2, sizeof(ppm_2x2), &frame_count);
+	img2_image_t **frames = img2_decode_stb(ppm_2x2, sizeof(ppm_2x2), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -249,17 +249,17 @@ CTEST(decoder_stb, decode_ppm)
 	/* Verify all pixels have opaque alpha */
 	for (uint32_t y = 0; y < 2; y++) {
 		for (uint32_t x = 0; x < 2; x++) {
-			uint8_t *pixel = image_get_pixel(frames[0], x, y);
+			uint8_t *pixel = img2_image_get_pixel(frames[0], x, y);
 			ASSERT_NOT_NULL(pixel);
 			ASSERT_EQUAL(255, pixel[3]); /* Alpha=255 */
 		}
 	}
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decode_stb() with PGM (Portable Graymap)
+ * @test Test img2_decode_stb() with PGM (Portable Graymap)
  *
  * Tests PGM format (PNM family) decoding.
  */
@@ -272,7 +272,7 @@ CTEST(decoder_stb, decode_pgm)
 	                                 "\x00\x7F\xAF\xFF"; /* 4 grayscale pixels */
 
 	int frame_count;
-	image_t **frames = decode_stb((const uint8_t *)pgm_2x2, strlen((const char *)pgm_2x2) + 4, &frame_count);
+	img2_image_t **frames = img2_decode_stb((const uint8_t *)pgm_2x2, strlen((const char *)pgm_2x2) + 4, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -283,7 +283,7 @@ CTEST(decoder_stb, decode_pgm)
 	/* Verify grayscale was converted to RGBA */
 	for (uint32_t y = 0; y < 2; y++) {
 		for (uint32_t x = 0; x < 2; x++) {
-			uint8_t *pixel = image_get_pixel(frames[0], x, y);
+			uint8_t *pixel = img2_image_get_pixel(frames[0], x, y);
 			ASSERT_NOT_NULL(pixel);
 			/* Grayscale means R=G=B */
 			ASSERT_EQUAL(pixel[0], pixel[1]);
@@ -292,35 +292,35 @@ CTEST(decoder_stb, decode_pgm)
 		}
 	}
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decoder_free_frames() with NULL
+ * @test Test img2_decoder_free_frames() with NULL
  *
- * Verifies that decoder_free_frames() handles NULL gracefully.
+ * Verifies that img2_decoder_free_frames() handles NULL gracefully.
  */
 CTEST(decoder_stb, free_frames_null)
 {
 	/* Should not crash */
-	decoder_free_frames(NULL, 0);
-	decoder_free_frames(NULL, 10);
+	img2_decoder_free_frames(NULL, 0);
+	img2_decoder_free_frames(NULL, 10);
 }
 
 /**
  * @test Test STB decoder through decoder registry (BMP)
  *
- * Verifies that BMP can be decoded through the decoder_decode() API.
+ * Verifies that BMP can be decoded through the img2_decoder_dispatch() API.
  */
 CTEST(decoder_stb, decode_bmp_through_registry)
 {
-	decoder_registry_init();
+	img2_decoder_registry_init();
 
 	static const uint8_t bmp_1x1[] = { 0x42, 0x4D, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x18,
 		                               0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 	int frame_count;
-	image_t **frames = decoder_decode(NULL, bmp_1x1, sizeof(bmp_1x1), MIME_BMP, &frame_count);
+	img2_image_t **frames = img2_decoder_dispatch(NULL, bmp_1x1, sizeof(bmp_1x1), IMG2_MIME_BMP, &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count);
@@ -328,21 +328,21 @@ CTEST(decoder_stb, decode_bmp_through_registry)
 	ASSERT_EQUAL(1, frames[0]->width);
 	ASSERT_EQUAL(1, frames[0]->height);
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }
 
 /**
- * @test Test decoder_find_by_mime() for BMP
+ * @test Test img2_decoder_find() for BMP
  *
  * Verifies that BMP decoder can be found in registry.
  */
 CTEST(decoder_stb, find_by_mime_bmp)
 {
-	decoder_registry_init();
+	img2_decoder_registry_init();
 
-	const decoder_t *decoder = decoder_find_by_mime(MIME_BMP);
+	const img2_decoder_entry_t *decoder = img2_decoder_find(IMG2_MIME_BMP);
 	ASSERT_NOT_NULL(decoder);
-	ASSERT_EQUAL(MIME_BMP, decoder->mime_type);
+	ASSERT_EQUAL(IMG2_MIME_BMP, decoder->mime_type);
 	ASSERT_NOT_NULL(decoder->name);
 	ASSERT_NOT_NULL(decoder->decode);
 }
@@ -358,10 +358,10 @@ CTEST(decoder_stb, single_frame_only)
 		                               0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 	int frame_count = -1;
-	image_t **frames = decode_stb(bmp_1x1, sizeof(bmp_1x1), &frame_count);
+	img2_image_t **frames = img2_decode_stb(bmp_1x1, sizeof(bmp_1x1), &frame_count);
 
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, frame_count); /* STB is always single-frame */
 
-	decoder_free_frames(frames, frame_count);
+	img2_decoder_free_frames(frames, frame_count);
 }

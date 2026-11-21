@@ -148,8 +148,8 @@ static const char *minimal_xmp_xml = "<?xml version=\"1.0\"?>"
  */
 CTEST(exif_reader, init_exif_info)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	ASSERT_STR("", exif.make);
 	ASSERT_STR("", exif.model);
@@ -166,8 +166,8 @@ CTEST(exif_reader, init_exif_info)
  */
 CTEST(exif_reader, init_xmp_info)
 {
-	xmp_info_t xmp;
-	xmp_info_init(&xmp);
+	img2_xmp_t xmp;
+	img2_xmp_init(&xmp);
 
 	ASSERT_STR("", xmp.creator);
 	ASSERT_STR("", xmp.copyright);
@@ -182,16 +182,16 @@ CTEST(exif_reader, init_xmp_info)
  */
 CTEST(exif_reader, parse_exif_basic)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
-	int result = parse_exif(&exif, minimal_jpeg_with_exif, sizeof(minimal_jpeg_with_exif));
+	int result = img2_exif_parse(&exif, minimal_jpeg_with_exif, sizeof(minimal_jpeg_with_exif));
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_STR("Canon", exif.make);
 	ASSERT_STR("Test", exif.model);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 }
 
 /**
@@ -199,16 +199,16 @@ CTEST(exif_reader, parse_exif_basic)
  */
 CTEST(exif_reader, parse_exif_invalid)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	/* Invalid JPEG (no SOI marker) */
 	uint8_t invalid_data[] = { 0x00, 0x01, 0x02, 0x03 };
-	int result = parse_exif(&exif, invalid_data, sizeof(invalid_data));
+	int result = img2_exif_parse(&exif, invalid_data, sizeof(invalid_data));
 
 	ASSERT_NOT_EQUAL(0, result);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 }
 
 /**
@@ -216,24 +216,24 @@ CTEST(exif_reader, parse_exif_invalid)
  */
 CTEST(exif_reader, parse_exif_null_params)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	uint8_t data[] = { 0xFF, 0xD8, 0xFF, 0xD9 };
 
 	/* NULL exif */
-	int result1 = parse_exif(NULL, data, sizeof(data));
+	int result1 = img2_exif_parse(NULL, data, sizeof(data));
 	ASSERT_NOT_EQUAL(0, result1);
 
 	/* NULL data */
-	int result2 = parse_exif(&exif, NULL, sizeof(data));
+	int result2 = img2_exif_parse(&exif, NULL, sizeof(data));
 	ASSERT_NOT_EQUAL(0, result2);
 
 	/* Zero length */
-	int result3 = parse_exif(&exif, data, 0);
+	int result3 = img2_exif_parse(&exif, data, 0);
 	ASSERT_NOT_EQUAL(0, result3);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 }
 
 /**
@@ -241,8 +241,8 @@ CTEST(exif_reader, parse_exif_null_params)
  */
 CTEST(exif_reader, parse_exif_no_segment)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	/* Minimal JPEG with no APP1 marker */
 	uint8_t jpeg_no_exif[] = {
@@ -252,11 +252,11 @@ CTEST(exif_reader, parse_exif_no_segment)
 		0xD9 /* EOI */
 	};
 
-	int result = parse_exif(&exif, jpeg_no_exif, sizeof(jpeg_no_exif));
+	int result = img2_exif_parse(&exif, jpeg_no_exif, sizeof(jpeg_no_exif));
 
 	ASSERT_NOT_EQUAL(0, result);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 }
 
 /**
@@ -264,8 +264,8 @@ CTEST(exif_reader, parse_exif_no_segment)
  */
 CTEST(exif_reader, parse_xmp_mock)
 {
-	xmp_info_t xmp;
-	xmp_info_init(&xmp);
+	img2_xmp_t xmp;
+	img2_xmp_init(&xmp);
 
 	/* Build minimal JPEG with XMP APP1 marker */
 	size_t xmp_xml_len = strlen(minimal_xmp_xml);
@@ -304,7 +304,7 @@ CTEST(exif_reader, parse_xmp_mock)
 	jpeg_with_xmp[pos++] = 0xD9;
 
 	/* Parse XMP */
-	int result = parse_xmp(&xmp, jpeg_with_xmp, total_len);
+	int result = img2_xmp_parse(&xmp, jpeg_with_xmp, total_len);
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_STR("Test Author", xmp.creator);
@@ -313,7 +313,7 @@ CTEST(exif_reader, parse_xmp_mock)
 	ASSERT_EQUAL(5, xmp.rating);
 
 	free(jpeg_with_xmp);
-	xmp_info_free(&xmp);
+	img2_xmp_clear(&xmp);
 }
 
 /**
@@ -321,20 +321,20 @@ CTEST(exif_reader, parse_xmp_mock)
  */
 CTEST(exif_reader, parse_xmp_null_params)
 {
-	xmp_info_t xmp;
-	xmp_info_init(&xmp);
+	img2_xmp_t xmp;
+	img2_xmp_init(&xmp);
 
 	uint8_t data[] = { 0xFF, 0xD8, 0xFF, 0xD9 };
 
 	/* NULL xmp */
-	int result1 = parse_xmp(NULL, data, sizeof(data));
+	int result1 = img2_xmp_parse(NULL, data, sizeof(data));
 	ASSERT_NOT_EQUAL(0, result1);
 
 	/* NULL data */
-	int result2 = parse_xmp(&xmp, NULL, sizeof(data));
+	int result2 = img2_xmp_parse(&xmp, NULL, sizeof(data));
 	ASSERT_NOT_EQUAL(0, result2);
 
-	xmp_info_free(&xmp);
+	img2_xmp_clear(&xmp);
 }
 
 /**
@@ -342,8 +342,8 @@ CTEST(exif_reader, parse_xmp_null_params)
  */
 CTEST(exif_reader, parse_xmp_no_segment)
 {
-	xmp_info_t xmp;
-	xmp_info_init(&xmp);
+	img2_xmp_t xmp;
+	img2_xmp_init(&xmp);
 
 	/* Minimal JPEG with no XMP APP1 marker */
 	uint8_t jpeg_no_xmp[] = {
@@ -353,11 +353,11 @@ CTEST(exif_reader, parse_xmp_no_segment)
 		0xD9 /* EOI */
 	};
 
-	int result = parse_xmp(&xmp, jpeg_no_xmp, sizeof(jpeg_no_xmp));
+	int result = img2_xmp_parse(&xmp, jpeg_no_xmp, sizeof(jpeg_no_xmp));
 
 	ASSERT_NOT_EQUAL(0, result);
 
-	xmp_info_free(&xmp);
+	img2_xmp_clear(&xmp);
 }
 
 /**
@@ -365,11 +365,11 @@ CTEST(exif_reader, parse_xmp_no_segment)
  */
 CTEST(exif_reader, memory_cleanup)
 {
-	exif_info_t exif;
-	xmp_info_t xmp;
+	img2_exif_t exif;
+	img2_xmp_t xmp;
 
-	exif_info_init(&exif);
-	xmp_info_init(&xmp);
+	img2_exif_init(&exif);
+	img2_xmp_init(&xmp);
 
 	/* Allocate XMP keywords */
 	xmp.keywords = malloc(100);
@@ -378,8 +378,8 @@ CTEST(exif_reader, memory_cleanup)
 	xmp.has_keywords = true;
 
 	/* Test cleanup (should not crash) */
-	exif_info_free(&exif);
-	xmp_info_free(&xmp);
+	img2_exif_clear(&exif);
+	img2_xmp_clear(&xmp);
 
 	/* Verify keywords freed */
 	ASSERT_NULL(xmp.keywords);
@@ -390,8 +390,8 @@ CTEST(exif_reader, memory_cleanup)
  */
 CTEST(exif_reader, parse_exif_big_endian)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	/* Minimal JPEG with big-endian EXIF */
 	uint8_t jpeg_big_endian[] = { /* JPEG SOI */
@@ -491,21 +491,21 @@ CTEST(exif_reader, parse_exif_big_endian)
 		                          0xD9
 	};
 
-	int result = parse_exif(&exif, jpeg_big_endian, sizeof(jpeg_big_endian));
+	int result = img2_exif_parse(&exif, jpeg_big_endian, sizeof(jpeg_big_endian));
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_STR("Nikon", exif.make);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 }
 
 /**
- * @test Test parse_exif_from_tiff() with raw TIFF data
+ * @test Test img2_exif_parse_tiff() with raw TIFF data
  */
 CTEST(exif_reader, parse_exif_from_tiff_raw_data)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	/* Raw TIFF data (little-endian) without JPEG wrapper */
 	uint8_t tiff_data[] = { /* TIFF header - little endian */
@@ -571,23 +571,23 @@ CTEST(exif_reader, parse_exif_from_tiff_raw_data)
 		                    0x00
 	};
 
-	/* Test parse_exif_from_tiff() with raw TIFF data */
-	int result = parse_exif_from_tiff(&exif, tiff_data, sizeof(tiff_data));
+	/* Test img2_exif_parse_tiff() with raw TIFF data */
+	int result = img2_exif_parse_tiff(&exif, tiff_data, sizeof(tiff_data));
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_STR("Sony", exif.make);
 	ASSERT_STR("A7RV", exif.model);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 }
 
 /**
- * @test Test parse_exif_from_tiff() with big-endian byte order
+ * @test Test img2_exif_parse_tiff() with big-endian byte order
  */
 CTEST(exif_reader, parse_exif_from_tiff_big_endian)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	/* Raw TIFF data (big-endian) */
 	uint8_t tiff_data[] = { /* TIFF header - BIG endian */
@@ -634,30 +634,30 @@ CTEST(exif_reader, parse_exif_from_tiff_big_endian)
 	};
 
 	/* Test TIFF magic validation */
-	int result = parse_exif_from_tiff(&exif, tiff_data, sizeof(tiff_data));
+	int result = img2_exif_parse_tiff(&exif, tiff_data, sizeof(tiff_data));
 
 	ASSERT_EQUAL(0, result);
 	ASSERT_STR("FujiX", exif.make);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 }
 
 /**
- * @test Test parse_exif_from_tiff() with invalid TIFF magic
+ * @test Test img2_exif_parse_tiff() with invalid TIFF magic
  */
 CTEST(exif_reader, parse_exif_from_tiff_invalid_magic)
 {
-	exif_info_t exif;
-	exif_info_init(&exif);
+	img2_exif_t exif;
+	img2_exif_init(&exif);
 
 	/* Invalid TIFF magic number */
 	uint8_t tiff_data[] = { 'I',  'I', /* Byte order */
 		                    0x2B, 0x00, /* Wrong magic (0x002B instead of 0x002A) */
 		                    0x08, 0x00, 0x00, 0x00 };
 
-	int result = parse_exif_from_tiff(&exif, tiff_data, sizeof(tiff_data));
+	int result = img2_exif_parse_tiff(&exif, tiff_data, sizeof(tiff_data));
 
 	ASSERT_NOT_EQUAL(0, result);
 
-	exif_info_free(&exif);
+	img2_exif_clear(&exif);
 }

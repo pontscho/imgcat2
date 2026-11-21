@@ -23,9 +23,9 @@
 #include "../test_tmpdir.h"
 
 /* Helper function to create test image */
-static image_t *create_test_image(int width, int height)
+static img2_image_t *create_test_image(int width, int height)
 {
-	image_t *img = image_create(width, height);
+	img2_image_t *img = img2_image_alloc(width, height);
 	if (img == NULL) {
 		return NULL;
 	}
@@ -33,7 +33,7 @@ static image_t *create_test_image(int width, int height)
 	/* Fill with gradient pattern */
 	for (uint32_t y = 0; y < (uint32_t)height; y++) {
 		for (uint32_t x = 0; x < (uint32_t)width; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / width);
 			pixel[1] = (y * 255 / height);
 			pixel[2] = 128;
@@ -65,14 +65,14 @@ static bool file_exists_with_content(const char *path, size_t *size_out)
 CTEST(file_render, null_inputs)
 {
 	/* Initialize encoder registry */
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
-	image_t *img = create_test_image(10, 10);
+	img2_image_t *img = create_test_image(10, 10);
 	ASSERT_NOT_NULL(img);
 
-	image_t *frames[] = { img };
+	img2_image_t *frames[] = { img };
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_JPEG;
+	opts.output_format = IMG2_FORMAT_JPEG;
 	opts.jpeg_quality = 80;
 	opts.output_file = NULL;
 	opts.silent = true;
@@ -93,31 +93,31 @@ CTEST(file_render, null_inputs)
 	result = file_render(frames, 1, NULL);
 	ASSERT_EQUAL(-1, result);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
- * @test Test file_render() with FORMAT_NONE
+ * @test Test file_render() with IMG2_FORMAT_NONE
  *
- * Verifies that file_render() rejects FORMAT_NONE.
+ * Verifies that file_render() rejects IMG2_FORMAT_NONE.
  */
 CTEST(file_render, invalid_format)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
-	image_t *img = create_test_image(10, 10);
+	img2_image_t *img = create_test_image(10, 10);
 	ASSERT_NOT_NULL(img);
 
-	image_t *frames[] = { img };
+	img2_image_t *frames[] = { img };
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_NONE; /* Invalid */
+	opts.output_format = IMG2_FORMAT_NONE; /* Invalid */
 	opts.output_file = NULL;
 	opts.silent = true;
 
 	int result = file_render(frames, 1, &opts);
 	ASSERT_EQUAL(-1, result);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -127,14 +127,14 @@ CTEST(file_render, invalid_format)
  */
 CTEST(file_render, file_output)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
-	image_t *img = create_test_image(20, 20);
+	img2_image_t *img = create_test_image(20, 20);
 	ASSERT_NOT_NULL(img);
 
-	image_t *frames[] = { img };
+	img2_image_t *frames[] = { img };
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_JPEG;
+	opts.output_format = IMG2_FORMAT_JPEG;
 	opts.jpeg_quality = 80;
 	char path[4096];
 	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_render.jpg");
@@ -155,7 +155,7 @@ CTEST(file_render, file_output)
 	FILE *fp = fopen(opts.output_file, "rb");
 	ASSERT_NOT_NULL(fp);
 	if (fp == NULL) {
-		image_destroy(img);
+		img2_image_destroy(img);
 		return;
 	}
 
@@ -169,7 +169,7 @@ CTEST(file_render, file_output)
 
 	/* Cleanup */
 	unlink(opts.output_file);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -179,14 +179,14 @@ CTEST(file_render, file_output)
  */
 CTEST(file_render, file_output_png)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
-	image_t *img = create_test_image(20, 20);
+	img2_image_t *img = create_test_image(20, 20);
 	ASSERT_NOT_NULL(img);
 
-	image_t *frames[] = { img };
+	img2_image_t *frames[] = { img };
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_PNG;
+	opts.output_format = IMG2_FORMAT_PNG;
 	opts.png_compression = 6;
 	char path[4096];
 	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_render.png");
@@ -207,7 +207,7 @@ CTEST(file_render, file_output_png)
 	FILE *fp = fopen(opts.output_file, "rb");
 	ASSERT_NOT_NULL(fp);
 	if (fp == NULL) {
-		image_destroy(img);
+		img2_image_destroy(img);
 		return;
 	}
 
@@ -223,7 +223,7 @@ CTEST(file_render, file_output_png)
 
 	/* Cleanup */
 	unlink(opts.output_file);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -233,19 +233,19 @@ CTEST(file_render, file_output_png)
  */
 CTEST(file_render, animated_warning)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create 3 test frames */
-	image_t *frame1 = create_test_image(10, 10);
-	image_t *frame2 = create_test_image(10, 10);
-	image_t *frame3 = create_test_image(10, 10);
+	img2_image_t *frame1 = create_test_image(10, 10);
+	img2_image_t *frame2 = create_test_image(10, 10);
+	img2_image_t *frame3 = create_test_image(10, 10);
 	ASSERT_NOT_NULL(frame1);
 	ASSERT_NOT_NULL(frame2);
 	ASSERT_NOT_NULL(frame3);
 
-	image_t *frames[] = { frame1, frame2, frame3 };
+	img2_image_t *frames[] = { frame1, frame2, frame3 };
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_JPEG;
+	opts.output_format = IMG2_FORMAT_JPEG;
 	opts.jpeg_quality = 80;
 	char path[4096];
 	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_animated.jpg");
@@ -263,9 +263,9 @@ CTEST(file_render, animated_warning)
 
 	/* Cleanup */
 	unlink(opts.output_file);
-	image_destroy(frame1);
-	image_destroy(frame2);
-	image_destroy(frame3);
+	img2_image_destroy(frame1);
+	img2_image_destroy(frame2);
+	img2_image_destroy(frame3);
 }
 
 /**
@@ -275,35 +275,35 @@ CTEST(file_render, animated_warning)
  */
 CTEST(file_render, frame_index)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
 	/* Create 3 test frames with different colors */
-	image_t *frame1 = create_test_image(10, 10);
-	image_t *frame2 = create_test_image(10, 10);
-	image_t *frame3 = create_test_image(10, 10);
+	img2_image_t *frame1 = create_test_image(10, 10);
+	img2_image_t *frame2 = create_test_image(10, 10);
+	img2_image_t *frame3 = create_test_image(10, 10);
 	ASSERT_NOT_NULL(frame1);
 	ASSERT_NOT_NULL(frame2);
 	ASSERT_NOT_NULL(frame3);
 
 	/* Mark frames with different colors */
-	uint8_t *p1 = image_get_pixel(frame1, 0, 0);
+	uint8_t *p1 = img2_image_get_pixel(frame1, 0, 0);
 	p1[0] = 255;
 	p1[1] = 0;
 	p1[2] = 0; /* Red */
 
-	uint8_t *p2 = image_get_pixel(frame2, 0, 0);
+	uint8_t *p2 = img2_image_get_pixel(frame2, 0, 0);
 	p2[0] = 0;
 	p2[1] = 255;
 	p2[2] = 0; /* Green */
 
-	uint8_t *p3 = image_get_pixel(frame3, 0, 0);
+	uint8_t *p3 = img2_image_get_pixel(frame3, 0, 0);
 	p3[0] = 0;
 	p3[1] = 0;
 	p3[2] = 255; /* Blue */
 
-	image_t *frames[] = { frame1, frame2, frame3 };
+	img2_image_t *frames[] = { frame1, frame2, frame3 };
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_PNG;
+	opts.output_format = IMG2_FORMAT_PNG;
 	opts.png_compression = 6;
 	char path[4096];
 	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_frame.png");
@@ -321,9 +321,9 @@ CTEST(file_render, frame_index)
 
 	/* Cleanup */
 	unlink(opts.output_file);
-	image_destroy(frame1);
-	image_destroy(frame2);
-	image_destroy(frame3);
+	img2_image_destroy(frame1);
+	img2_image_destroy(frame2);
+	img2_image_destroy(frame3);
 }
 
 /**
@@ -333,16 +333,16 @@ CTEST(file_render, frame_index)
  */
 CTEST(file_render, invalid_frame_index)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
-	image_t *frame1 = create_test_image(10, 10);
-	image_t *frame2 = create_test_image(10, 10);
+	img2_image_t *frame1 = create_test_image(10, 10);
+	img2_image_t *frame2 = create_test_image(10, 10);
 	ASSERT_NOT_NULL(frame1);
 	ASSERT_NOT_NULL(frame2);
 
-	image_t *frames[] = { frame1, frame2 };
+	img2_image_t *frames[] = { frame1, frame2 };
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_JPEG;
+	opts.output_format = IMG2_FORMAT_JPEG;
 	opts.jpeg_quality = 80;
 	char path[4096];
 	opts.output_file = test_tmp_path(path, sizeof(path), "imgcat2_test_invalid.jpg");
@@ -359,18 +359,18 @@ CTEST(file_render, invalid_frame_index)
 	ASSERT_FALSE(file_exists_with_content(opts.output_file, NULL));
 
 	/* Cleanup */
-	image_destroy(frame1);
-	image_destroy(frame2);
+	img2_image_destroy(frame1);
+	img2_image_destroy(frame2);
 }
 
-#if defined(HAVE_HEIF) || defined(HAVE_WEBP) || defined(HAVE_JXL)
+#if defined(IMG2_HAVE_HEIF) || defined(IMG2_HAVE_WEBP) || defined(IMG2_HAVE_JXL)
 /* Helper: render one frame with opts to a file under test_tmpdir(), return its size (0 on failure) */
-static size_t render_to_temp_file(image_t *img, cli_options_t *opts, const char *name)
+static size_t render_to_temp_file(img2_image_t *img, cli_options_t *opts, const char *name)
 {
 	char path[4096];
 	test_tmp_path(path, sizeof(path), name);
 
-	image_t *frames[] = { img };
+	img2_image_t *frames[] = { img };
 	opts->output_file = path;
 	opts->silent = true;
 	unlink(path);
@@ -385,7 +385,7 @@ static size_t render_to_temp_file(image_t *img, cli_options_t *opts, const char 
 }
 #endif
 
-#ifdef HAVE_HEIF
+#ifdef IMG2_HAVE_HEIF
 /**
  * @test Test file_render() honors the HEIF quality option
  *
@@ -394,13 +394,13 @@ static size_t render_to_temp_file(image_t *img, cli_options_t *opts, const char 
  */
 CTEST(file_render, heif_quality_option)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
-	image_t *img = create_test_image(64, 64);
+	img2_image_t *img = create_test_image(64, 64);
 	ASSERT_NOT_NULL(img);
 
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_HEIF;
+	opts.output_format = IMG2_FORMAT_HEIF;
 
 	opts.heif_quality = 10;
 	size_t size_low = render_to_temp_file(img, &opts, "imgcat2_test_render_q10.heif");
@@ -411,11 +411,11 @@ CTEST(file_render, heif_quality_option)
 	ASSERT_TRUE(size_high > 0);
 	ASSERT_TRUE(size_low < size_high);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 #endif
 
-#ifdef HAVE_WEBP
+#ifdef IMG2_HAVE_WEBP
 /**
  * @test Test file_render() honors the WebP quality option
  *
@@ -424,13 +424,13 @@ CTEST(file_render, heif_quality_option)
  */
 CTEST(file_render, webp_quality_option)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
-	image_t *img = create_test_image(64, 64);
+	img2_image_t *img = create_test_image(64, 64);
 	ASSERT_NOT_NULL(img);
 
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_WEBP;
+	opts.output_format = IMG2_FORMAT_WEBP;
 
 	opts.webp_quality = 10;
 	size_t size_low = render_to_temp_file(img, &opts, "imgcat2_test_render_q10.webp");
@@ -441,11 +441,11 @@ CTEST(file_render, webp_quality_option)
 	ASSERT_TRUE(size_high > 0);
 	ASSERT_TRUE(size_low < size_high);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 #endif
 
-#ifdef HAVE_JXL
+#ifdef IMG2_HAVE_JXL
 /**
  * @test Test file_render() honors the JXL quality option
  *
@@ -454,13 +454,13 @@ CTEST(file_render, webp_quality_option)
  */
 CTEST(file_render, jxl_quality_option)
 {
-	encoder_registry_init();
+	img2_encoder_registry_init();
 
-	image_t *img = create_test_image(64, 64);
+	img2_image_t *img = create_test_image(64, 64);
 	ASSERT_NOT_NULL(img);
 
 	cli_options_t opts = { 0 };
-	opts.output_format = FORMAT_JXL;
+	opts.output_format = IMG2_FORMAT_JXL;
 
 	opts.jxl_quality = 10;
 	size_t size_low = render_to_temp_file(img, &opts, "imgcat2_test_render_q10.jxl");
@@ -474,6 +474,6 @@ CTEST(file_render, jxl_quality_option)
 	ASSERT_TRUE(size_low < size_high);
 	ASSERT_TRUE(size_lossless > 0);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 #endif

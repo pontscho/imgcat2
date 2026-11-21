@@ -16,12 +16,12 @@
 #include "../ctest.h"
 
 /* Forward declaration for WebP encoder function */
-extern int encode_webp(const image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+extern int img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 
 /**
- * @test Test encode_webp() with NULL parameters
+ * @test Test img2_encode_webp() with NULL parameters
  *
- * Verifies that encode_webp() rejects NULL input gracefully.
+ * Verifies that img2_encode_webp() rejects NULL input gracefully.
  */
 CTEST(encoder_webp, null_inputs)
 {
@@ -29,38 +29,38 @@ CTEST(encoder_webp, null_inputs)
 	size_t out_size = 0;
 
 	/* Create minimal valid image */
-	image_t *img = image_create(1, 1);
+	img2_image_t *img = img2_image_alloc(1, 1);
 	ASSERT_NOT_NULL(img);
 
 	/* NULL image pointer */
-	int result = encode_webp(NULL, 80, &out_data, &out_size);
+	int result = img2_encode_webp(NULL, 80, &out_data, &out_size);
 	ASSERT_EQUAL(-1, result);
 	ASSERT_NULL(out_data);
 	ASSERT_EQUAL(0, out_size);
 
 	/* NULL out_data pointer */
-	result = encode_webp(img, 80, NULL, &out_size);
+	result = img2_encode_webp(img, 80, NULL, &out_size);
 	ASSERT_EQUAL(-1, result);
 
 	/* NULL out_size pointer */
-	result = encode_webp(img, 80, &out_data, NULL);
+	result = img2_encode_webp(img, 80, &out_data, NULL);
 	ASSERT_EQUAL(-1, result);
 
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
- * @test Test encode_webp() with minimal 1x1 image
+ * @test Test img2_encode_webp() with minimal 1x1 image
  *
  * Verifies that WebP encoder can encode the smallest possible image.
  */
 CTEST(encoder_webp, encode_1x1_image)
 {
 	/* Create 1x1 red image */
-	image_t *img = image_create(1, 1);
+	img2_image_t *img = img2_image_alloc(1, 1);
 	ASSERT_NOT_NULL(img);
 
-	uint8_t *pixel = image_get_pixel(img, 0, 0);
+	uint8_t *pixel = img2_image_get_pixel(img, 0, 0);
 	ASSERT_NOT_NULL(pixel);
 	pixel[0] = 255; /* R */
 	pixel[1] = 0; /* G */
@@ -70,7 +70,7 @@ CTEST(encoder_webp, encode_1x1_image)
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
 
-	int result = encode_webp(img, 80, &out_data, &out_size);
+	int result = img2_encode_webp(img, 80, &out_data, &out_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data);
 	ASSERT_TRUE(out_size > 0);
@@ -87,24 +87,24 @@ CTEST(encoder_webp, encode_1x1_image)
 	ASSERT_EQUAL('P', out_data[11]);
 
 	free(out_data);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
- * @test Test encode_webp() with 10x10 RGBA image
+ * @test Test img2_encode_webp() with 10x10 RGBA image
  *
  * Verifies that WebP encoder can encode a small image.
  */
 CTEST(encoder_webp, encode_10x10_image)
 {
 	/* Create 10x10 gradient image */
-	image_t *img = image_create(10, 10);
+	img2_image_t *img = img2_image_alloc(10, 10);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with red-to-green gradient */
 	for (uint32_t y = 0; y < 10; y++) {
 		for (uint32_t x = 0; x < 10; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			ASSERT_NOT_NULL(pixel);
 			pixel[0] = 255 - (x * 255 / 10); /* R: decreases left-to-right */
 			pixel[1] = (x * 255 / 10); /* G: increases left-to-right */
@@ -116,7 +116,7 @@ CTEST(encoder_webp, encode_10x10_image)
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
 
-	int result = encode_webp(img, 80, &out_data, &out_size);
+	int result = img2_encode_webp(img, 80, &out_data, &out_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data);
 	ASSERT_TRUE(out_size > 0);
@@ -137,11 +137,11 @@ CTEST(encoder_webp, encode_10x10_image)
 	ASSERT_TRUE(out_size <= 5000);
 
 	free(out_data);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
- * @test Test encode_webp() with different quality levels
+ * @test Test img2_encode_webp() with different quality levels
  *
  * Verifies that quality parameter affects output size as expected.
  * Higher quality should produce larger files.
@@ -149,13 +149,13 @@ CTEST(encoder_webp, encode_10x10_image)
 CTEST(encoder_webp, quality_levels)
 {
 	/* Create 100x100 gradient image */
-	image_t *img = image_create(100, 100);
+	img2_image_t *img = img2_image_alloc(100, 100);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with gradient */
 	for (uint32_t y = 0; y < 100; y++) {
 		for (uint32_t x = 0; x < 100; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 100);
 			pixel[1] = (y * 255 / 100);
 			pixel[2] = 128;
@@ -171,19 +171,19 @@ CTEST(encoder_webp, quality_levels)
 	size_t out_size_q90 = 0;
 
 	/* Encode with quality 10 (low) */
-	int result = encode_webp(img, 10, &out_data_q10, &out_size_q10);
+	int result = img2_encode_webp(img, 10, &out_data_q10, &out_size_q10);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data_q10);
 	ASSERT_TRUE(out_size_q10 > 0);
 
 	/* Encode with quality 50 (medium) */
-	result = encode_webp(img, 50, &out_data_q50, &out_size_q50);
+	result = img2_encode_webp(img, 50, &out_data_q50, &out_size_q50);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data_q50);
 	ASSERT_TRUE(out_size_q50 > 0);
 
 	/* Encode with quality 90 (high) */
-	result = encode_webp(img, 90, &out_data_q90, &out_size_q90);
+	result = img2_encode_webp(img, 90, &out_data_q90, &out_size_q90);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data_q90);
 	ASSERT_TRUE(out_size_q90 > 0);
@@ -203,11 +203,11 @@ CTEST(encoder_webp, quality_levels)
 	free(out_data_q10);
 	free(out_data_q50);
 	free(out_data_q90);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
- * @test Test encode_webp() lossless mode
+ * @test Test img2_encode_webp() lossless mode
  *
  * Verifies that quality 100 triggers lossless encoding.
  * Lossless mode typically produces larger files than high-quality lossy.
@@ -215,13 +215,13 @@ CTEST(encoder_webp, quality_levels)
 CTEST(encoder_webp, lossless_mode)
 {
 	/* Create 100x100 gradient image */
-	image_t *img = image_create(100, 100);
+	img2_image_t *img = img2_image_alloc(100, 100);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with gradient */
 	for (uint32_t y = 0; y < 100; y++) {
 		for (uint32_t x = 0; x < 100; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x * 255 / 100);
 			pixel[1] = (y * 255 / 100);
 			pixel[2] = 128;
@@ -235,13 +235,13 @@ CTEST(encoder_webp, lossless_mode)
 	size_t out_size_q100 = 0;
 
 	/* Encode with quality 90 (lossy) */
-	int result = encode_webp(img, 90, &out_data_q90, &out_size_q90);
+	int result = img2_encode_webp(img, 90, &out_data_q90, &out_size_q90);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data_q90);
 	ASSERT_TRUE(out_size_q90 > 0);
 
 	/* Encode with quality 100 (lossless) */
-	result = encode_webp(img, 100, &out_data_q100, &out_size_q100);
+	result = img2_encode_webp(img, 100, &out_data_q100, &out_size_q100);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data_q100);
 	ASSERT_TRUE(out_size_q100 > 0);
@@ -257,7 +257,7 @@ CTEST(encoder_webp, lossless_mode)
 
 	free(out_data_q90);
 	free(out_data_q100);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -268,13 +268,13 @@ CTEST(encoder_webp, lossless_mode)
 CTEST(encoder_webp, transparency)
 {
 	/* Create 50x50 image with varying alpha */
-	image_t *img = image_create(50, 50);
+	img2_image_t *img = img2_image_alloc(50, 50);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with pattern: left half opaque, right half transparent */
 	for (uint32_t y = 0; y < 50; y++) {
 		for (uint32_t x = 0; x < 50; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = 255; /* R */
 			pixel[1] = 0; /* G */
 			pixel[2] = 0; /* B */
@@ -291,7 +291,7 @@ CTEST(encoder_webp, transparency)
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
 
-	int result = encode_webp(img, 80, &out_data, &out_size);
+	int result = img2_encode_webp(img, 80, &out_data, &out_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data);
 	ASSERT_TRUE(out_size > 0);
@@ -312,7 +312,7 @@ CTEST(encoder_webp, transparency)
 	ASSERT_TRUE(out_size <= 50000);
 
 	free(out_data);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
 
 /**
@@ -323,13 +323,13 @@ CTEST(encoder_webp, transparency)
 CTEST(encoder_webp, magic_bytes)
 {
 	/* Create 50x50 image */
-	image_t *img = image_create(50, 50);
+	img2_image_t *img = img2_image_alloc(50, 50);
 	ASSERT_NOT_NULL(img);
 
 	/* Fill with pattern */
 	for (uint32_t y = 0; y < 50; y++) {
 		for (uint32_t x = 0; x < 50; x++) {
-			uint8_t *pixel = image_get_pixel(img, x, y);
+			uint8_t *pixel = img2_image_get_pixel(img, x, y);
 			pixel[0] = (x + y) % 256;
 			pixel[1] = (x * 2) % 256;
 			pixel[2] = (y * 2) % 256;
@@ -340,7 +340,7 @@ CTEST(encoder_webp, magic_bytes)
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
 
-	int result = encode_webp(img, 75, &out_data, &out_size);
+	int result = img2_encode_webp(img, 75, &out_data, &out_size);
 	ASSERT_EQUAL(0, result);
 	ASSERT_NOT_NULL(out_data);
 	ASSERT_TRUE(out_size >= 12); /* Must have at least 12 bytes for RIFF/WEBP header */
@@ -358,5 +358,5 @@ CTEST(encoder_webp, magic_bytes)
 	ASSERT_EQUAL('P', out_data[11]);
 
 	free(out_data);
-	image_destroy(img);
+	img2_image_destroy(img);
 }
