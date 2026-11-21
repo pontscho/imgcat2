@@ -13,19 +13,7 @@
 #include <stdbool.h>
 
 #include "../libimg2/decoders/yuv.h"
-
-/**
- * @enum output_format_t
- * @brief Supported output image formats
- */
-typedef enum {
-	FORMAT_NONE = 0, /**< No format selected */
-	FORMAT_JPEG, /**< JPEG format */
-	FORMAT_PNG, /**< PNG format */
-	FORMAT_HEIF, /**< HEIF format */
-	FORMAT_WEBP, /**< WebP format */
-	FORMAT_JXL, /**< JXL format */
-} output_format_t;
+#include "../libimg2/encoders/encoder.h"
 
 /**
  * @struct cli_options_t

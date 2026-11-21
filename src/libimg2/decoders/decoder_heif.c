@@ -16,6 +16,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 #ifdef HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
@@ -83,7 +84,7 @@ bool heif_is_animated(const uint8_t *data, size_t len)
 static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_heif_static\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_heif_static");
 		return NULL;
 	}
 
@@ -93,14 +94,14 @@ static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_
 	// Create HEIF context
 	struct heif_context *ctx = heif_context_alloc();
 	if (ctx == NULL) {
-		fprintf(stderr, "Error: Failed to allocate HEIF context\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
 		return NULL;
 	}
 
 	// Read from memory
 	struct heif_error err = heif_context_read_from_memory_without_copy(ctx, data, len, NULL);
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to read HEIF data: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to read HEIF data: %s", err.message);
 		heif_context_free(ctx);
 		return NULL;
 	}
@@ -109,7 +110,7 @@ static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_
 	struct heif_image_handle *handle = NULL;
 	err = heif_context_get_primary_image_handle(ctx, &handle);
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to get primary image handle: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to get primary image handle: %s", err.message);
 		heif_context_free(ctx);
 		return NULL;
 	}
@@ -118,7 +119,7 @@ static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_
 	struct heif_image *img = NULL;
 	err = heif_decode_image(handle, &img, heif_colorspace_RGB, heif_chroma_interleaved_RGBA, NULL);
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to decode HEIF image: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to decode HEIF image: %s", err.message);
 		heif_image_handle_release(handle);
 		heif_context_free(ctx);
 		return NULL;
@@ -132,7 +133,7 @@ static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_
 	int stride = 0;
 	const uint8_t *plane = heif_image_get_plane_readonly(img, heif_channel_interleaved, &stride);
 	if (plane == NULL) {
-		fprintf(stderr, "Error: Failed to get HEIF image plane\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to get HEIF image plane");
 		heif_image_release(img);
 		heif_image_handle_release(handle);
 		heif_context_free(ctx);
@@ -142,7 +143,7 @@ static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_
 	// Create image_t structure
 	image_t *output = image_create((uint32_t)width, (uint32_t)height);
 	if (output == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		heif_image_release(img);
 		heif_image_handle_release(handle);
 		heif_context_free(ctx);
@@ -301,7 +302,7 @@ static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(output);
 		return NULL;
 	}
@@ -330,7 +331,7 @@ static image_t **decode_heif_static(const uint8_t *data, size_t len, int *frame_
 static image_t **decode_heif_animated(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_heif_animated\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_heif_animated");
 		return NULL;
 	}
 
@@ -340,14 +341,14 @@ static image_t **decode_heif_animated(const uint8_t *data, size_t len, int *fram
 	// Create HEIF context
 	struct heif_context *ctx = heif_context_alloc();
 	if (ctx == NULL) {
-		fprintf(stderr, "Error: Failed to allocate HEIF context\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
 		return NULL;
 	}
 
 	// Read from memory
 	struct heif_error err = heif_context_read_from_memory_without_copy(ctx, data, len, NULL);
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to read HEIF data: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to read HEIF data: %s", err.message);
 		heif_context_free(ctx);
 		return NULL;
 	}
@@ -355,28 +356,28 @@ static image_t **decode_heif_animated(const uint8_t *data, size_t len, int *fram
 	// Get number of top-level images
 	int num_images = heif_context_get_number_of_top_level_images(ctx);
 	if (num_images == 0) {
-		fprintf(stderr, "Error: HEIF image sequence has no images\n");
+		img2_log(IMG2_LOG_ERROR, "Error: HEIF image sequence has no images");
 		heif_context_free(ctx);
 		return NULL;
 	}
 
 	// Enforce MAX_HEIF_FRAMES limit
 	if (num_images > MAX_HEIF_FRAMES) {
-		fprintf(stderr, "Warning: HEIF has %d images, limiting to %d\n", num_images, MAX_HEIF_FRAMES);
+		img2_log(IMG2_LOG_WARN, "Warning: HEIF has %d images, limiting to %d", num_images, MAX_HEIF_FRAMES);
 		num_images = MAX_HEIF_FRAMES;
 	}
 
 	// Get list of image IDs
 	heif_item_id *image_ids = (heif_item_id *)malloc(sizeof(heif_item_id) * num_images);
 	if (image_ids == NULL) {
-		fprintf(stderr, "Error: Failed to allocate image ID array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate image ID array");
 		heif_context_free(ctx);
 		return NULL;
 	}
 
 	int actual_count = heif_context_get_list_of_top_level_image_IDs(ctx, image_ids, num_images);
 	if (actual_count != num_images) {
-		fprintf(stderr, "Error: Failed to get image ID list\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to get image ID list");
 		free(image_ids);
 		heif_context_free(ctx);
 		return NULL;
@@ -385,7 +386,7 @@ static image_t **decode_heif_animated(const uint8_t *data, size_t len, int *fram
 	// Allocate frames array
 	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_images);
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		free(image_ids);
 		heif_context_free(ctx);
 		return NULL;
@@ -402,7 +403,7 @@ static image_t **decode_heif_animated(const uint8_t *data, size_t len, int *fram
 		struct heif_image_handle *handle = NULL;
 		err = heif_context_get_image_handle(ctx, image_ids[i], &handle);
 		if (err.code != heif_error_Ok) {
-			fprintf(stderr, "Error: Failed to get image handle %d: %s\n", i, err.message);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to get image handle %d: %s", i, err.message);
 			goto cleanup_error;
 		}
 
@@ -410,7 +411,7 @@ static image_t **decode_heif_animated(const uint8_t *data, size_t len, int *fram
 		struct heif_image *img = NULL;
 		err = heif_decode_image(handle, &img, heif_colorspace_RGB, heif_chroma_interleaved_RGBA, NULL);
 		if (err.code != heif_error_Ok) {
-			fprintf(stderr, "Error: Failed to decode HEIF image %d: %s\n", i, err.message);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to decode HEIF image %d: %s", i, err.message);
 			heif_image_handle_release(handle);
 			goto cleanup_error;
 		}
@@ -423,7 +424,7 @@ static image_t **decode_heif_animated(const uint8_t *data, size_t len, int *fram
 		int stride = 0;
 		const uint8_t *plane = heif_image_get_plane_readonly(img, heif_channel_interleaved, &stride);
 		if (plane == NULL) {
-			fprintf(stderr, "Error: Failed to get HEIF image plane %d\n", i);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to get HEIF image plane %d", i);
 			heif_image_release(img);
 			heif_image_handle_release(handle);
 			goto cleanup_error;
@@ -432,7 +433,7 @@ static image_t **decode_heif_animated(const uint8_t *data, size_t len, int *fram
 		// Create output frame
 		frames[i] = image_create((uint32_t)width, (uint32_t)height);
 		if (frames[i] == NULL) {
-			fprintf(stderr, "Error: Failed to create output frame %d\n", i);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", i);
 			heif_image_release(img);
 			heif_image_handle_release(handle);
 			goto cleanup_error;
@@ -490,7 +491,7 @@ cleanup_error:
 image_t **decode_heif(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_heif\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_heif");
 		return NULL;
 	}
 

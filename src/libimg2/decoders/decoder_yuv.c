@@ -27,6 +27,7 @@
 /* clang-format on */
 
 #include "yuv.h"
+#include "../core/log.h"
 
 /** Maximum accepted length of a --yuv specification string */
 #define YUV_SPEC_MAX_LEN 128
@@ -522,25 +523,25 @@ image_t **decode_yuv(const uint8_t *data, size_t len, const yuv_params_t *params
 		*frame_count = 0;
 	}
 	if (data == NULL || len == 0 || params == NULL || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_yuv\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_yuv");
 		return NULL;
 	}
 
 	char err[160];
 	yuv_layout_t L;
 	if (yuv_compute_layout(params, &L, err, sizeof(err)) < 0) {
-		fprintf(stderr, "Error: Invalid YUV parameters: %s\n", err);
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid YUV parameters: %s", err);
 		return NULL;
 	}
 
 	if (len < L.required) {
-		fprintf(stderr, "Error: Raw YUV input too short for %s %ux%u: need %zu bytes, have %zu\n", yuv_format_name(params->format), params->width, params->height, L.required, len);
+		img2_log(IMG2_LOG_ERROR, "Error: Raw YUV input too short for %s %ux%u: need %zu bytes, have %zu", yuv_format_name(params->format), params->width, params->height, L.required, len);
 		return NULL;
 	}
 
 	image_t *img = image_create(params->width, params->height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		return NULL;
 	}
 
@@ -577,7 +578,7 @@ image_t **decode_yuv(const uint8_t *data, size_t len, const yuv_params_t *params
 
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}

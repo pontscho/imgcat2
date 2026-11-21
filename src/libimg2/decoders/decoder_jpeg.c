@@ -16,6 +16,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 #ifdef HAVE_JPEGQS
 #include "libjpegqs.h"
@@ -54,7 +55,7 @@ static void jpeg_error_exit(j_common_ptr cinfo)
 	/* Print error message */
 	char buffer[JMSG_LENGTH_MAX];
 	(*cinfo->err->format_message)(cinfo, buffer);
-	fprintf(stderr, "Error: libjpeg error: %s\n", buffer);
+	img2_log(IMG2_LOG_ERROR, "Error: libjpeg error: %s", buffer);
 
 	/* Jump back to decode_jpeg() */
 	longjmp(err->setjmp_buffer, 1);
@@ -78,7 +79,7 @@ static void jpeg_error_exit(j_common_ptr cinfo)
 image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_jpeg\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jpeg");
 		return NULL;
 	}
 
@@ -107,7 +108,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 
 	// Read JPEG header
 	if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
-		fprintf(stderr, "Error: Failed to read JPEG header\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG header");
 		jpeg_destroy_decompress(&cinfo);
 		return NULL;
 	}
@@ -121,7 +122,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 #else
 	if (!jpeg_start_decompress(&cinfo)) {
 #endif
-		fprintf(stderr, "Error: Failed to start JPEG decompression\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to start JPEG decompression");
 		jpeg_destroy_decompress(&cinfo);
 		return NULL;
 	}
@@ -132,7 +133,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	int channels = cinfo.output_components; // Should be 3 for RGB
 
 	if (channels != 3) {
-		fprintf(stderr, "Error: Unexpected JPEG output channels: %d (expected 3)\n", channels);
+		img2_log(IMG2_LOG_ERROR, "Error: Unexpected JPEG output channels: %d (expected 3)", channels);
 		jpeg_destroy_decompress(&cinfo);
 		return NULL;
 	}
@@ -140,7 +141,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	// Create image_t structure for RGBA output
 	image_t *img = image_create(width, height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		jpeg_destroy_decompress(&cinfo);
 		return NULL;
 	}
@@ -149,7 +150,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	size_t row_stride = width * channels; // RGB: 3 bytes per pixel
 	uint8_t *row_buffer = (uint8_t *)malloc(row_stride);
 	if (row_buffer == NULL) {
-		fprintf(stderr, "Error: Failed to allocate JPEG row buffer\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JPEG row buffer");
 		image_destroy(img);
 		jpeg_destroy_decompress(&cinfo);
 		return NULL;
@@ -163,7 +164,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	while (cinfo.output_scanline < cinfo.output_height) {
 		// Read one scanline (RGB)
 		if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
-			fprintf(stderr, "Error: Failed to read JPEG scanline %u\n", y);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG scanline %u", y);
 			free(row_buffer);
 			image_destroy(img);
 			jpeg_destroy_decompress(&cinfo);
@@ -187,11 +188,11 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	// Finish decompression
 #ifdef HAVE_JPEGQS
 	if (!jpegqs_finish_decompress(&cinfo)) {
-		fprintf(stderr, "Warning: jpegqs_finish_decompress() returned false\n");
+		img2_log(IMG2_LOG_WARN, "Warning: jpegqs_finish_decompress() returned false");
 	}
 #else
 	if (!jpeg_finish_decompress(&cinfo)) {
-		fprintf(stderr, "Warning: jpeg_finish_decompress() returned false\n");
+		img2_log(IMG2_LOG_WARN, "Warning: jpeg_finish_decompress() returned false");
 	}
 #endif
 
@@ -241,7 +242,7 @@ image_t **decode_jpeg(const uint8_t *data, size_t len, int *frame_count)
 	// Allocate frames array (single frame for JPEG)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}

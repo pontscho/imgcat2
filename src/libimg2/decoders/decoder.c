@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "decoder.h"
+#include "../core/log.h"
 
 /**
  * @brief Forward declarations for decoder functions
@@ -173,7 +174,7 @@ size_t g_decoder_count = 0;
  * Sets up the global registry pointers. This function is idempotent
  * and safe to call multiple times.
  */
-void decoder_registry_init(cli_options_t *opts)
+void decoder_registry_init(void)
 {
 	if (g_decoder_registry != NULL) {
 		// Already initialized
@@ -183,11 +184,9 @@ void decoder_registry_init(cli_options_t *opts)
 	g_decoder_registry = s_decoder_registry;
 	g_decoder_count = sizeof(s_decoder_registry) / sizeof(decoder_t);
 
-	if (opts != NULL && !opts->silent) {
-		fprintf(stderr, "Decoder registry initialized with %zu decoders:\n", g_decoder_count);
-		for (size_t i = 0; i < g_decoder_count; i++) {
-			fprintf(stderr, "  [%zu] %s\n", i, s_decoder_registry[i].name);
-		}
+	img2_log(IMG2_LOG_INFO, "Decoder registry initialized with %zu decoders:", g_decoder_count);
+	for (size_t i = 0; i < g_decoder_count; i++) {
+		img2_log(IMG2_LOG_INFO, "  [%zu] %s", i, s_decoder_registry[i].name);
 	}
 }
 
@@ -200,7 +199,7 @@ void decoder_registry_init(cli_options_t *opts)
 const decoder_t *decoder_find_by_mime(mime_type_t mime)
 {
 	if (g_decoder_registry == NULL) {
-		fprintf(stderr, "Error: Decoder registry not initialized (call decoder_registry_init())\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Decoder registry not initialized (call decoder_registry_init())");
 		return NULL;
 	}
 
@@ -212,7 +211,7 @@ const decoder_t *decoder_find_by_mime(mime_type_t mime)
 	}
 
 	// No decoder found
-	fprintf(stderr, "Error: No decoder found for MIME type: %s\n", mime_type_name(mime));
+	img2_log(IMG2_LOG_ERROR, "Error: No decoder found for MIME type: %s", mime_type_name(mime));
 	return NULL;
 }
 
@@ -221,11 +220,11 @@ const decoder_t *decoder_find_by_mime(mime_type_t mime)
  *
  * Main decoding dispatcher with comprehensive error checking and validation.
  */
-image_t **decoder_decode(cli_options_t *opts, const uint8_t *data, size_t len, mime_type_t mime, int *frame_count)
+image_t **decoder_decode(const img2_decode_opts_t *opts, const uint8_t *data, size_t len, mime_type_t mime, int *frame_count)
 {
 	// Validate inputs
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decoder_decode\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decoder_decode");
 		return NULL;
 	}
 
@@ -236,18 +235,16 @@ image_t **decoder_decode(cli_options_t *opts, const uint8_t *data, size_t len, m
 
 	if (mime == MIME_YUV) {
 		// Raw YUV is headerless: it is not in the registry and needs the --yuv geometry
-		if (opts == NULL || !opts->yuv_input) {
-			fprintf(stderr, "Error: Raw YUV input requires --yuv format:width:height\n");
+		if (opts == NULL || opts->yuv == NULL) {
+			img2_log(IMG2_LOG_ERROR, "Error: Raw YUV input requires --yuv format:width:height");
 			return NULL;
 		}
 
-		if (!opts->silent) {
-			fprintf(stderr, "Decoding %zu bytes with decoder: YUV raw (%s %ux%u)\n", len, yuv_format_name(opts->yuv.format), opts->yuv.width, opts->yuv.height);
-		}
+		img2_log(IMG2_LOG_INFO, "Decoding %zu bytes with decoder: YUV raw (%s %ux%u)", len, yuv_format_name(opts->yuv->format), opts->yuv->width, opts->yuv->height);
 
-		frames = decode_yuv(data, len, &opts->yuv, frame_count);
+		frames = decode_yuv(data, len, opts->yuv, frame_count);
 		if (frames == NULL) {
-			fprintf(stderr, "Error: Decoder 'YUV raw' failed to decode image\n");
+			img2_log(IMG2_LOG_ERROR, "Error: Decoder 'YUV raw' failed to decode image");
 			return NULL;
 		}
 
@@ -255,25 +252,23 @@ image_t **decoder_decode(cli_options_t *opts, const uint8_t *data, size_t len, m
 		// Find appropriate decoder
 		const decoder_t *decoder = decoder_find_by_mime(mime);
 		if (decoder == NULL) {
-			fprintf(stderr, "Error: No decoder available for format: %s\n", mime_type_name(mime));
+			img2_log(IMG2_LOG_ERROR, "Error: No decoder available for format: %s", mime_type_name(mime));
 			return NULL;
 		}
 
-		if (opts != NULL && !opts->silent) {
-			fprintf(stderr, "Decoding %zu bytes with decoder: %s\n", len, decoder->name);
-		}
+		img2_log(IMG2_LOG_INFO, "Decoding %zu bytes with decoder: %s", len, decoder->name);
 
 		// Call decoder function
 		frames = decoder->decode(data, len, frame_count);
 		if (frames == NULL) {
-			fprintf(stderr, "Error: Decoder '%s' failed to decode image\n", decoder->name);
+			img2_log(IMG2_LOG_ERROR, "Error: Decoder '%s' failed to decode image", decoder->name);
 			return NULL;
 		}
 	}
 
 	// Validate output
 	if (*frame_count <= 0) {
-		fprintf(stderr, "Error: Decoder returned invalid frame count: %d\n", *frame_count);
+		img2_log(IMG2_LOG_ERROR, "Error: Decoder returned invalid frame count: %d", *frame_count);
 		decoder_free_frames(frames, *frame_count);
 		return NULL;
 	}
@@ -281,35 +276,33 @@ image_t **decoder_decode(cli_options_t *opts, const uint8_t *data, size_t len, m
 	// Validate each frame
 	for (int i = 0; i < *frame_count; i++) {
 		if (frames[i] == NULL) {
-			fprintf(stderr, "Error: Decoder returned NULL frame at index %d\n", i);
+			img2_log(IMG2_LOG_ERROR, "Error: Decoder returned NULL frame at index %d", i);
 			decoder_free_frames(frames, *frame_count);
 			return NULL;
 		}
 
 		// Check dimensions within limits
 		if (frames[i]->width == 0 || frames[i]->height == 0) {
-			fprintf(stderr, "Error: Frame %d has invalid dimensions: %ux%u\n", i, frames[i]->width, frames[i]->height);
+			img2_log(IMG2_LOG_ERROR, "Error: Frame %d has invalid dimensions: %ux%u", i, frames[i]->width, frames[i]->height);
 			decoder_free_frames(frames, *frame_count);
 			return NULL;
 		}
 
 		if (frames[i]->width > IMAGE_MAX_DIMENSION || frames[i]->height > IMAGE_MAX_DIMENSION) {
-			fprintf(stderr, "Error: Frame %d dimensions exceed maximum (%u): %ux%u\n", i, IMAGE_MAX_DIMENSION, frames[i]->width, frames[i]->height);
+			img2_log(IMG2_LOG_ERROR, "Error: Frame %d dimensions exceed maximum (%u): %ux%u", i, IMAGE_MAX_DIMENSION, frames[i]->width, frames[i]->height);
 			decoder_free_frames(frames, *frame_count);
 			return NULL;
 		}
 
 		// Check pixel buffer allocated
 		if (frames[i]->pixels == NULL) {
-			fprintf(stderr, "Error: Frame %d has NULL pixel buffer\n", i);
+			img2_log(IMG2_LOG_ERROR, "Error: Frame %d has NULL pixel buffer", i);
 			decoder_free_frames(frames, *frame_count);
 			return NULL;
 		}
 	}
 
-	if (opts != NULL && !opts->silent) {
-		fprintf(stderr, "Successfully decoded %d frame(s) with dimensions: %ux%u\n", *frame_count, frames[0]->width, frames[0]->height);
-	}
+	img2_log(IMG2_LOG_INFO, "Successfully decoded %d frame(s) with dimensions: %ux%u", *frame_count, frames[0]->width, frames[0]->height);
 
 	return frames;
 }

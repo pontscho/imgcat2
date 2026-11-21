@@ -18,7 +18,7 @@ add_custom_target(embed_fonts DEPENDS "${IMG2_GENERATED_DIR}/embedded_fonts.c" "
 add_library(img2 STATIC)
 add_library(img2::img2 ALIAS img2)
 target_sources(img2 PRIVATE
-	core/image.c
+	core/image.c core/log.c
 	decoders/decoder.c decoders/magic.c decoders/decoder_stb.c decoders/decoder_png.c decoders/decoder_jpeg.c
 	decoders/decoder_qoi.c decoders/decoder_ico.c decoders/decoder_pnm.c decoders/decoder_yuv.c decoders/decoder_nanosvg.c
 	encoders/encoder.c encoders/encoder_jpeg.c encoders/encoder_png.c
@@ -85,7 +85,13 @@ if(APPLE AND STATIC_LIBCXX_LIBS)
 elseif(APPLE AND DYNAMIC_LIBCXX_LIBS)
 	target_link_libraries(img2 PRIVATE ${DYNAMIC_LIBCXX_LIBS})
 endif()
+target_link_libraries(img2 PRIVATE Threads::Threads)
 img2_apply_project_settings(img2)
+
+# [SM4] Format-string hardening for img2's own sources only (not vendors, not the CLI)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(img2 PRIVATE -Wformat=2 -Wformat-security -Werror=format-security)
+endif()
 
 # White-box tests and the (transitional) CLI see the internal headers and feature macros.
 # Never installed or exported.

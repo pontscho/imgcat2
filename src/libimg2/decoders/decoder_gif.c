@@ -16,6 +16,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 /** Maximum number of GIF frames to decode (prevents DoS) */
 #define MAX_GIF_FRAMES 200
@@ -105,7 +106,7 @@ static inline void gif_index_to_rgba(const ColorMapObject *color_map, int index,
 image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_gif\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_gif");
 		return NULL;
 	}
 
@@ -122,20 +123,20 @@ image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
 	int error_code;
 	GifFileType *gif = DGifOpen(&reader, gif_read_func, &error_code);
 	if (gif == NULL) {
-		fprintf(stderr, "Error: Failed to open GIF: %s\n", GifErrorString(error_code));
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to open GIF: %s", GifErrorString(error_code));
 		return NULL;
 	}
 
 	// Read GIF structure
 	if (DGifSlurp(gif) != GIF_OK) {
-		fprintf(stderr, "Error: Failed to read GIF structure: %s\n", GifErrorString(gif->Error));
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to read GIF structure: %s", GifErrorString(gif->Error));
 		DGifCloseFile(gif, &error_code);
 		return NULL;
 	}
 
 	// Check if GIF has at least one frame
 	if (gif->ImageCount == 0) {
-		fprintf(stderr, "Error: GIF has no images\n");
+		img2_log(IMG2_LOG_ERROR, "Error: GIF has no images");
 		DGifCloseFile(gif, &error_code);
 		return NULL;
 	}
@@ -150,7 +151,7 @@ image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
 	}
 
 	if (color_map == NULL) {
-		fprintf(stderr, "Error: GIF has no color map\n");
+		img2_log(IMG2_LOG_ERROR, "Error: GIF has no color map");
 		DGifCloseFile(gif, &error_code);
 		return NULL;
 	}
@@ -171,7 +172,7 @@ image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
 	// Create image_t structure
 	image_t *img = image_create(width, height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		DGifCloseFile(gif, &error_code);
 		return NULL;
 	}
@@ -193,7 +194,7 @@ image_t **decode_gif(const uint8_t *data, size_t len, int *frame_count)
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}
@@ -273,7 +274,7 @@ static void frame_composition(image_t *accumulator, const GifByteType *raster, c
 image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_gif_animated\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_gif_animated");
 		return NULL;
 	}
 
@@ -290,13 +291,13 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	int error_code;
 	GifFileType *gif = DGifOpen(&reader, gif_read_func, &error_code);
 	if (gif == NULL) {
-		fprintf(stderr, "Error: Failed to open GIF: %s\n", GifErrorString(error_code));
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to open GIF: %s", GifErrorString(error_code));
 		return NULL;
 	}
 
 	// Read GIF structure
 	if (DGifSlurp(gif) != GIF_OK) {
-		fprintf(stderr, "Error: Failed to read GIF structure: %s\n", GifErrorString(gif->Error));
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to read GIF structure: %s", GifErrorString(gif->Error));
 		DGifCloseFile(gif, &error_code);
 		return NULL;
 	}
@@ -304,13 +305,13 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	// Check frame count
 	int num_frames = gif->ImageCount;
 	if (num_frames == 0) {
-		fprintf(stderr, "Error: GIF has no images\n");
+		img2_log(IMG2_LOG_ERROR, "Error: GIF has no images");
 		DGifCloseFile(gif, &error_code);
 		return NULL;
 	}
 
 	if (num_frames > MAX_GIF_FRAMES) {
-		fprintf(stderr, "Warning: GIF has %d frames, limiting to %d\n", num_frames, MAX_GIF_FRAMES);
+		img2_log(IMG2_LOG_WARN, "Warning: GIF has %d frames, limiting to %d", num_frames, MAX_GIF_FRAMES);
 		num_frames = MAX_GIF_FRAMES;
 	}
 
@@ -321,7 +322,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	// Allocate frames array
 	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		DGifCloseFile(gif, &error_code);
 		return NULL;
 	}
@@ -334,7 +335,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 	// Create accumulator canvas for frame composition
 	image_t *accumulator = image_create(canvas_width, canvas_height);
 	if (accumulator == NULL) {
-		fprintf(stderr, "Error: Failed to create accumulator canvas\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
 		free(frames);
 		DGifCloseFile(gif, &error_code);
 		return NULL;
@@ -355,7 +356,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 		}
 
 		if (color_map == NULL) {
-			fprintf(stderr, "Error: Frame %d has no color map\n", frame_idx);
+			img2_log(IMG2_LOG_ERROR, "Error: Frame %d has no color map", frame_idx);
 			goto cleanup_error;
 		}
 
@@ -375,7 +376,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 		if (disposal_mode == DISPOSE_PREVIOUS && previous == NULL) {
 			previous = image_create(canvas_width, canvas_height);
 			if (previous == NULL) {
-				fprintf(stderr, "Error: Failed to create previous frame backup\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to create previous frame backup");
 				goto cleanup_error;
 			}
 		}
@@ -396,7 +397,7 @@ image_t **decode_gif_animated(const uint8_t *data, size_t len, int *frame_count)
 		// Copy composed frame to output
 		frames[frame_idx] = image_create(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
-			fprintf(stderr, "Error: Failed to create output frame %d\n", frame_idx);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", frame_idx);
 			goto cleanup_error;
 		}
 

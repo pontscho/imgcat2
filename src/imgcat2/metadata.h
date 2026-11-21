@@ -93,14 +93,4 @@ void output_exif_json(const struct exif_info_t *exif, bool first);
 void output_xmp_json(const struct xmp_info_t *xmp, bool first);
 #endif
 
-/**
- * @brief Get MIME type string (e.g., "image/png")
- *
- * Converts mime_type_t enum to standard MIME type string.
- *
- * @param mime MIME type enum
- * @return MIME type string (e.g., "image/png", "image/jpeg")
- */
-const char *get_mime_string(mime_type_t mime);
-
 #endif /* IMGCAT2_METADATA_H */

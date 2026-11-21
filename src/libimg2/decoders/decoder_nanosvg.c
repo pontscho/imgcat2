@@ -17,6 +17,7 @@
 
 #include "../text/font_manager.h"
 #include "decoder.h"
+#include "../core/log.h"
 
 /* NanoSVG implementation */
 #define NANOSVG_IMPLEMENTATION
@@ -236,7 +237,7 @@ static char *inline_svg_styles(const char *svg_data)
 image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_svg_nanosvg\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_svg_nanosvg");
 		return NULL;
 	}
 
@@ -247,7 +248,7 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	// nanosvg requires a modifiable buffer (it modifies during parsing)
 	char *svg_copy = (char *)malloc(len + 1);
 	if (svg_copy == NULL) {
-		fprintf(stderr, "Error: Failed to allocate SVG copy buffer\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate SVG copy buffer");
 		return NULL;
 	}
 	memcpy(svg_copy, data, len);
@@ -257,7 +258,7 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	char *svg_processed = inline_svg_styles(svg_copy);
 	free(svg_copy);
 	if (svg_processed == NULL) {
-		fprintf(stderr, "Error: Failed to process SVG styles\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to process SVG styles");
 		return NULL;
 	}
 
@@ -274,7 +275,7 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	free(svg_processed);
 
 	if (svg_image == NULL) {
-		fprintf(stderr, "Error: Failed to parse SVG image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to parse SVG image");
 		return NULL;
 	}
 
@@ -288,18 +289,18 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 		// No dimensions specified, use default 512x512
 		width = 512;
 		height = 512;
-		fprintf(stderr, "Warning: SVG has no explicit dimensions, using default 512x512\n");
+		img2_log(IMG2_LOG_WARN, "Warning: SVG has no explicit dimensions, using default 512x512");
 	}
 
 	// Validate dimensions
 	if (width == 0 || height == 0) {
-		fprintf(stderr, "Error: Invalid SVG dimensions: %ux%u\n", width, height);
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid SVG dimensions: %ux%u", width, height);
 		nsvgDelete(svg_image);
 		return NULL;
 	}
 
 	if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
-		fprintf(stderr, "Error: SVG dimensions exceed maximum (%u): %ux%u\n", IMAGE_MAX_DIMENSION, width, height);
+		img2_log(IMG2_LOG_ERROR, "Error: SVG dimensions exceed maximum (%u): %ux%u", IMAGE_MAX_DIMENSION, width, height);
 		nsvgDelete(svg_image);
 		return NULL;
 	}
@@ -307,7 +308,7 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	// Check pixel count limit
 	uint64_t pixel_count = (uint64_t)width * (uint64_t)height;
 	if (pixel_count > IMAGE_MAX_PIXELS) {
-		fprintf(stderr, "Error: SVG pixel count exceeds maximum (%lu): %llu\n", (unsigned long)IMAGE_MAX_PIXELS, (unsigned long long)pixel_count);
+		img2_log(IMG2_LOG_ERROR, "Error: SVG pixel count exceeds maximum (%lu): %llu", (unsigned long)IMAGE_MAX_PIXELS, (unsigned long long)pixel_count);
 		nsvgDelete(svg_image);
 		return NULL;
 	}
@@ -315,7 +316,7 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	// Create rasterizer
 	NSVGrasterizer *rast = nsvgCreateRasterizer();
 	if (rast == NULL) {
-		fprintf(stderr, "Error: Failed to create SVG rasterizer\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create SVG rasterizer");
 		nsvgDelete(svg_image);
 		return NULL;
 	}
@@ -323,7 +324,7 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	// Create image_t structure
 	image_t *output = image_create(width, height);
 	if (output == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		nsvgDeleteRasterizer(rast);
 		nsvgDelete(svg_image);
 		return NULL;
@@ -340,7 +341,7 @@ image_t **decode_svg_nanosvg(const uint8_t *data, size_t len, int *frame_count)
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(output);
 		return NULL;
 	}

@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "decoder.h"
+#include "../core/log.h"
 
 #ifdef HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
@@ -481,7 +482,7 @@ static void apng_composite_frame(image_t *accumulator, uint8_t *frame_pixels, ui
 static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_png_animated\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png_animated");
 		return NULL;
 	}
 
@@ -497,20 +498,20 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 	/* Create PNG read structures */
 	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 	if (png_ptr == NULL) {
-		fprintf(stderr, "Error: Failed to create PNG read struct\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG read struct");
 		return NULL;
 	}
 
 	png_infop info_ptr = png_create_info_struct(png_ptr);
 	if (info_ptr == NULL) {
-		fprintf(stderr, "Error: Failed to create PNG info struct\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG info struct");
 		png_destroy_read_struct(&png_ptr, NULL, NULL);
 		return NULL;
 	}
 
 	/* Set up error handling */
 	if (setjmp(png_jmpbuf(png_ptr))) {
-		fprintf(stderr, "Error: PNG decoding error\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PNG decoding error");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
@@ -525,19 +526,19 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 	png_uint_32 num_frames = 0;
 	png_uint_32 num_plays = 0;
 	if (png_get_acTL(png_ptr, info_ptr, &num_frames, &num_plays) == 0) {
-		fprintf(stderr, "Error: PNG does not contain acTL chunk (not an APNG)\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PNG does not contain acTL chunk (not an APNG)");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
 
 	/* Apply frame limit (DoS protection) */
 	if (num_frames > MAX_PNG_FRAMES) {
-		fprintf(stderr, "Warning: PNG has %u frames, limiting to %d\n", num_frames, MAX_PNG_FRAMES);
+		img2_log(IMG2_LOG_WARN, "Warning: PNG has %u frames, limiting to %d", num_frames, MAX_PNG_FRAMES);
 		num_frames = MAX_PNG_FRAMES;
 	}
 
 	if (num_frames == 0) {
-		fprintf(stderr, "Error: APNG has no frames\n");
+		img2_log(IMG2_LOG_ERROR, "Error: APNG has no frames");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
@@ -569,7 +570,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 	/* Allocate frames array */
 	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
@@ -582,7 +583,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 	/* Create accumulator canvas for frame composition */
 	image_t *accumulator = image_create(canvas_width, canvas_height);
 	if (accumulator == NULL) {
-		fprintf(stderr, "Error: Failed to create accumulator canvas\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
 		free(frames);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
@@ -615,7 +616,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 
 		/* Validate frame dimensions and offsets */
 		if (x_offset + frame_width > canvas_width || y_offset + frame_height > canvas_height) {
-			fprintf(stderr, "Error: Frame %u dimensions exceed canvas bounds\n", frame_idx);
+			img2_log(IMG2_LOG_ERROR, "Error: Frame %u dimensions exceed canvas bounds", frame_idx);
 			goto cleanup_error;
 		}
 
@@ -623,7 +624,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 		if (dispose_op == PNG_DISPOSE_OP_PREVIOUS && previous == NULL) {
 			previous = image_create(canvas_width, canvas_height);
 			if (previous == NULL) {
-				fprintf(stderr, "Error: Failed to create previous frame backup\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to create previous frame backup");
 				goto cleanup_error;
 			}
 		}
@@ -635,14 +636,14 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 		/* Allocate row pointers for frame */
 		png_bytep *row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * frame_height);
 		if (row_pointers == NULL) {
-			fprintf(stderr, "Error: Failed to allocate row pointers\n");
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
 			goto cleanup_error;
 		}
 
 		/* Allocate frame buffer */
 		uint8_t *frame_buffer = (uint8_t *)malloc(frame_width * frame_height * 4);
 		if (frame_buffer == NULL) {
-			fprintf(stderr, "Error: Failed to allocate frame buffer\n");
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frame buffer");
 			free(row_pointers);
 			goto cleanup_error;
 		}
@@ -661,7 +662,7 @@ static image_t **decode_png_animated(const uint8_t *data, size_t len, int *frame
 		/* Copy accumulator to output frame */
 		frames[frame_idx] = image_create(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
-			fprintf(stderr, "Error: Failed to create output frame %u\n", frame_idx);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %u", frame_idx);
 			free(frame_buffer);
 			free(row_pointers);
 			goto cleanup_error;
@@ -800,7 +801,7 @@ static void png_static_warning_fn(png_structp png_ptr, png_const_charp message)
 static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_png\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png");
 		return NULL;
 	}
 
@@ -819,13 +820,13 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	// Create PNG read structures (warnings silenced, errors recorded)
 	png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, &error_ctx, png_static_error_fn, png_static_warning_fn);
 	if (png_ptr == NULL) {
-		fprintf(stderr, "Error: Failed to create PNG read struct\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG read struct");
 		return NULL;
 	}
 
 	png_infop info_ptr = png_create_info_struct(png_ptr);
 	if (info_ptr == NULL) {
-		fprintf(stderr, "Error: Failed to create PNG info struct\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG info struct");
 		png_destroy_read_struct(&png_ptr, NULL, NULL);
 		return NULL;
 	}
@@ -836,7 +837,7 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 
 	// Set up error handling
 	if (setjmp(png_jmpbuf(png_ptr))) {
-		fprintf(stderr, "Error: libpng failed to decode PNG: %s\n", error_ctx.message);
+		img2_log(IMG2_LOG_ERROR, "Error: libpng failed to decode PNG: %s", error_ctx.message);
 		free(row_pointers);
 		image_destroy(img);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -883,14 +884,14 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	// Create image_t structure and decode straight into its pixel buffer
 	img = image_create(width, height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
 	}
 
 	row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
 	if (row_pointers == NULL) {
-		fprintf(stderr, "Error: Failed to allocate row pointers\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
 		image_destroy(img);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return NULL;
@@ -934,7 +935,7 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 	// Allocate frames array (single frame for PNG)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}
@@ -963,7 +964,7 @@ static image_t **decode_png_static(const uint8_t *data, size_t len, int *frame_c
 image_t **decode_png(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_png\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_png");
 		return NULL;
 	}
 

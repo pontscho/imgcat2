@@ -2971,7 +2971,7 @@ static void nsvg__renderTextToPath(NSVGparser* p, const char* text)
 
 	font_t* font = font_manager_load(p->textFamily, weight, style);
 	if (!font) {
-		fprintf(stderr, "Warning: Failed to load font '%s', skipping text\n", p->textFamily);
+		img2_log(IMG2_LOG_WARN, "Warning: Failed to load font '%s', skipping text", p->textFamily);
 		return;
 	}
 
@@ -2980,7 +2980,7 @@ static void nsvg__renderTextToPath(NSVGparser* p, const char* text)
 	const uint8_t* font_data = font_get_data(font, &font_size);
 	stbtt_fontinfo stbtt_font;
 	if (!stbtt_InitFont(&stbtt_font, font_data, 0)) {
-		fprintf(stderr, "Error: stbtt_InitFont failed\n");
+		img2_log(IMG2_LOG_ERROR, "Error: stbtt_InitFont failed");
 		return;
 	}
 

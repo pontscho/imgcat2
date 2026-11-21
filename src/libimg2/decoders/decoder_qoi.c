@@ -20,6 +20,7 @@
 #define QOI_IMPLEMENTATION
 #define QOI_NO_STDIO
 #include "qoi.h"
+#include "../core/log.h"
 
 /**
  * @brief Decode QOI image (single frame)
@@ -37,7 +38,7 @@
 static image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_qoi_static\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_qoi_static");
 		return NULL;
 	}
 
@@ -48,14 +49,14 @@ static image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_c
 	qoi_desc desc;
 	void *pixels = qoi_decode(data, (int)len, &desc, 4); // 4 = RGBA
 	if (pixels == NULL) {
-		fprintf(stderr, "Error: Failed to decode QOI image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to decode QOI image");
 		return NULL;
 	}
 
 	// Create image_t structure
 	image_t *output = image_create((uint32_t)desc.width, (uint32_t)desc.height);
 	if (output == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		free(pixels);
 		return NULL;
 	}
@@ -70,7 +71,7 @@ static image_t **decode_qoi_static(const uint8_t *data, size_t len, int *frame_c
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(output);
 		return NULL;
 	}

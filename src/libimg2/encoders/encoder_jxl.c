@@ -15,6 +15,7 @@
 /* clang-format on */
 
 #include "encoder.h"
+#include "../core/log.h"
 
 /**
  * @brief Encode RGBA image to JXL format
@@ -37,7 +38,7 @@
 int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to encode_jxl\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_jxl");
 		return -1;
 	}
 
@@ -66,14 +67,14 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	/* Create encoder */
 	JxlEncoder *encoder = JxlEncoderCreate(NULL);
 	if (encoder == NULL) {
-		fprintf(stderr, "Error: Failed to create JXL encoder\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL encoder");
 		return -1;
 	}
 
 	/* Get frame settings */
 	JxlEncoderFrameSettings *settings = JxlEncoderFrameSettingsCreate(encoder, NULL);
 	if (settings == NULL) {
-		fprintf(stderr, "Error: Failed to create JXL frame settings\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL frame settings");
 		JxlEncoderDestroy(encoder);
 		return -1;
 	}
@@ -95,7 +96,7 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	basic_info.alpha_premultiplied = JXL_FALSE;
 
 	if (JxlEncoderSetBasicInfo(encoder, &basic_info) != JXL_ENC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to set JXL basic info\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL basic info");
 		JxlEncoderDestroy(encoder);
 		return -1;
 	}
@@ -104,7 +105,7 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	JxlColorEncoding color_encoding;
 	JxlColorEncodingSetToSRGB(&color_encoding, JXL_FALSE);
 	if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to set JXL color encoding\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL color encoding");
 		JxlEncoderDestroy(encoder);
 		return -1;
 	}
@@ -112,13 +113,13 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	/* Set lossless or distance */
 	if (use_lossless) {
 		if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
-			fprintf(stderr, "Error: Failed to set JXL lossless mode\n");
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL lossless mode");
 			JxlEncoderDestroy(encoder);
 			return -1;
 		}
 	} else {
 		if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
-			fprintf(stderr, "Error: Failed to set JXL frame distance\n");
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL frame distance");
 			JxlEncoderDestroy(encoder);
 			return -1;
 		}
@@ -134,7 +135,7 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	/* Add image frame */
 	size_t pixel_size = (size_t)img->width * (size_t)img->height * 4;
 	if (JxlEncoderAddImageFrame(settings, &format, img->pixels, pixel_size) != JXL_ENC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to add JXL image frame\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to add JXL image frame");
 		JxlEncoderDestroy(encoder);
 		return -1;
 	}
@@ -146,7 +147,7 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	size_t buffer_capacity = 65536; /* Initial buffer: 64KB */
 	uint8_t *buffer = (uint8_t *)malloc(buffer_capacity);
 	if (buffer == NULL) {
-		fprintf(stderr, "Error: Failed to allocate JXL output buffer\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JXL output buffer");
 		JxlEncoderDestroy(encoder);
 		return -1;
 	}
@@ -166,7 +167,7 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 			size_t new_capacity = buffer_capacity * 2;
 			uint8_t *new_buffer = (uint8_t *)realloc(buffer, new_capacity);
 			if (new_buffer == NULL) {
-				fprintf(stderr, "Error: Failed to reallocate JXL output buffer\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to reallocate JXL output buffer");
 				free(buffer);
 				JxlEncoderDestroy(encoder);
 				return -1;
@@ -182,7 +183,7 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 			break;
 		} else {
 			/* Error occurred */
-			fprintf(stderr, "Error: JXL encoder failed during processing\n");
+			img2_log(IMG2_LOG_ERROR, "Error: JXL encoder failed during processing");
 			free(buffer);
 			JxlEncoderDestroy(encoder);
 			return -1;
@@ -194,14 +195,14 @@ int encode_jxl(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 
 	/* Allocate and copy output data */
 	if (buffer_size == 0) {
-		fprintf(stderr, "Error: JXL encoder produced no output\n");
+		img2_log(IMG2_LOG_ERROR, "Error: JXL encoder produced no output");
 		free(buffer);
 		return -1;
 	}
 
 	*out_data = (uint8_t *)malloc(buffer_size);
 	if (*out_data == NULL) {
-		fprintf(stderr, "Error: Failed to allocate output buffer (%zu bytes)\n", buffer_size);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%zu bytes)", buffer_size);
 		free(buffer);
 		return -1;
 	}

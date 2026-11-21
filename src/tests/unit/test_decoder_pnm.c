@@ -383,7 +383,7 @@ CTEST(decoder_pnm, huge_dimensions)
  */
 CTEST(decoder_pnm, decode_through_registry)
 {
-	decoder_registry_init(NULL);
+	decoder_registry_init();
 
 	const decoder_t *decoder = decoder_find_by_mime(MIME_PNM);
 	ASSERT_NOT_NULL(decoder);

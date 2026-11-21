@@ -15,6 +15,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 /* ICO directory structures */
 #pragma pack(push, 1)
@@ -375,7 +376,7 @@ static image_t *decode_dib(const uint8_t *data, size_t len)
 	// Parse BMP header
 	bmp_info_header_t header;
 	if (!parse_bmp_header(data, len, &header)) {
-		fprintf(stderr, "Error: Failed to parse BMP header\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to parse BMP header");
 		return NULL;
 	}
 
@@ -404,7 +405,7 @@ static image_t *decode_dib(const uint8_t *data, size_t len)
 	size_t palette_offset = 40;
 	size_t palette_bytes = palette_size * 4;
 	if (palette_offset + palette_bytes > len) {
-		fprintf(stderr, "Error: Invalid palette size\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid palette size");
 		return NULL;
 	}
 
@@ -418,7 +419,7 @@ static image_t *decode_dib(const uint8_t *data, size_t len)
 	size_t pixel_bytes = (size_t)row_stride * height;
 
 	if (pixel_offset + pixel_bytes > len) {
-		fprintf(stderr, "Error: Invalid pixel data size\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid pixel data size");
 		return NULL;
 	}
 
@@ -427,7 +428,7 @@ static image_t *decode_dib(const uint8_t *data, size_t len)
 	// Create output image
 	image_t *img = image_create(width, height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image");
 		return NULL;
 	}
 
@@ -439,7 +440,7 @@ static image_t *decode_dib(const uint8_t *data, size_t len)
 		case 4: decode_dib_4bit(img, pixels, palette, palette_size, width, height, row_stride); break;
 		case 1: decode_dib_1bit(img, pixels, palette, palette_size, width, height, row_stride); break;
 		default:
-			fprintf(stderr, "Error: Unsupported bit depth: %u\n", header.bit_count);
+			img2_log(IMG2_LOG_ERROR, "Error: Unsupported bit depth: %u", header.bit_count);
 			image_destroy(img);
 			return NULL;
 	}
@@ -502,7 +503,7 @@ static image_t *decode_ico_entry(const uint8_t *data, size_t len, bool is_cursor
 image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_ico\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_ico");
 		return NULL;
 	}
 
@@ -511,7 +512,7 @@ image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count)
 
 	// Validate minimum size (6 byte header + 16 byte entry)
 	if (len < 22) {
-		fprintf(stderr, "Error: ICO file too small\n");
+		img2_log(IMG2_LOG_ERROR, "Error: ICO file too small");
 		return NULL;
 	}
 
@@ -521,22 +522,22 @@ image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count)
 
 	// Validate header
 	if (header.reserved != 0) {
-		fprintf(stderr, "Error: Invalid ICO reserved field\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO reserved field");
 		return NULL;
 	}
 	if (header.type != 1 && header.type != 2) {
-		fprintf(stderr, "Error: Invalid ICO type field\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO type field");
 		return NULL;
 	}
 	if (header.count == 0 || header.count > 255) {
-		fprintf(stderr, "Error: Invalid ICO image count\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO image count");
 		return NULL;
 	}
 
 	// Validate entries array size
 	size_t entries_size = (size_t)header.count * sizeof(ico_dir_entry_t);
 	if (len < 6 + entries_size) {
-		fprintf(stderr, "Error: ICO file too small for entries\n");
+		img2_log(IMG2_LOG_ERROR, "Error: ICO file too small for entries");
 		return NULL;
 	}
 
@@ -549,11 +550,11 @@ image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count)
 	// Validate selected entry
 	const ico_dir_entry_t *entry = &entries[best_idx];
 	if (entry->image_offset >= len || entry->bytes_in_res == 0) {
-		fprintf(stderr, "Error: Invalid ICO entry offset or size\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO entry offset or size");
 		return NULL;
 	}
 	if (entry->image_offset + entry->bytes_in_res > len) {
-		fprintf(stderr, "Error: ICO entry extends beyond file\n");
+		img2_log(IMG2_LOG_ERROR, "Error: ICO entry extends beyond file");
 		return NULL;
 	}
 
@@ -564,14 +565,14 @@ image_t **decode_ico(const uint8_t *data, size_t len, int *frame_count)
 
 	image_t *img = decode_ico_entry(entry_data, entry_size, is_cursor);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to decode ICO entry\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to decode ICO entry");
 		return NULL;
 	}
 
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}

@@ -25,7 +25,7 @@
 CTEST(encoder, registry_init)
 {
 	/* Initialize registry */
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	/* Verify registry is populated */
 	ASSERT_NOT_NULL(g_encoder_registry);
@@ -74,7 +74,7 @@ CTEST(encoder, registry_init)
  */
 CTEST(encoder, find_by_format_jpeg)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 #ifdef HAVE_LIBJPEG
 	const encoder_t *encoder = encoder_find_by_format(FORMAT_JPEG);
@@ -97,7 +97,7 @@ CTEST(encoder, find_by_format_jpeg)
  */
 CTEST(encoder, find_by_format_png)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 #ifdef HAVE_LIBPNG
 	const encoder_t *encoder = encoder_find_by_format(FORMAT_PNG);
@@ -120,7 +120,7 @@ CTEST(encoder, find_by_format_png)
  */
 CTEST(encoder, find_by_format_none)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	/* FORMAT_NONE should always return NULL */
 	const encoder_t *encoder = encoder_find_by_format(FORMAT_NONE);
@@ -134,7 +134,7 @@ CTEST(encoder, find_by_format_none)
  */
 CTEST(encoder, encode_null_checks)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	uint8_t *out_data = NULL;
 	size_t out_size = 0;
@@ -172,15 +172,15 @@ CTEST(encoder, encode_null_checks)
 CTEST(encoder, registry_init_idempotent)
 {
 	/* Initialize multiple times */
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 	const encoder_t *first_registry = g_encoder_registry;
 	size_t first_count = g_encoder_count;
 
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 	const encoder_t *second_registry = g_encoder_registry;
 	size_t second_count = g_encoder_count;
 
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 	const encoder_t *third_registry = g_encoder_registry;
 	size_t third_count = g_encoder_count;
 

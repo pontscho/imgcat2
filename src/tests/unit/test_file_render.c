@@ -65,7 +65,7 @@ static bool file_exists_with_content(const char *path, size_t *size_out)
 CTEST(file_render, null_inputs)
 {
 	/* Initialize encoder registry */
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	image_t *img = create_test_image(10, 10);
 	ASSERT_NOT_NULL(img);
@@ -103,7 +103,7 @@ CTEST(file_render, null_inputs)
  */
 CTEST(file_render, invalid_format)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	image_t *img = create_test_image(10, 10);
 	ASSERT_NOT_NULL(img);
@@ -127,7 +127,7 @@ CTEST(file_render, invalid_format)
  */
 CTEST(file_render, file_output)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	image_t *img = create_test_image(20, 20);
 	ASSERT_NOT_NULL(img);
@@ -179,7 +179,7 @@ CTEST(file_render, file_output)
  */
 CTEST(file_render, file_output_png)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	image_t *img = create_test_image(20, 20);
 	ASSERT_NOT_NULL(img);
@@ -233,7 +233,7 @@ CTEST(file_render, file_output_png)
  */
 CTEST(file_render, animated_warning)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	/* Create 3 test frames */
 	image_t *frame1 = create_test_image(10, 10);
@@ -275,7 +275,7 @@ CTEST(file_render, animated_warning)
  */
 CTEST(file_render, frame_index)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	/* Create 3 test frames with different colors */
 	image_t *frame1 = create_test_image(10, 10);
@@ -333,7 +333,7 @@ CTEST(file_render, frame_index)
  */
 CTEST(file_render, invalid_frame_index)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	image_t *frame1 = create_test_image(10, 10);
 	image_t *frame2 = create_test_image(10, 10);
@@ -394,7 +394,7 @@ static size_t render_to_temp_file(image_t *img, cli_options_t *opts, const char 
  */
 CTEST(file_render, heif_quality_option)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	image_t *img = create_test_image(64, 64);
 	ASSERT_NOT_NULL(img);
@@ -424,7 +424,7 @@ CTEST(file_render, heif_quality_option)
  */
 CTEST(file_render, webp_quality_option)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	image_t *img = create_test_image(64, 64);
 	ASSERT_NOT_NULL(img);
@@ -454,7 +454,7 @@ CTEST(file_render, webp_quality_option)
  */
 CTEST(file_render, jxl_quality_option)
 {
-	encoder_registry_init(NULL);
+	encoder_registry_init();
 
 	image_t *img = create_test_image(64, 64);
 	ASSERT_NOT_NULL(img);

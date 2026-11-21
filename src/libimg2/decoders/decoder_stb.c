@@ -16,6 +16,7 @@
 #define STBI_NO_STDIO        /* We provide data buffer directly */
 #define STBI_FAILURE_USERMSG /* Use custom error messages */
 #include "stb_image.h"
+#include "../core/log.h"
 
 /**
  * @brief Decode image using stb_image (fallback decoder)
@@ -34,7 +35,7 @@
 image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_stb\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_stb");
 		return NULL;
 	}
 
@@ -45,13 +46,13 @@ image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count)
 	int width, height, channels;
 	uint8_t *pixels = stbi_load_from_memory(data, (int)len, &width, &height, &channels, 4);
 	if (pixels == NULL) {
-		fprintf(stderr, "Error: stb_image failed to decode: %s\n", stbi_failure_reason());
+		img2_log(IMG2_LOG_ERROR, "Error: stb_image failed to decode: %s", stbi_failure_reason());
 		return NULL;
 	}
 
 	// Validate dimensions
 	if (width <= 0 || height <= 0) {
-		fprintf(stderr, "Error: stb_image returned invalid dimensions: %dx%d\n", width, height);
+		img2_log(IMG2_LOG_ERROR, "Error: stb_image returned invalid dimensions: %dx%d", width, height);
 		stbi_image_free(pixels);
 		return NULL;
 	}
@@ -59,7 +60,7 @@ image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count)
 	// Create image_t structure
 	image_t *img = image_create((uint32_t)width, (uint32_t)height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		stbi_image_free(pixels);
 		return NULL;
 	}
@@ -74,7 +75,7 @@ image_t **decode_stb(const uint8_t *data, size_t len, int *frame_count)
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}
@@ -152,7 +153,7 @@ image_t **decode_psd(const uint8_t *data, size_t len, int *frame_count)
 image_t **decode_hdr(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_hdr\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_hdr");
 		return NULL;
 	}
 
@@ -163,13 +164,13 @@ image_t **decode_hdr(const uint8_t *data, size_t len, int *frame_count)
 	int width, height, channels;
 	float *pixels_float = stbi_loadf_from_memory(data, (int)len, &width, &height, &channels, 3);
 	if (pixels_float == NULL) {
-		fprintf(stderr, "Error: stb_image failed to decode HDR: %s\n", stbi_failure_reason());
+		img2_log(IMG2_LOG_ERROR, "Error: stb_image failed to decode HDR: %s", stbi_failure_reason());
 		return NULL;
 	}
 
 	// Validate dimensions
 	if (width <= 0 || height <= 0) {
-		fprintf(stderr, "Error: stb_image returned invalid dimensions: %dx%d\n", width, height);
+		img2_log(IMG2_LOG_ERROR, "Error: stb_image returned invalid dimensions: %dx%d", width, height);
 		stbi_image_free(pixels_float);
 		return NULL;
 	}
@@ -177,7 +178,7 @@ image_t **decode_hdr(const uint8_t *data, size_t len, int *frame_count)
 	// Create image_t structure
 	image_t *img = image_create((uint32_t)width, (uint32_t)height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		stbi_image_free(pixels_float);
 		return NULL;
 	}
@@ -228,7 +229,7 @@ image_t **decode_hdr(const uint8_t *data, size_t len, int *frame_count)
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}

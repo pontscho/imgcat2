@@ -16,6 +16,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 #ifdef HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
@@ -80,20 +81,20 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 	// Create decoder
 	JxlDecoder *dec = JxlDecoderCreate(NULL);
 	if (dec == NULL) {
-		fprintf(stderr, "Error: Failed to create JXL decoder\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL decoder");
 		return -1;
 	}
 
 	// Subscribe to events
 	if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_FRAME) != JXL_DEC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to subscribe to JXL decoder events\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to subscribe to JXL decoder events");
 		JxlDecoderDestroy(dec);
 		return -1;
 	}
 
 	// Set input data
 	if (JxlDecoderSetInput(dec, data, len) != JXL_DEC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to set JXL decoder input\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL decoder input");
 		JxlDecoderDestroy(dec);
 		return -1;
 	}
@@ -112,7 +113,7 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 			// Get basic info
 			JxlBasicInfo info;
 			if (JxlDecoderGetBasicInfo(dec, &info) != JXL_DEC_SUCCESS) {
-				fprintf(stderr, "Error: Failed to get JXL basic info\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to get JXL basic info");
 				JxlDecoderDestroy(dec);
 				return -1;
 			}
@@ -122,13 +123,13 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 
 			// Validate dimensions
 			if (*width > IMAGE_MAX_DIMENSION || *height > IMAGE_MAX_DIMENSION) {
-				fprintf(stderr, "Error: JXL dimensions exceed maximum: %ux%u\n", *width, *height);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", *width, *height);
 				JxlDecoderDestroy(dec);
 				return -1;
 			}
 
 			if (*width == 0 || *height == 0) {
-				fprintf(stderr, "Error: JXL has invalid dimensions: %ux%u\n", *width, *height);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL has invalid dimensions: %ux%u", *width, *height);
 				JxlDecoderDestroy(dec);
 				return -1;
 			}
@@ -140,7 +141,7 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 
 			// Enforce frame limit
 			if (frame_count > MAX_JXL_FRAMES) {
-				fprintf(stderr, "Error: JXL frame count exceeds maximum (%d)\n", MAX_JXL_FRAMES);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL frame count exceeds maximum (%d)", MAX_JXL_FRAMES);
 				JxlDecoderDestroy(dec);
 				return -1;
 			}
@@ -149,12 +150,12 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 			break;
 		} else if (status == JXL_DEC_ERROR) {
 			// Decoding error
-			fprintf(stderr, "Error: JXL decoder error\n");
+			img2_log(IMG2_LOG_ERROR, "Error: JXL decoder error");
 			JxlDecoderDestroy(dec);
 			return -1;
 		} else {
 			// Unexpected status
-			fprintf(stderr, "Error: Unexpected JXL decoder status: %d\n", status);
+			img2_log(IMG2_LOG_ERROR, "Error: Unexpected JXL decoder status: %d", status);
 			JxlDecoderDestroy(dec);
 			return -1;
 		}
@@ -164,7 +165,7 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 	JxlDecoderDestroy(dec);
 
 	if (!basic_info_received || frame_count == 0) {
-		fprintf(stderr, "Error: No frames found in JXL image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: No frames found in JXL image");
 		return -1;
 	}
 
@@ -175,7 +176,7 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_jxl_static\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl_static");
 		return NULL;
 	}
 
@@ -185,20 +186,20 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 	// Create decoder
 	JxlDecoder *dec = JxlDecoderCreate(NULL);
 	if (dec == NULL) {
-		fprintf(stderr, "Error: Failed to create JXL decoder\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL decoder");
 		return NULL;
 	}
 
 	// Subscribe to events (NEED_IMAGE_OUT_BUFFER is a status, not an event to subscribe to)
 	if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to subscribe to JXL decoder events\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to subscribe to JXL decoder events");
 		JxlDecoderDestroy(dec);
 		return NULL;
 	}
 
 	// Set input data
 	if (JxlDecoderSetInput(dec, data, len) != JXL_DEC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to set JXL decoder input\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL decoder input");
 		JxlDecoderDestroy(dec);
 		return NULL;
 	}
@@ -226,7 +227,7 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 			// Get dimensions
 			JxlBasicInfo info;
 			if (JxlDecoderGetBasicInfo(dec, &info) != JXL_DEC_SUCCESS) {
-				fprintf(stderr, "Error: Failed to get JXL basic info\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to get JXL basic info");
 				goto cleanup_error;
 			}
 
@@ -235,44 +236,44 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 
 			// Validate dimensions
 			if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
-				fprintf(stderr, "Error: JXL dimensions exceed maximum: %ux%u\n", width, height);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", width, height);
 				goto cleanup_error;
 			}
 
 			if (width == 0 || height == 0) {
-				fprintf(stderr, "Error: JXL has invalid dimensions: %ux%u\n", width, height);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL has invalid dimensions: %ux%u", width, height);
 				goto cleanup_error;
 			}
 
 			// Create image_t
 			output = image_create(width, height);
 			if (output == NULL) {
-				fprintf(stderr, "Error: Failed to create image_t structure\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
 			// Ensure we have basic info first
 			if (output == NULL) {
-				fprintf(stderr, "Error: JXL buffer requested before basic info\n");
+				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested before basic info");
 				goto cleanup_error;
 			}
 
 			// Query buffer size
 			size_t buffer_size;
 			if (JxlDecoderImageOutBufferSize(dec, &format, &buffer_size) != JXL_DEC_SUCCESS) {
-				fprintf(stderr, "Error: Failed to query JXL buffer size\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to query JXL buffer size");
 				goto cleanup_error;
 			}
 
 			// Verify buffer size matches our allocation
 			if (buffer_size != width * height * 4) {
-				fprintf(stderr, "Error: JXL buffer size mismatch: expected %zu, got %zu\n", (size_t)(width * height * 4), buffer_size);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch: expected %zu, got %zu", (size_t)(width * height * 4), buffer_size);
 				goto cleanup_error;
 			}
 
 			// Set output buffer
 			if (JxlDecoderSetImageOutBuffer(dec, &format, output->pixels, buffer_size) != JXL_DEC_SUCCESS) {
-				fprintf(stderr, "Error: Failed to set JXL output buffer\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL output buffer");
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_FULL_IMAGE) {
@@ -282,10 +283,10 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 			// All done
 			break;
 		} else if (status == JXL_DEC_ERROR) {
-			fprintf(stderr, "Error: JXL decoder error\n");
+			img2_log(IMG2_LOG_ERROR, "Error: JXL decoder error");
 			goto cleanup_error;
 		} else {
-			fprintf(stderr, "Error: Unexpected JXL decoder status: %d\n", status);
+			img2_log(IMG2_LOG_ERROR, "Error: Unexpected JXL decoder status: %d", status);
 			goto cleanup_error;
 		}
 	}
@@ -296,7 +297,7 @@ static image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_c
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(output);
 		return NULL;
 	}
@@ -317,7 +318,7 @@ cleanup_error:
 static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame_count, int num_frames)
 {
 	if (data == NULL || len == 0 || frame_count == NULL || num_frames <= 0) {
-		fprintf(stderr, "Error: Invalid parameters to decode_jxl_animated\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl_animated");
 		return NULL;
 	}
 
@@ -327,7 +328,7 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 	// Allocate frames array
 	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		return NULL;
 	}
 
@@ -339,14 +340,14 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 	// Create decoder
 	JxlDecoder *dec = JxlDecoderCreate(NULL);
 	if (dec == NULL) {
-		fprintf(stderr, "Error: Failed to create JXL decoder\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL decoder");
 		free(frames);
 		return NULL;
 	}
 
 	// Subscribe to events (NEED_IMAGE_OUT_BUFFER is a status, not an event to subscribe to)
 	if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_FRAME | JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to subscribe to JXL decoder events\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to subscribe to JXL decoder events");
 		JxlDecoderDestroy(dec);
 		free(frames);
 		return NULL;
@@ -354,7 +355,7 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 
 	// Set input data
 	if (JxlDecoderSetInput(dec, data, len) != JXL_DEC_SUCCESS) {
-		fprintf(stderr, "Error: Failed to set JXL decoder input\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL decoder input");
 		JxlDecoderDestroy(dec);
 		free(frames);
 		return NULL;
@@ -384,7 +385,7 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 			// Get dimensions (only once)
 			JxlBasicInfo info;
 			if (JxlDecoderGetBasicInfo(dec, &info) != JXL_DEC_SUCCESS) {
-				fprintf(stderr, "Error: Failed to get JXL basic info\n");
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to get JXL basic info");
 				goto cleanup_error;
 			}
 
@@ -393,12 +394,12 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 
 			// Validate dimensions
 			if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
-				fprintf(stderr, "Error: JXL dimensions exceed maximum: %ux%u\n", width, height);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", width, height);
 				goto cleanup_error;
 			}
 
 			if (width == 0 || height == 0) {
-				fprintf(stderr, "Error: JXL has invalid dimensions: %ux%u\n", width, height);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL has invalid dimensions: %ux%u", width, height);
 				goto cleanup_error;
 			}
 
@@ -406,39 +407,39 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 		} else if (status == JXL_DEC_FRAME) {
 			// Start of new frame
 			if (current_frame >= num_frames) {
-				fprintf(stderr, "Error: JXL frame count mismatch: expected %d, got more\n", num_frames);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL frame count mismatch: expected %d, got more", num_frames);
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
 			// Ensure we have basic info
 			if (!basic_info_received) {
-				fprintf(stderr, "Error: JXL buffer requested before basic info\n");
+				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested before basic info");
 				goto cleanup_error;
 			}
 
 			// Allocate image_t for current frame
 			frames[current_frame] = image_create(width, height);
 			if (frames[current_frame] == NULL) {
-				fprintf(stderr, "Error: Failed to create frame %d\n", current_frame);
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to create frame %d", current_frame);
 				goto cleanup_error;
 			}
 
 			// Query buffer size
 			size_t buffer_size;
 			if (JxlDecoderImageOutBufferSize(dec, &format, &buffer_size) != JXL_DEC_SUCCESS) {
-				fprintf(stderr, "Error: Failed to query JXL buffer size for frame %d\n", current_frame);
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to query JXL buffer size for frame %d", current_frame);
 				goto cleanup_error;
 			}
 
 			// Verify buffer size
 			if (buffer_size != width * height * 4) {
-				fprintf(stderr, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu\n", current_frame, (size_t)(width * height * 4), buffer_size);
+				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu", current_frame, (size_t)(width * height * 4), buffer_size);
 				goto cleanup_error;
 			}
 
 			// Set output buffer
 			if (JxlDecoderSetImageOutBuffer(dec, &format, frames[current_frame]->pixels, buffer_size) != JXL_DEC_SUCCESS) {
-				fprintf(stderr, "Error: Failed to set JXL output buffer for frame %d\n", current_frame);
+				img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL output buffer for frame %d", current_frame);
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_FULL_IMAGE) {
@@ -448,10 +449,10 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 			// All frames decoded
 			break;
 		} else if (status == JXL_DEC_ERROR) {
-			fprintf(stderr, "Error: JXL decoder error\n");
+			img2_log(IMG2_LOG_ERROR, "Error: JXL decoder error");
 			goto cleanup_error;
 		} else {
-			fprintf(stderr, "Error: Unexpected JXL decoder status: %d\n", status);
+			img2_log(IMG2_LOG_ERROR, "Error: Unexpected JXL decoder status: %d", status);
 			goto cleanup_error;
 		}
 	}
@@ -461,7 +462,7 @@ static image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *frame
 
 	// Verify we got all frames
 	if (current_frame != num_frames) {
-		fprintf(stderr, "Error: JXL frame count mismatch: expected %d, got %d\n", num_frames, current_frame);
+		img2_log(IMG2_LOG_ERROR, "Error: JXL frame count mismatch: expected %d, got %d", num_frames, current_frame);
 		// Cleanup allocated frames
 		for (int i = 0; i < num_frames; i++) {
 			if (frames[i] != NULL) {
@@ -606,7 +607,7 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, exif_info_t **
 image_t **decode_jxl(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_jxl\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_jxl");
 		return NULL;
 	}
 

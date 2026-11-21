@@ -16,6 +16,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 #ifdef HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
@@ -187,7 +188,7 @@ static bool tiff_is_multipage(const uint8_t *data, size_t len)
 static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_tiff_static\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_static");
 		return NULL;
 	}
 
@@ -197,7 +198,7 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 
 	TIFF *tif = TIFFClientOpen("memory", "r", (thandle_t)&mem, tiff_read_proc, tiff_write_proc, tiff_seek_proc, tiff_close_proc, tiff_size_proc, NULL, NULL);
 	if (tif == NULL) {
-		fprintf(stderr, "Error: Failed to open TIFF\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to open TIFF");
 		return NULL;
 	}
 
@@ -208,14 +209,14 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 	// Allocate raster buffer (ABGR format)
 	uint32_t *raster = (uint32_t *)_TIFFmalloc(width * height * sizeof(uint32_t));
 	if (raster == NULL) {
-		fprintf(stderr, "Error: Failed to allocate raster buffer\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate raster buffer");
 		TIFFClose(tif);
 		return NULL;
 	}
 
 	// Read RGBA image (libtiff handles all format conversions)
 	if (!TIFFReadRGBAImageOriented(tif, width, height, raster, ORIENTATION_TOPLEFT, 0)) {
-		fprintf(stderr, "Error: Failed to read TIFF image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to read TIFF image");
 		_TIFFfree(raster);
 		TIFFClose(tif);
 		return NULL;
@@ -224,7 +225,7 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 	// Create image_t
 	image_t *img = image_create(width, height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t");
 		_TIFFfree(raster);
 		TIFFClose(tif);
 		return NULL;
@@ -263,7 +264,7 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 	// Allocate frames array
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}
@@ -291,7 +292,7 @@ static image_t **decode_tiff_static(const uint8_t *data, size_t len, int *frame_
 static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_tiff_multipage\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_multipage");
 		return NULL;
 	}
 
@@ -301,13 +302,13 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 
 	TIFF *tif = TIFFClientOpen("memory", "r", (thandle_t)&mem, tiff_read_proc, tiff_write_proc, tiff_seek_proc, tiff_close_proc, tiff_size_proc, NULL, NULL);
 	if (tif == NULL) {
-		fprintf(stderr, "Error: Failed to open TIFF\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to open TIFF");
 		return NULL;
 	}
 
 	tdir_t num_dirs = TIFFNumberOfDirectories(tif);
 	if (num_dirs == 0) {
-		fprintf(stderr, "Error: TIFF has no pages\n");
+		img2_log(IMG2_LOG_ERROR, "Error: TIFF has no pages");
 		TIFFClose(tif);
 		return NULL;
 	}
@@ -315,14 +316,14 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 	// Enforce MAX_TIFF_FRAMES limit
 	int num_frames = (int)num_dirs;
 	if (num_frames > MAX_TIFF_FRAMES) {
-		fprintf(stderr, "Warning: TIFF has %d pages, limiting to %d\n", num_frames, MAX_TIFF_FRAMES);
+		img2_log(IMG2_LOG_WARN, "Warning: TIFF has %d pages, limiting to %d", num_frames, MAX_TIFF_FRAMES);
 		num_frames = MAX_TIFF_FRAMES;
 	}
 
 	// Allocate frames array
 	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		TIFFClose(tif);
 		return NULL;
 	}
@@ -335,7 +336,7 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 	// Decode each directory
 	for (int i = 0; i < num_frames; i++) {
 		if (!TIFFSetDirectory(tif, (tdir_t)i)) {
-			fprintf(stderr, "Error: Failed to set TIFF directory %d\n", i);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to set TIFF directory %d", i);
 			goto cleanup_error;
 		}
 
@@ -345,19 +346,19 @@ static image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int *fra
 
 		uint32_t *raster = (uint32_t *)_TIFFmalloc(width * height * sizeof(uint32_t));
 		if (raster == NULL) {
-			fprintf(stderr, "Error: Failed to allocate raster for page %d\n", i);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate raster for page %d", i);
 			goto cleanup_error;
 		}
 
 		if (!TIFFReadRGBAImageOriented(tif, width, height, raster, ORIENTATION_TOPLEFT, 0)) {
-			fprintf(stderr, "Error: Failed to read TIFF page %d\n", i);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to read TIFF page %d", i);
 			_TIFFfree(raster);
 			goto cleanup_error;
 		}
 
 		frames[i] = image_create(width, height);
 		if (frames[i] == NULL) {
-			fprintf(stderr, "Error: Failed to create image_t for page %d\n", i);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t for page %d", i);
 			_TIFFfree(raster);
 			goto cleanup_error;
 		}
@@ -429,7 +430,7 @@ cleanup_error:
 image_t **decode_tiff(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_tiff\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff");
 		return NULL;
 	}
 

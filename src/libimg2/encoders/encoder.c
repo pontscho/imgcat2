@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "encoder.h"
+#include "../core/log.h"
 
 /**
  * @brief Forward declarations for encoder functions
@@ -77,7 +78,7 @@ size_t g_encoder_count = 0;
  * Sets up the global registry pointers. This function is idempotent
  * and safe to call multiple times.
  */
-void encoder_registry_init(const cli_options_t *opts)
+void encoder_registry_init(void)
 {
 	if (g_encoder_registry != NULL) {
 		/* Already initialized */
@@ -87,11 +88,9 @@ void encoder_registry_init(const cli_options_t *opts)
 	g_encoder_registry = s_encoder_registry;
 	g_encoder_count = sizeof(s_encoder_registry) / sizeof(encoder_t);
 
-	if (opts != NULL && !opts->silent) {
-		fprintf(stderr, "Encoder registry initialized with %zu encoders:\n", g_encoder_count);
-		for (size_t i = 0; i < g_encoder_count; i++) {
-			fprintf(stderr, "  [%zu] %s (%s)\n", i, s_encoder_registry[i].name, s_encoder_registry[i].extension);
-		}
+	img2_log(IMG2_LOG_INFO, "Encoder registry initialized with %zu encoders:", g_encoder_count);
+	for (size_t i = 0; i < g_encoder_count; i++) {
+		img2_log(IMG2_LOG_INFO, "  [%zu] %s (%s)", i, s_encoder_registry[i].name, s_encoder_registry[i].extension);
 	}
 }
 
@@ -104,7 +103,7 @@ void encoder_registry_init(const cli_options_t *opts)
 const encoder_t *encoder_find_by_format(output_format_t format)
 {
 	if (g_encoder_registry == NULL) {
-		fprintf(stderr, "Error: Encoder registry not initialized (call encoder_registry_init())\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Encoder registry not initialized (call encoder_registry_init())");
 		return NULL;
 	}
 
@@ -117,7 +116,7 @@ const encoder_t *encoder_find_by_format(output_format_t format)
 
 	/* No encoder found */
 	const char *format_name = (format == FORMAT_JPEG) ? "JPEG" : (format == FORMAT_PNG) ? "PNG" : (format == FORMAT_HEIF) ? "HEIF" : (format == FORMAT_WEBP) ? "WebP" : (format == FORMAT_JXL) ? "JXL" : "UNKNOWN";
-	fprintf(stderr, "Error: No encoder found for format: %s\n", format_name);
+	img2_log(IMG2_LOG_ERROR, "Error: No encoder found for format: %s", format_name);
 	return NULL;
 }
 
@@ -130,7 +129,7 @@ int encoder_encode(const image_t *img, output_format_t format, int quality, uint
 {
 	/* Validate inputs */
 	if (img == NULL || out_data == NULL || out_size == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to encoder_encode\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encoder_encode");
 		return -1;
 	}
 
@@ -140,27 +139,27 @@ int encoder_encode(const image_t *img, output_format_t format, int quality, uint
 
 	/* Validate format */
 	if (format == FORMAT_NONE) {
-		fprintf(stderr, "Error: No output format specified\n");
+		img2_log(IMG2_LOG_ERROR, "Error: No output format specified");
 		return -1;
 	}
 
 	/* Find appropriate encoder */
 	const encoder_t *encoder = encoder_find_by_format(format);
 	if (encoder == NULL) {
-		fprintf(stderr, "Error: No encoder available for format\n");
+		img2_log(IMG2_LOG_ERROR, "Error: No encoder available for format");
 		return -1;
 	}
 
 	/* Call encoder function */
 	int result = encoder->encode(img, quality, out_data, out_size);
 	if (result != 0) {
-		fprintf(stderr, "Error: Encoder '%s' failed to encode image\n", encoder->name);
+		img2_log(IMG2_LOG_ERROR, "Error: Encoder '%s' failed to encode image", encoder->name);
 		return -1;
 	}
 
 	/* Validate output */
 	if (*out_data == NULL || *out_size == 0) {
-		fprintf(stderr, "Error: Encoder returned invalid output (data=%p, size=%zu)\n", (void *)*out_data, *out_size);
+		img2_log(IMG2_LOG_ERROR, "Error: Encoder returned invalid output (data=%p, size=%zu)", (void *)*out_data, *out_size);
 		if (*out_data != NULL) {
 			free(*out_data);
 			*out_data = NULL;

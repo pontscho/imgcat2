@@ -16,6 +16,7 @@
 /* clang-format on */
 
 #include "encoder.h"
+#include "../core/log.h"
 
 /**
  * @struct jpeg_error_mgr_extended
@@ -42,7 +43,7 @@ static void jpeg_error_exit(j_common_ptr cinfo)
 	/* Print error message */
 	char buffer[JMSG_LENGTH_MAX];
 	(*cinfo->err->format_message)(cinfo, buffer);
-	fprintf(stderr, "Error: libjpeg error: %s\n", buffer);
+	img2_log(IMG2_LOG_ERROR, "Error: libjpeg error: %s", buffer);
 
 	/* Jump back to encode_jpeg() */
 	longjmp(err->setjmp_buffer, 1);
@@ -66,7 +67,7 @@ static void jpeg_error_exit(j_common_ptr cinfo)
 int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to encode_jpeg\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_jpeg");
 		return -1;
 	}
 
@@ -132,7 +133,7 @@ int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	size_t row_stride = img->width * 3; /* RGB: 3 bytes per pixel */
 	uint8_t *row_buffer = (uint8_t *)malloc(row_stride);
 	if (row_buffer == NULL) {
-		fprintf(stderr, "Error: Failed to allocate JPEG row buffer\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JPEG row buffer");
 		jpeg_destroy_compress(&cinfo);
 		return -1;
 	}
@@ -157,7 +158,7 @@ int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out
 
 		/* Write scanline */
 		if (jpeg_write_scanlines(&cinfo, row_pointer, 1) != 1) {
-			fprintf(stderr, "Error: Failed to write JPEG scanline %u\n", y);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to write JPEG scanline %u", y);
 			free(row_buffer);
 			jpeg_destroy_compress(&cinfo);
 			return -1;
@@ -175,13 +176,13 @@ int encode_jpeg(const image_t *img, int quality, uint8_t **out_data, size_t *out
 
 	/* Allocate and copy output data */
 	if (jpeg_buffer == NULL || jpeg_size == 0) {
-		fprintf(stderr, "Error: JPEG encoder produced no output\n");
+		img2_log(IMG2_LOG_ERROR, "Error: JPEG encoder produced no output");
 		return -1;
 	}
 
 	*out_data = (uint8_t *)malloc(jpeg_size);
 	if (*out_data == NULL) {
-		fprintf(stderr, "Error: Failed to allocate output buffer (%lu bytes)\n", jpeg_size);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%lu bytes)", jpeg_size);
 		free(jpeg_buffer);
 		return -1;
 	}

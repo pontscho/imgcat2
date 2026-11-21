@@ -28,6 +28,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 /** Maximum valid maxval for Netpbm formats */
 #define PNM_MAXVAL_LIMIT 65535U
@@ -199,14 +200,14 @@ static bool pnm_parse_header(pnm_reader_t *r, pnm_header_t *hdr)
 	bool is_binary = (hdr->format >= '4');
 
 	if (!pnm_read_uint(r, &hdr->width) || !pnm_read_uint(r, &hdr->height)) {
-		fprintf(stderr, "Error: PNM: invalid width/height in header\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: invalid width/height in header");
 		return false;
 	}
 
 	if (is_bitmap) {
 		hdr->maxval = 1;
 	} else if (!pnm_read_uint(r, &hdr->maxval)) {
-		fprintf(stderr, "Error: PNM: invalid maxval in header\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: invalid maxval in header");
 		return false;
 	}
 
@@ -215,7 +216,7 @@ static bool pnm_parse_header(pnm_reader_t *r, pnm_header_t *hdr)
 	if (is_binary) {
 		// Exactly one whitespace byte separates the header from the raster
 		if (r->pos >= r->len || !pnm_is_space(r->data[r->pos])) {
-			fprintf(stderr, "Error: PNM: missing whitespace before raster data\n");
+			img2_log(IMG2_LOG_ERROR, "Error: PNM: missing whitespace before raster data");
 			return false;
 		}
 		r->pos++;
@@ -258,7 +259,7 @@ static bool pnm_parse_pam_header(pnm_reader_t *r, pnm_header_t *hdr)
 	for (;;) {
 		pnm_skip_space(r);
 		if (r->pos >= r->len) {
-			fprintf(stderr, "Error: PAM: header ended without ENDHDR\n");
+			img2_log(IMG2_LOG_ERROR, "Error: PAM: header ended without ENDHDR");
 			return false;
 		}
 
@@ -274,13 +275,13 @@ static bool pnm_parse_pam_header(pnm_reader_t *r, pnm_header_t *hdr)
 			// Rest of the ENDHDR line (normally empty) up to and including '\n'
 			while (r->pos < r->len && r->data[r->pos] != '\n') {
 				if (!pnm_is_space(r->data[r->pos])) {
-					fprintf(stderr, "Error: PAM: garbage after ENDHDR\n");
+					img2_log(IMG2_LOG_ERROR, "Error: PAM: garbage after ENDHDR");
 					return false;
 				}
 				r->pos++;
 			}
 			if (r->pos >= r->len) {
-				fprintf(stderr, "Error: PAM: missing newline after ENDHDR\n");
+				img2_log(IMG2_LOG_ERROR, "Error: PAM: missing newline after ENDHDR");
 				return false;
 			}
 			r->pos++;
@@ -288,25 +289,25 @@ static bool pnm_parse_pam_header(pnm_reader_t *r, pnm_header_t *hdr)
 		} else if (pnm_token_eq(tok, tok_len, "WIDTH")) {
 			have_width = pnm_read_uint(r, &hdr->width);
 			if (!have_width) {
-				fprintf(stderr, "Error: PAM: invalid WIDTH\n");
+				img2_log(IMG2_LOG_ERROR, "Error: PAM: invalid WIDTH");
 				return false;
 			}
 		} else if (pnm_token_eq(tok, tok_len, "HEIGHT")) {
 			have_height = pnm_read_uint(r, &hdr->height);
 			if (!have_height) {
-				fprintf(stderr, "Error: PAM: invalid HEIGHT\n");
+				img2_log(IMG2_LOG_ERROR, "Error: PAM: invalid HEIGHT");
 				return false;
 			}
 		} else if (pnm_token_eq(tok, tok_len, "DEPTH")) {
 			have_depth = pnm_read_uint(r, &depth);
 			if (!have_depth) {
-				fprintf(stderr, "Error: PAM: invalid DEPTH\n");
+				img2_log(IMG2_LOG_ERROR, "Error: PAM: invalid DEPTH");
 				return false;
 			}
 		} else if (pnm_token_eq(tok, tok_len, "MAXVAL")) {
 			have_maxval = pnm_read_uint(r, &hdr->maxval);
 			if (!have_maxval) {
-				fprintf(stderr, "Error: PAM: invalid MAXVAL\n");
+				img2_log(IMG2_LOG_ERROR, "Error: PAM: invalid MAXVAL");
 				return false;
 			}
 		} else if (pnm_token_eq(tok, tok_len, "TUPLTYPE")) {
@@ -323,18 +324,18 @@ static bool pnm_parse_pam_header(pnm_reader_t *r, pnm_header_t *hdr)
 				tupltype_len--;
 			}
 		} else {
-			fprintf(stderr, "Error: PAM: unrecognized header line\n");
+			img2_log(IMG2_LOG_ERROR, "Error: PAM: unrecognized header line");
 			return false;
 		}
 	}
 
 	if (!have_width || !have_height || !have_depth || !have_maxval) {
-		fprintf(stderr, "Error: PAM: header missing WIDTH, HEIGHT, DEPTH or MAXVAL\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PAM: header missing WIDTH, HEIGHT, DEPTH or MAXVAL");
 		return false;
 	}
 
 	if (depth < 1 || depth > 4) {
-		fprintf(stderr, "Error: PAM: unsupported DEPTH %u\n", depth);
+		img2_log(IMG2_LOG_ERROR, "Error: PAM: unsupported DEPTH %u", depth);
 		return false;
 	}
 
@@ -352,7 +353,7 @@ static bool pnm_parse_pam_header(pnm_reader_t *r, pnm_header_t *hdr)
 			expected = 4;
 		}
 		if (expected != 0 && expected != depth) {
-			fprintf(stderr, "Error: PAM: TUPLTYPE does not match DEPTH %u\n", depth);
+			img2_log(IMG2_LOG_ERROR, "Error: PAM: TUPLTYPE does not match DEPTH %u", depth);
 			return false;
 		}
 	}
@@ -482,7 +483,7 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 	*frame_count = 0;
 
 	if (len < 3 || data[0] != 'P' || data[1] < '1' || data[1] > '7') {
-		fprintf(stderr, "Error: Not a Netpbm (PNM/PAM) image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Not a Netpbm (PNM/PAM) image");
 		return NULL;
 	}
 
@@ -491,7 +492,7 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 
 	// Magic must be followed by whitespace (or a comment for P1-P6)
 	if (!pnm_is_space(data[2]) && !(hdr.format != '7' && data[2] == '#')) {
-		fprintf(stderr, "Error: Not a Netpbm (PNM/PAM) image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Not a Netpbm (PNM/PAM) image");
 		return NULL;
 	}
 
@@ -502,15 +503,15 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 
 	// Validate header values before any size arithmetic
 	if (hdr.width == 0 || hdr.height == 0) {
-		fprintf(stderr, "Error: PNM: invalid dimensions %ux%u\n", hdr.width, hdr.height);
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: invalid dimensions %ux%u", hdr.width, hdr.height);
 		return NULL;
 	}
 	if (hdr.width > IMAGE_MAX_DIMENSION || hdr.height > IMAGE_MAX_DIMENSION) {
-		fprintf(stderr, "Error: PNM: dimensions %ux%u exceed limit\n", hdr.width, hdr.height);
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: dimensions %ux%u exceed limit", hdr.width, hdr.height);
 		return NULL;
 	}
 	if (hdr.maxval < 1 || hdr.maxval > PNM_MAXVAL_LIMIT) {
-		fprintf(stderr, "Error: PNM: invalid maxval %u\n", hdr.maxval);
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: invalid maxval %u", hdr.maxval);
 		return NULL;
 	}
 
@@ -520,7 +521,7 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 	size_t pixel_count, needed;
 	size_t remaining = len - r.pos;
 	if (!pnm_mul_size(hdr.width, hdr.height, &pixel_count)) {
-		fprintf(stderr, "Error: PNM: image size overflow\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: image size overflow");
 		return NULL;
 	}
 
@@ -533,17 +534,17 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 		size_ok = pnm_mul_size(pixel_count, hdr.channels, &needed) && pnm_mul_size(needed, bps, &needed);
 	}
 	if (!size_ok) {
-		fprintf(stderr, "Error: PNM: image size overflow\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: image size overflow");
 		return NULL;
 	}
 	if (remaining < needed) {
-		fprintf(stderr, "Error: PNM: truncated raster data (need %zu bytes, have %zu)\n", needed, remaining);
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: truncated raster data (need %zu bytes, have %zu)", needed, remaining);
 		return NULL;
 	}
 
 	image_t *img = image_create(hdr.width, hdr.height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		return NULL;
 	}
 
@@ -564,14 +565,14 @@ image_t **decode_netpbm(const uint8_t *data, size_t len, int *frame_count)
 	}
 
 	if (!ok) {
-		fprintf(stderr, "Error: PNM: truncated or malformed raster data\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PNM: truncated or malformed raster data");
 		image_destroy(img);
 		return NULL;
 	}
 
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}

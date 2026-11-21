@@ -13,7 +13,6 @@
 #include <png.h>
 #include <stddef.h>
 
-#include "../../imgcat2/cli.h"
 #include "../core/image.h"
 #include "magic.h"
 #include "yuv.h"
@@ -39,6 +38,13 @@ typedef image_t **(*decode_func_t)(const uint8_t *data, size_t len, int *frame_c
  *
  * Represents a single image format decoder with metadata and function pointer.
  */
+typedef struct img2_decode_opts {
+	mime_type_t force_mime;          /* MIME_UNKNOWN = detect */
+	const yuv_params_t *yuv;         /* required for MIME_YUV */
+	int max_frames;                  /* <= 0: no extra limit (implemented in S6) */
+	int jpeg_deblock;                /* -1 default (jpegqs if built), 0 off, 1 on (implemented in S6) */
+} img2_decode_opts_t;
+
 typedef struct {
 	mime_type_t mime_type; /**< MIME type this decoder handles */
 	const char *name; /**< Human-readable format name (e.g., "PNG", "JPEG") */
@@ -73,11 +79,11 @@ extern size_t g_decoder_count;
  * 4. BMP, TGA, PSD, HDR: decode_stb (stb_image always available)
  * 5. PNM/PAM (P1-P7): decode_netpbm (native, always available)
  *
- * @param opts CLI options structure (currently unused, reserved for future use)
+ * Logs the registered decoders at IMG2_LOG_INFO.
  *
  * @note This function is idempotent (safe to call multiple times)
  */
-void decoder_registry_init(cli_options_t *opts);
+void decoder_registry_init(void);
 
 /**
  * @brief Find decoder by MIME type
@@ -108,11 +114,11 @@ const decoder_t *decoder_find_by_mime(mime_type_t mime);
  * 4. Validates output frames
  * 5. Returns decoded frames array
  *
- * @param opts CLI options structure (for logging verbosity)
+ * @param opts Decode options (may be NULL; required with yuv set for MIME_YUV)
  * @param data Raw image file data
  * @param len Length of data in bytes
  * @param mime Detected MIME type (from detect_mime_type()), or MIME_YUV for raw
- *             YUV input (requires opts->yuv_input; geometry taken from opts->yuv)
+ *             YUV input (requires opts->yuv; geometry taken from opts->yuv)
  * @param frame_count Output: number of frames decoded
  * @return Array of image_t* frames, or NULL on error
  *
@@ -134,7 +140,7 @@ const decoder_t *decoder_find_by_mime(mime_type_t mime);
  *     free(data);
  * }
  */
-image_t **decoder_decode(cli_options_t *opts, const uint8_t *data, size_t len, mime_type_t mime, int *frame_count);
+image_t **decoder_decode(const img2_decode_opts_t *opts, const uint8_t *data, size_t len, mime_type_t mime, int *frame_count);
 
 /**
  * @brief Free multi-frame decoder output

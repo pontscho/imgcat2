@@ -36,6 +36,7 @@ img2_add_test(test_file_render SOURCES unit/test_file_render.c LINK cli)
 img2_add_test(test_xml_parser SOURCES unit/test_xml_parser.c REQUIRES EXIF_READER)
 img2_add_test(test_exif_reader SOURCES unit/test_exif_reader.c REQUIRES EXIF_READER)
 img2_add_test(test_metadata_output SOURCES unit/test_metadata_output.c LINK cli REQUIRES EXIF_READER)
+img2_add_test(test_log SOURCES unit/test_log.c)
 
 # ============================================================================
 # INTEGRATION TESTS
@@ -74,3 +75,10 @@ img2_add_test(test_raw_orientation KIND integration SOURCES integration/test_raw
 img2_add_test(test_tiff_orientation KIND integration SOURCES integration/test_tiff_orientation.c REQUIRES TIFF)
 
 # unit/test_xml_simple.c is an orphan and stays unregistered.
+
+# ============================================================================
+# GUARDS
+# ============================================================================
+add_test(NAME img2_layering_lib COMMAND ${CMAKE_COMMAND} -DMODE=lib -DROOT=${PROJECT_SOURCE_DIR}
+	-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_layering.cmake)
+set_tests_properties(img2_layering_lib PROPERTIES LABELS guard)

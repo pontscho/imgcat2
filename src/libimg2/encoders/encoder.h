@@ -13,10 +13,20 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../imgcat2/cli.h"
 #include "../core/image.h"
 
-/* output_format_t is defined in cli.h */
+/**
+ * @enum output_format_t
+ * @brief Supported output image formats
+ */
+typedef enum {
+	FORMAT_NONE = 0, /**< No format selected */
+	FORMAT_JPEG, /**< JPEG format */
+	FORMAT_PNG, /**< PNG format */
+	FORMAT_HEIF, /**< HEIF format */
+	FORMAT_WEBP, /**< WebP format */
+	FORMAT_JXL, /**< JXL format */
+} output_format_t;
 
 /**
  * @typedef encode_func_t
@@ -71,11 +81,11 @@ extern size_t g_encoder_count;
  *
  * Must be called once at program startup before any encoding operations.
  *
- * @param opts CLI options structure (for logging verbosity)
+ * Logs the registered encoders at IMG2_LOG_INFO.
  *
  * @note This function is idempotent (safe to call multiple times)
  */
-void encoder_registry_init(const cli_options_t *opts);
+void encoder_registry_init(void);
 
 /**
  * @brief Find encoder by output format

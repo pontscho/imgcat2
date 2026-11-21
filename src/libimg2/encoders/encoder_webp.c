@@ -15,6 +15,7 @@
 /* clang-format on */
 
 #include "encoder.h"
+#include "../core/log.h"
 
 /**
  * @brief Encode RGBA image to WebP format
@@ -37,7 +38,7 @@
 int encode_webp(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to encode_webp\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_webp");
 		return -1;
 	}
 
@@ -67,14 +68,14 @@ int encode_webp(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	}
 
 	if (webp_size == 0 || webp_buffer == NULL) {
-		fprintf(stderr, "Error: Failed to encode WebP image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to encode WebP image");
 		return -1;
 	}
 
 	/* Allocate and copy output data */
 	*out_data = (uint8_t *)malloc(webp_size);
 	if (*out_data == NULL) {
-		fprintf(stderr, "Error: Failed to allocate output buffer (%zu bytes)\n", webp_size);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%zu bytes)", webp_size);
 		WebPFree(webp_buffer);
 		return -1;
 	}

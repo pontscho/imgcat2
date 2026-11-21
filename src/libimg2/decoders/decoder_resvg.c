@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "decoder.h"
+#include "../core/log.h"
 
 /**
  * @brief Decode SVG image using resvg (single frame)
@@ -34,7 +35,7 @@
 image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_svg_resvg\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_svg_resvg");
 		return NULL;
 	}
 
@@ -44,7 +45,7 @@ image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count)
 	// Create resvg options
 	resvg_options *opt = resvg_options_create();
 	if (opt == NULL) {
-		fprintf(stderr, "Error: Failed to create resvg options\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create resvg options");
 		return NULL;
 	}
 
@@ -53,7 +54,7 @@ image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count)
 	resvg_error err = resvg_parse_tree_from_data((const char *)data, len, opt, &tree);
 
 	if (err != RESVG_OK || tree == NULL) {
-		fprintf(stderr, "Error: resvg failed to parse SVG (error code: %d)\n", err);
+		img2_log(IMG2_LOG_ERROR, "Error: resvg failed to parse SVG (error code: %d)", err);
 		resvg_options_destroy(opt);
 		return NULL;
 	}
@@ -65,14 +66,14 @@ image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count)
 
 	// Validate dimensions
 	if (width == 0 || height == 0) {
-		fprintf(stderr, "Error: Invalid SVG dimensions: %ux%u\n", width, height);
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid SVG dimensions: %ux%u", width, height);
 		resvg_tree_destroy(tree);
 		resvg_options_destroy(opt);
 		return NULL;
 	}
 
 	if (width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION) {
-		fprintf(stderr, "Error: SVG dimensions exceed maximum (%u): %ux%u\n", IMAGE_MAX_DIMENSION, width, height);
+		img2_log(IMG2_LOG_ERROR, "Error: SVG dimensions exceed maximum (%u): %ux%u", IMAGE_MAX_DIMENSION, width, height);
 		resvg_tree_destroy(tree);
 		resvg_options_destroy(opt);
 		return NULL;
@@ -81,7 +82,7 @@ image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count)
 	// Check pixel count limit
 	uint64_t pixel_count = (uint64_t)width * (uint64_t)height;
 	if (pixel_count > IMAGE_MAX_PIXELS) {
-		fprintf(stderr, "Error: SVG pixel count exceeds maximum (%lu): %llu\n", (unsigned long)IMAGE_MAX_PIXELS, (unsigned long long)pixel_count);
+		img2_log(IMG2_LOG_ERROR, "Error: SVG pixel count exceeds maximum (%lu): %llu", (unsigned long)IMAGE_MAX_PIXELS, (unsigned long long)pixel_count);
 		resvg_tree_destroy(tree);
 		resvg_options_destroy(opt);
 		return NULL;
@@ -90,7 +91,7 @@ image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count)
 	// Create image_t structure
 	image_t *output = image_create(width, height);
 	if (output == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		resvg_tree_destroy(tree);
 		resvg_options_destroy(opt);
 		return NULL;
@@ -107,7 +108,7 @@ image_t **decode_svg_resvg(const uint8_t *data, size_t len, int *frame_count)
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(output);
 		return NULL;
 	}

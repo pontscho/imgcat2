@@ -46,6 +46,7 @@ static bool g_initialized = false;
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
+#include "../core/log.h"
 
 /**
  * @brief Platform-specific font search paths
@@ -566,7 +567,7 @@ static font_cache_entry_t *find_family_match(const char *family)
 font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t style)
 {
 	if (!g_initialized) {
-		fprintf(stderr, "Error: Font manager not initialized\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
 		return NULL;
 	}
 
@@ -600,7 +601,7 @@ font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t
 
 	/* Load font file if not already loaded */
 	if (!load_font_file(entry)) {
-		fprintf(stderr, "Warning: Failed to load font '%s', using fallback\n", family);
+		img2_log(IMG2_LOG_WARN, "Warning: Failed to load font '%s', using fallback", family);
 		return font_manager_load_fallback();
 	}
 
@@ -625,7 +626,7 @@ font_t *font_manager_load(const char *family, font_weight_t weight, font_style_t
 font_t *font_manager_load_fallback(void)
 {
 	if (!g_initialized || g_fallback_font == NULL) {
-		fprintf(stderr, "Error: Fallback font not available\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Fallback font not available");
 		return NULL;
 	}
 
@@ -683,7 +684,7 @@ static const char *style_to_string(font_style_t style)
 void font_manager_list_fonts(void)
 {
 	if (!g_initialized) {
-		fprintf(stderr, "Error: Font manager not initialized\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
 		return;
 	}
 

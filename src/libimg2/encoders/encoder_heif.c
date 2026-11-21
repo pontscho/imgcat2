@@ -15,6 +15,7 @@
 /* clang-format on */
 
 #include "encoder.h"
+#include "../core/log.h"
 
 /**
  * @brief HEIF memory write state structure
@@ -99,7 +100,7 @@ static struct heif_error heif_memory_write_func(struct heif_context *ctx, const 
 int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to encode_heif\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_heif");
 		return -1;
 	}
 
@@ -119,7 +120,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	/* Create HEIF context */
 	struct heif_context *ctx = heif_context_alloc();
 	if (ctx == NULL) {
-		fprintf(stderr, "Error: Failed to allocate HEIF context\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
 		return -1;
 	}
 
@@ -128,7 +129,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	struct heif_error err = heif_image_create(img->width, img->height, heif_colorspace_RGB, heif_chroma_interleaved_RGBA, &heif_img);
 
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to create HEIF image: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create HEIF image: %s", err.message);
 		heif_context_free(ctx);
 		return -1;
 	}
@@ -136,7 +137,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	/* Add image plane */
 	err = heif_image_add_plane(heif_img, heif_channel_interleaved, img->width, img->height, 8);
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to add HEIF image plane: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to add HEIF image plane: %s", err.message);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
 		return -1;
@@ -146,7 +147,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	int stride = 0;
 	uint8_t *plane = heif_image_get_plane(heif_img, heif_channel_interleaved, &stride);
 	if (plane == NULL) {
-		fprintf(stderr, "Error: Failed to get HEIF image plane\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to get HEIF image plane");
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
 		return -1;
@@ -163,7 +164,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	struct heif_encoder *encoder = NULL;
 	err = heif_context_get_encoder_for_format(ctx, heif_compression_HEVC, &encoder);
 	if (err.code != heif_error_Ok || encoder == NULL) {
-		fprintf(stderr, "Error: No HEVC encoder available: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: No HEVC encoder available: %s", err.message);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
 		return -1;
@@ -172,7 +173,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	/* Set quality */
 	err = heif_encoder_set_lossy_quality(encoder, heif_quality);
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to set HEIF quality: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set HEIF quality: %s", err.message);
 		heif_encoder_release(encoder);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
@@ -183,7 +184,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	struct heif_image_handle *handle = NULL;
 	err = heif_context_encode_image(ctx, heif_img, encoder, NULL, &handle);
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to encode HEIF image: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to encode HEIF image: %s", err.message);
 		heif_encoder_release(encoder);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
@@ -207,7 +208,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	/* Write to memory using our callback */
 	err = heif_context_write(ctx, &writer, &write_state);
 	if (err.code != heif_error_Ok) {
-		fprintf(stderr, "Error: Failed to write HEIF to memory: %s\n", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to write HEIF to memory: %s", err.message);
 		heif_image_handle_release(handle);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
@@ -224,7 +225,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 
 	/* Check output */
 	if (write_state.buffer == NULL || write_state.size == 0) {
-		fprintf(stderr, "Error: HEIF encoder produced no output\n");
+		img2_log(IMG2_LOG_ERROR, "Error: HEIF encoder produced no output");
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
 		}
@@ -234,7 +235,7 @@ int encode_heif(const image_t *img, int quality, uint8_t **out_data, size_t *out
 	/* Allocate and copy output data */
 	*out_data = (uint8_t *)malloc(write_state.size);
 	if (*out_data == NULL) {
-		fprintf(stderr, "Error: Failed to allocate output buffer (%zu bytes)\n", write_state.size);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%zu bytes)", write_state.size);
 		free(write_state.buffer);
 		return -1;
 	}

@@ -123,7 +123,7 @@ void print_version(void)
 	printf("Supported image formats:\n");
 
 	/* Initialize decoder registry to get the list of supported formats */
-	decoder_registry_init(NULL);
+	decoder_registry_init();
 
 	/* Print each supported format */
 	for (size_t i = 0; i < g_decoder_count; i++) {

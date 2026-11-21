@@ -684,17 +684,18 @@ CTEST(decoder_yuv, decoder_decode_requires_yuv_options)
 	memset(data, 16, sizeof(data));
 	int fc = 0;
 
-	decoder_registry_init(NULL);
+	decoder_registry_init();
 
 	/* No options: refused */
 	ASSERT_NULL(decoder_decode(NULL, data, sizeof(data), MIME_YUV, &fc));
 
-	cli_options_t opts = { .silent = true };
+	img2_decode_opts_t opts = { .force_mime = MIME_UNKNOWN, .yuv = NULL, .max_frames = 0, .jpeg_deblock = -1 };
 	ASSERT_NULL(decoder_decode(&opts, data, sizeof(data), MIME_YUV, &fc));
 
 	/* With --yuv geometry */
-	opts.yuv_input = true;
-	ASSERT_EQUAL(0, yuv_parse_spec("gray:4:4", &opts.yuv, NULL, 0));
+	yuv_params_t yuv;
+	ASSERT_EQUAL(0, yuv_parse_spec("gray:4:4", &yuv, NULL, 0));
+	opts.yuv = &yuv;
 	image_t **frames = decoder_decode(&opts, data, sizeof(data), MIME_YUV, &fc);
 	ASSERT_NOT_NULL(frames);
 	ASSERT_EQUAL(1, fc);
@@ -707,7 +708,7 @@ CTEST(decoder_yuv, pipeline_bypasses_magic_detection)
 	/* Data that starts with a PNG signature must be decoded as raw YUV with --yuv */
 	uint8_t data[16] = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 16, 16, 16, 16, 16, 16, 16, 16 };
 
-	decoder_registry_init(NULL);
+	decoder_registry_init();
 
 	cli_options_t opts = { .silent = true, .yuv_input = true };
 	ASSERT_EQUAL(0, yuv_parse_spec("y8:4:4", &opts.yuv, NULL, 0));

@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "encoder.h"
+#include "../core/log.h"
 
 /**
  * @brief PNG memory write state structure
@@ -95,7 +96,7 @@ static void png_memory_flush_func(png_structp png_ptr)
  */
 static void png_error_handler(png_structp png_ptr, png_const_charp error_msg)
 {
-	fprintf(stderr, "Error: libpng error: %s\n", error_msg);
+	img2_log(IMG2_LOG_ERROR, "Error: libpng error: %s", error_msg);
 
 	/* Jump back to encode_png() */
 	jmp_buf *jmpbuf = (jmp_buf *)png_get_error_ptr(png_ptr);
@@ -115,7 +116,7 @@ static void png_error_handler(png_structp png_ptr, png_const_charp error_msg)
 static void png_warning_handler(png_structp png_ptr, png_const_charp warning_msg)
 {
 	(void)png_ptr; /* Unused */
-	fprintf(stderr, "Warning: libpng warning: %s\n", warning_msg);
+	img2_log(IMG2_LOG_WARN, "Warning: libpng warning: %s", warning_msg);
 }
 
 /**
@@ -136,7 +137,7 @@ static void png_warning_handler(png_structp png_ptr, png_const_charp warning_msg
 int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to encode_png\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_png");
 		return -1;
 	}
 
@@ -166,14 +167,14 @@ int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	jmp_buf jmpbuf;
 	png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, &jmpbuf, png_error_handler, png_warning_handler);
 	if (png_ptr == NULL) {
-		fprintf(stderr, "Error: Failed to create PNG write struct\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG write struct");
 		return -1;
 	}
 
 	/* Create PNG info structure */
 	png_infop info_ptr = png_create_info_struct(png_ptr);
 	if (info_ptr == NULL) {
-		fprintf(stderr, "Error: Failed to create PNG info struct\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG info struct");
 		png_destroy_write_struct(&png_ptr, NULL);
 		return -1;
 	}
@@ -212,7 +213,7 @@ int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 	/* Prepare row pointers (each row points to pixel data in img->pixels) */
 	png_bytep *row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * img->height);
 	if (row_pointers == NULL) {
-		fprintf(stderr, "Error: Failed to allocate row pointers\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
 		png_destroy_write_struct(&png_ptr, &info_ptr);
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
@@ -239,7 +240,7 @@ int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 
 	/* Allocate and copy output data */
 	if (write_state.buffer == NULL || write_state.size == 0) {
-		fprintf(stderr, "Error: PNG encoder produced no output\n");
+		img2_log(IMG2_LOG_ERROR, "Error: PNG encoder produced no output");
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
 		}
@@ -248,7 +249,7 @@ int encode_png(const image_t *img, int quality, uint8_t **out_data, size_t *out_
 
 	*out_data = (uint8_t *)malloc(write_state.size);
 	if (*out_data == NULL) {
-		fprintf(stderr, "Error: Failed to allocate output buffer (%zu bytes)\n", write_state.size);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate output buffer (%zu bytes)", write_state.size);
 		free(write_state.buffer);
 		return -1;
 	}

@@ -57,6 +57,9 @@ img2_vendor_section_end()
 include(Img2ProjectSettings)
 include(Img2Testing)
 
+# After img2_vendor_section_end(): the -static vendor link flags must not bias the Threads checks
+find_package(Threads REQUIRED)
+
 # Library, command line tool
 add_subdirectory(src/libimg2)
 if(IMG2_BUILD_CLI OR IMG2_BUILD_TESTS)

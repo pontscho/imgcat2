@@ -17,6 +17,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 #ifdef HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
@@ -222,7 +223,7 @@ static xmp_info_t *extract_raw_xmp(libraw_data_t *raw)
 static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_raw_static\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_raw_static");
 		return NULL;
 	}
 
@@ -232,7 +233,7 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	// Create LibRAW processor
 	libraw_data_t *raw = libraw_init(0);
 	if (raw == NULL) {
-		fprintf(stderr, "Error: Failed to initialize LibRAW\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to initialize LibRAW");
 		return NULL;
 	}
 
@@ -240,7 +241,7 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	// Cast away const - libraw API doesn't accept const but won't modify data
 	int ret = libraw_open_buffer(raw, (void *)data, len);
 	if (ret != LIBRAW_SUCCESS) {
-		fprintf(stderr, "Error: Failed to open RAW buffer: %s\n", libraw_strerror(ret));
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to open RAW buffer: %s", libraw_strerror(ret));
 		libraw_close(raw);
 		return NULL;
 	}
@@ -348,7 +349,7 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	// Process RAW data (demosaicing, color correction)
 	ret = libraw_dcraw_process(raw);
 	if (ret != LIBRAW_SUCCESS) {
-		fprintf(stderr, "Error: Failed to process RAW data: %s\n", libraw_strerror(ret));
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to process RAW data: %s", libraw_strerror(ret));
 		libraw_close(raw);
 		return NULL;
 	}
@@ -356,7 +357,7 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	// Get processed image
 	libraw_processed_image_t *processed = libraw_dcraw_make_mem_image(raw, &ret);
 	if (processed == NULL) {
-		fprintf(stderr, "Error: Failed to create memory image: %s\n", libraw_strerror(ret));
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create memory image: %s", libraw_strerror(ret));
 		libraw_close(raw);
 		return NULL;
 	}
@@ -364,7 +365,7 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	// Create image_t structure
 	image_t *output = image_create(processed->width, processed->height);
 	if (output == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		libraw_dcraw_clear_mem(processed);
 		libraw_close(raw);
 		return NULL;
@@ -397,7 +398,7 @@ static image_t **decode_raw_static(const uint8_t *data, size_t len, int *frame_c
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(output);
 		return NULL;
 	}

@@ -12,6 +12,7 @@
 
 #include "cli.h"
 #include "../libimg2/core/image.h"
+#include "../libimg2/core/log.h"
 #include "metadata.h"
 #include "pipeline.h"
 #include "../libimg2/decoders/decoder.h"
@@ -26,6 +27,8 @@
  */
 int main(int argc, char **argv)
 {
+	img2_set_log_level(IMG2_LOG_WARN);
+
 	int exit_code = EXIT_FAILURE;
 
 	/* Initialize CLI options with defaults */
@@ -98,6 +101,10 @@ int main(int argc, char **argv)
 	}
 
 	if (!opts.silent) {
+		img2_set_log_level(IMG2_LOG_INFO);
+	}
+
+	if (!opts.silent) {
 		const char *terminal_type = opts.terminal.is_iterm2 ? "iTerm2" : opts.terminal.is_wezterm ? "WezTerm" : opts.terminal.is_ghostty ? "Ghostty" : opts.terminal.is_kitty ? "Kitty" : opts.terminal.is_konsole ? "Konsole" : "ANSI";
 
 		fprintf(stderr, "Terminal size: %dx%d (%dx%d) pixels, is %s\n", opts.terminal.width, opts.terminal.height, opts.terminal.cols, opts.terminal.rows, terminal_type);
@@ -111,10 +118,10 @@ int main(int argc, char **argv)
 	}
 
 	/* Initialize encoder registry */
-	encoder_registry_init(&opts);
+	encoder_registry_init();
 
 	/* Initialize decoder registry */
-	decoder_registry_init(&opts);
+	decoder_registry_init();
 
 	/* Pipeline variables */
 	uint8_t *buffer = NULL;

@@ -149,7 +149,7 @@ CTEST(decoder_jpeg, free_frames_null)
 CTEST(decoder_jpeg, decode_through_registry)
 {
 	/* Initialize decoder registry */
-	decoder_registry_init(NULL);
+	decoder_registry_init();
 
 	/* Minimal 1x1 JPEG */
 	static const uint8_t jpeg_1x1[] = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
@@ -177,7 +177,7 @@ CTEST(decoder_jpeg, decode_through_registry)
  */
 CTEST(decoder_jpeg, find_by_mime)
 {
-	decoder_registry_init(NULL);
+	decoder_registry_init();
 
 	const decoder_t *decoder = decoder_find_by_mime(MIME_JPEG);
 	ASSERT_NOT_NULL(decoder);

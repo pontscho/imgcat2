@@ -18,6 +18,7 @@
 /* clang-format on */
 
 #include "decoder.h"
+#include "../core/log.h"
 
 #ifdef HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
@@ -190,7 +191,7 @@ static xmp_info_t *extract_webp_xmp(const uint8_t *data, size_t len)
 static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_webp_static\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp_static");
 		return NULL;
 	}
 
@@ -202,14 +203,14 @@ static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_
 	int height = 0;
 	uint8_t *pixels = WebPDecodeRGBA(data, len, &width, &height);
 	if (pixels == NULL) {
-		fprintf(stderr, "Error: Failed to decode WebP image\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to decode WebP image");
 		return NULL;
 	}
 
 	// Create image_t structure
 	image_t *img = image_create((uint32_t)width, (uint32_t)height);
 	if (img == NULL) {
-		fprintf(stderr, "Error: Failed to create image_t structure\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		WebPFree(pixels);
 		return NULL;
 	}
@@ -237,7 +238,7 @@ static image_t **decode_webp_static(const uint8_t *data, size_t len, int *frame_
 	// Allocate frames array (single frame)
 	image_t **frames = (image_t **)malloc(sizeof(image_t *));
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		image_destroy(img);
 		return NULL;
 	}
@@ -296,7 +297,7 @@ bool webp_is_animated(const uint8_t *data, size_t len)
 static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_webp_animated\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp_animated");
 		return NULL;
 	}
 
@@ -311,7 +312,7 @@ static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *fram
 	// Initialize decoder options
 	WebPAnimDecoderOptions dec_options;
 	if (!WebPAnimDecoderOptionsInit(&dec_options)) {
-		fprintf(stderr, "Error: Failed to initialize WebP decoder options\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to initialize WebP decoder options");
 		return NULL;
 	}
 
@@ -321,14 +322,14 @@ static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *fram
 	// Create decoder
 	WebPAnimDecoder *dec = WebPAnimDecoderNew(&webp_data, &dec_options);
 	if (dec == NULL) {
-		fprintf(stderr, "Error: Failed to create WebP animation decoder\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create WebP animation decoder");
 		return NULL;
 	}
 
 	// Get animation info
 	WebPAnimInfo anim_info;
 	if (!WebPAnimDecoderGetInfo(dec, &anim_info)) {
-		fprintf(stderr, "Error: Failed to get WebP animation info\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to get WebP animation info");
 		WebPAnimDecoderDelete(dec);
 		return NULL;
 	}
@@ -336,13 +337,13 @@ static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *fram
 	// Check frame count
 	int num_frames = (int)anim_info.frame_count;
 	if (num_frames == 0) {
-		fprintf(stderr, "Error: WebP animation has no frames\n");
+		img2_log(IMG2_LOG_ERROR, "Error: WebP animation has no frames");
 		WebPAnimDecoderDelete(dec);
 		return NULL;
 	}
 
 	if (num_frames > MAX_WEBP_FRAMES) {
-		fprintf(stderr, "Warning: WebP has %d frames, limiting to %d\n", num_frames, MAX_WEBP_FRAMES);
+		img2_log(IMG2_LOG_WARN, "Warning: WebP has %d frames, limiting to %d", num_frames, MAX_WEBP_FRAMES);
 		num_frames = MAX_WEBP_FRAMES;
 	}
 
@@ -353,7 +354,7 @@ static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *fram
 	// Allocate frames array
 	image_t **frames = (image_t **)malloc(sizeof(image_t *) * num_frames);
 	if (frames == NULL) {
-		fprintf(stderr, "Error: Failed to allocate frames array\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		WebPAnimDecoderDelete(dec);
 		return NULL;
 	}
@@ -370,14 +371,14 @@ static image_t **decode_webp_animated(const uint8_t *data, size_t len, int *fram
 		int timestamp;
 
 		if (!WebPAnimDecoderGetNext(dec, &frame_buf, &timestamp)) {
-			fprintf(stderr, "Error: Failed to decode WebP frame %d\n", frame_idx);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to decode WebP frame %d", frame_idx);
 			goto cleanup_error;
 		}
 
 		// Create output frame
 		frames[frame_idx] = image_create(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
-			fprintf(stderr, "Error: Failed to create output frame %d\n", frame_idx);
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", frame_idx);
 			goto cleanup_error;
 		}
 
@@ -427,7 +428,7 @@ cleanup_error:
 image_t **decode_webp(const uint8_t *data, size_t len, int *frame_count)
 {
 	if (data == NULL || len == 0 || frame_count == NULL) {
-		fprintf(stderr, "Error: Invalid parameters to decode_webp\n");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_webp");
 		return NULL;
 	}
 

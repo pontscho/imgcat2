@@ -504,7 +504,8 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, ima
 	}
 
 	/* Decode with registry */
-	image_t **frames = decoder_decode(opts, buffer, size, mime, out_frame_count);
+	img2_decode_opts_t dopts = { .force_mime = MIME_UNKNOWN, .yuv = (opts != NULL && opts->yuv_input) ? &opts->yuv : NULL, .max_frames = 0, .jpeg_deblock = -1 };
+	image_t **frames = decoder_decode(&dopts, buffer, size, mime, out_frame_count);
 	if (frames == NULL || *out_frame_count <= 0) {
 		fprintf(stderr, "pipeline_decode: failed to decode image\n");
 		return -1;

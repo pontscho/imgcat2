@@ -38,8 +38,8 @@ static const uint8_t TEST_JPEG[] = { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0
 CTEST(convert, png_to_jpeg)
 {
 	/* Initialize registries */
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Decode PNG */
 	image_t **frames = NULL;
@@ -89,8 +89,8 @@ CTEST(convert, png_to_jpeg)
  */
 CTEST(convert, jpeg_to_png)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Decode JPEG */
 	image_t **frames = NULL;
@@ -140,8 +140,8 @@ CTEST(convert, jpeg_to_png)
  */
 CTEST(convert, jpeg_quality_levels)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
 	image_t *img = image_create(10, 10);
@@ -207,8 +207,8 @@ CTEST(convert, jpeg_quality_levels)
  */
 CTEST(convert, png_compression_levels)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
 	image_t *img = image_create(10, 10);
@@ -275,8 +275,8 @@ CTEST(convert, png_compression_levels)
  */
 CTEST(convert, round_trip)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Start with PNG */
 	image_t **frames1 = NULL;
@@ -337,8 +337,8 @@ CTEST(convert, round_trip)
  */
 CTEST(convert, png_transparency)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create image with varying alpha */
 	image_t *img = image_create(10, 10);
@@ -389,8 +389,8 @@ CTEST(convert, png_transparency)
  */
 CTEST(convert, dimensions_preserved_no_resize)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create a 200x150 test image */
 	image_t *img = image_create(200, 150);
@@ -441,8 +441,8 @@ CTEST(convert, dimensions_preserved_no_resize)
  */
 CTEST(convert, dimensions_preserved_large_image)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create a 3000x2000 test image - much larger than any terminal */
 	image_t *img = image_create(3000, 2000);
@@ -509,8 +509,8 @@ CTEST(convert, dimensions_preserved_large_image)
  */
 CTEST(convert, dimensions_preserved_ansi_fallback)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create a 2000x1500 image */
 	image_t *img = image_create(2000, 1500);
@@ -571,8 +571,8 @@ CTEST(convert, dimensions_preserved_ansi_fallback)
  */
 CTEST(convert, convert_with_custom_width)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create 800x600 image */
 	image_t *img = image_create(800, 600);
@@ -617,8 +617,8 @@ CTEST(convert, convert_with_custom_width)
  */
 CTEST(convert, convert_with_custom_height)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create 800x600 image */
 	image_t *img = image_create(800, 600);
@@ -663,8 +663,8 @@ CTEST(convert, convert_with_custom_height)
  */
 CTEST(convert, convert_with_custom_both)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create 800x600 image */
 	image_t *img = image_create(800, 600);
@@ -709,8 +709,8 @@ CTEST(convert, convert_with_custom_both)
  */
 CTEST(convert, png_to_heif)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Decode PNG */
 	image_t **frames = NULL;
@@ -764,8 +764,8 @@ CTEST(convert, png_to_heif)
  */
 CTEST(convert, png_to_webp)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Decode PNG */
 	image_t **frames = NULL;
@@ -823,8 +823,8 @@ CTEST(convert, png_to_webp)
  */
 CTEST(convert, png_to_jxl)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Decode PNG */
 	image_t **frames = NULL;
@@ -881,8 +881,8 @@ CTEST(convert, png_to_jxl)
  */
 CTEST(convert, jpeg_to_heif)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Decode JPEG */
 	image_t **frames = NULL;
@@ -936,8 +936,8 @@ CTEST(convert, jpeg_to_heif)
  */
 CTEST(convert, jpeg_to_webp)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Decode JPEG */
 	image_t **frames = NULL;
@@ -995,8 +995,8 @@ CTEST(convert, jpeg_to_webp)
  */
 CTEST(convert, jpeg_to_jxl)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Decode JPEG */
 	image_t **frames = NULL;
@@ -1053,8 +1053,8 @@ CTEST(convert, jpeg_to_jxl)
  */
 CTEST(convert, heif_quality_levels)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
 	image_t *img = image_create(10, 10);
@@ -1123,8 +1123,8 @@ CTEST(convert, heif_quality_levels)
  */
 CTEST(convert, webp_quality_levels)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
 	image_t *img = image_create(10, 10);
@@ -1203,8 +1203,8 @@ CTEST(convert, webp_quality_levels)
  */
 CTEST(convert, jxl_quality_levels)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create test image (10x10 with gradient) */
 	image_t *img = image_create(10, 10);
@@ -1273,8 +1273,8 @@ CTEST(convert, jxl_quality_levels)
  */
 CTEST(convert, jxl_lossless_roundtrip)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	uint32_t sizes[] = { 32, 256 };
 	for (size_t s = 0; s < sizeof(sizes) / sizeof(sizes[0]); s++) {
@@ -1331,8 +1331,8 @@ CTEST(convert, jxl_lossless_roundtrip)
  */
 CTEST(convert, webp_lossless_roundtrip)
 {
-	decoder_registry_init(NULL);
-	encoder_registry_init(NULL);
+	decoder_registry_init();
+	encoder_registry_init();
 
 	/* Create test image (32x32, noisy opaque pattern) */
 	image_t *img = image_create(32, 32);

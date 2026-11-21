@@ -13,36 +13,6 @@
 #endif
 
 /**
- * @brief Get MIME type string from enum
- *
- * Returns standard MIME type strings for supported image formats.
- */
-const char *get_mime_string(mime_type_t mime)
-{
-	switch (mime) {
-		case MIME_PNG: return "image/png";
-		case MIME_JPEG: return "image/jpeg";
-		case MIME_GIF: return "image/gif";
-		case MIME_BMP: return "image/bmp";
-		case MIME_WEBP: return "image/webp";
-		case MIME_HEIF: return "image/heif";
-		case MIME_AVIF: return "image/avif";
-		case MIME_JXL: return "image/jxl";
-		case MIME_QOI: return "image/qoi";
-		case MIME_ICO: return "image/vnd.microsoft.icon";
-		case MIME_CUR: return "image/x-win-bitmap";
-		case MIME_SVG: return "image/svg+xml";
-		case MIME_TIFF: return "image/tiff";
-		case MIME_TGA: return "image/x-tga";
-		case MIME_PSD: return "image/vnd.adobe.photoshop";
-		case MIME_HDR: return "image/vnd.radiance";
-		case MIME_PNM: return "image/x-portable-anymap";
-		case MIME_YUV: return "application/octet-stream"; /* headerless raw frame, no registered image type */
-		default: return "application/octet-stream";
-	}
-}
-
-/**
  * @brief Output metadata in human-readable text format
  *
  * Format: "TYPE mime WxH N frame(s)"

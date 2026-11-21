@@ -203,4 +203,14 @@ mime_type_t detect_mime_type(const uint8_t *data, size_t len);
  */
 const char *mime_type_name(mime_type_t mime);
 
+/**
+ * @brief Get MIME type string (e.g., "image/png")
+ *
+ * Converts mime_type_t enum to standard MIME type string.
+ *
+ * @param mime MIME type enum
+ * @return MIME type string (e.g., "image/png", "image/jpeg")
+ */
+const char *get_mime_string(mime_type_t mime);
+
 #endif /* IMGCAT2_MAGIC_H */

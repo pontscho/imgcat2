@@ -12,6 +12,7 @@
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "image.h"
 #include "stb_image_resize2.h"
+#include "log.h"
 
 /* EXIF/XMP metadata support */
 #ifdef HAVE_EXIF_READER
@@ -44,21 +45,21 @@ image_t *image_create(uint32_t width, uint32_t height)
 	/* Validate dimensions and calculate size */
 	size_t byte_count;
 	if (!image_calculate_size(width, height, &byte_count)) {
-		fprintf(stderr, "image_create: invalid dimensions %u×%u\n", width, height);
+		img2_log(IMG2_LOG_ERROR, "image_create: invalid dimensions %u×%u", width, height);
 		return NULL;
 	}
 
 	/* Allocate image structure */
 	image_t *img = malloc(sizeof(image_t));
 	if (img == NULL) {
-		fprintf(stderr, "image_create: failed to allocate image_t\n");
+		img2_log(IMG2_LOG_ERROR, "image_create: failed to allocate image_t");
 		return NULL;
 	}
 
 	/* Allocate pixel buffer (initialized to zero - transparent black) */
 	img->pixels = calloc(byte_count, 1);
 	if (img->pixels == NULL) {
-		fprintf(stderr, "image_create: failed to allocate %zu bytes for pixels\n", byte_count);
+		img2_log(IMG2_LOG_ERROR, "image_create: failed to allocate %zu bytes for pixels", byte_count);
 		free(img);
 		return NULL;
 	}
@@ -107,11 +108,11 @@ void image_destroy(image_t *img)
 image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t target_height)
 {
 	if (src == NULL || src->pixels == NULL) {
-		fprintf(stderr, "image_scale_fit: invalid source image\n");
+		img2_log(IMG2_LOG_ERROR, "image_scale_fit: invalid source image");
 		return NULL;
 
 	} else if (target_width == 0 || target_height == 0) {
-		fprintf(stderr, "image_scale_fit: invalid target dimensions %u×%u\n", target_width, target_height);
+		img2_log(IMG2_LOG_ERROR, "image_scale_fit: invalid target dimensions %u×%u", target_width, target_height);
 		return NULL;
 	}
 
@@ -143,20 +144,20 @@ image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t tar
 
 	/* Validate new dimensions */
 	if (new_width == 0 || new_height == 0) {
-		fprintf(stderr, "image_scale_fit: calculated dimensions are invalid %u×%u\n", new_width, new_height);
+		img2_log(IMG2_LOG_ERROR, "image_scale_fit: calculated dimensions are invalid %u×%u", new_width, new_height);
 		return NULL;
 	}
 
 	/* Create output image */
 	image_t *dst = image_create(new_width, new_height);
 	if (dst == NULL) {
-		fprintf(stderr, "image_scale_fit: failed to create output image\n");
+		img2_log(IMG2_LOG_ERROR, "image_scale_fit: failed to create output image");
 		return NULL;
 	}
 
 	/* Resize using stb_image_resize2 (SRGB colorspace for natural results) */
 	if (!stbir_resize_uint8_srgb(src->pixels, src->width, src->height, 0, dst->pixels, new_width, new_height, 0, STBIR_RGBA)) {
-		fprintf(stderr, "image_scale_fit: stbir_resize failed\n");
+		img2_log(IMG2_LOG_ERROR, "image_scale_fit: stbir_resize failed");
 		image_destroy(dst);
 		return NULL;
 	}
@@ -167,25 +168,25 @@ image_t *image_scale_fit(const image_t *src, uint32_t target_width, uint32_t tar
 image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t target_height)
 {
 	if (src == NULL || src->pixels == NULL) {
-		fprintf(stderr, "image_scale_resize: invalid source image\n");
+		img2_log(IMG2_LOG_ERROR, "image_scale_resize: invalid source image");
 		return NULL;
 	}
 
 	if (target_width == 0 || target_height == 0) {
-		fprintf(stderr, "image_scale_resize: invalid target dimensions %u×%u\n", target_width, target_height);
+		img2_log(IMG2_LOG_ERROR, "image_scale_resize: invalid target dimensions %u×%u", target_width, target_height);
 		return NULL;
 	}
 
 	/* Create output image with exact dimensions (no aspect ratio preservation) */
 	image_t *dst = image_create(target_width, target_height);
 	if (dst == NULL) {
-		fprintf(stderr, "image_scale_resize: failed to create output image\n");
+		img2_log(IMG2_LOG_ERROR, "image_scale_resize: failed to create output image");
 		return NULL;
 	}
 
 	/* Resize using stb_image_resize2 (SRGB colorspace) */
 	if (!stbir_resize_uint8_srgb(src->pixels, src->width, src->height, 0, dst->pixels, target_width, target_height, 0, STBIR_RGBA)) {
-		fprintf(stderr, "image_scale_resize: stbir_resize failed\n");
+		img2_log(IMG2_LOG_ERROR, "image_scale_resize: stbir_resize failed");
 		image_destroy(dst);
 		return NULL;
 	}
@@ -196,14 +197,14 @@ image_t *image_scale_resize(const image_t *src, uint32_t target_width, uint32_t 
 image_t *convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height)
 {
 	if (rgb == NULL) {
-		fprintf(stderr, "convert_rgb_to_rgba: invalid RGB data\n");
+		img2_log(IMG2_LOG_ERROR, "convert_rgb_to_rgba: invalid RGB data");
 		return NULL;
 	}
 
 	/* Create RGBA image */
 	image_t *img = image_create(width, height);
 	if (img == NULL) {
-		fprintf(stderr, "convert_rgb_to_rgba: failed to create image\n");
+		img2_log(IMG2_LOG_ERROR, "convert_rgb_to_rgba: failed to create image");
 		return NULL;
 	}
 
@@ -222,14 +223,14 @@ image_t *convert_rgb_to_rgba(const uint8_t *rgb, uint32_t width, uint32_t height
 image_t *convert_grayscale_to_rgba(const uint8_t *gray, uint32_t width, uint32_t height)
 {
 	if (gray == NULL) {
-		fprintf(stderr, "convert_grayscale_to_rgba: invalid grayscale data\n");
+		img2_log(IMG2_LOG_ERROR, "convert_grayscale_to_rgba: invalid grayscale data");
 		return NULL;
 	}
 
 	/* Create RGBA image */
 	image_t *img = image_create(width, height);
 	if (img == NULL) {
-		fprintf(stderr, "convert_grayscale_to_rgba: failed to create image\n");
+		img2_log(IMG2_LOG_ERROR, "convert_grayscale_to_rgba: failed to create image");
 		return NULL;
 	}
 
@@ -262,7 +263,7 @@ image_t *convert_grayscale_to_rgba(const uint8_t *gray, uint32_t width, uint32_t
 static uint8_t *transform_flip_horizontal(const uint8_t *src, uint32_t width, uint32_t height)
 {
 	if (src == NULL) {
-		fprintf(stderr, "transform_flip_horizontal: invalid source data\n");
+		img2_log(IMG2_LOG_ERROR, "transform_flip_horizontal: invalid source data");
 		return NULL;
 	}
 
@@ -270,7 +271,7 @@ static uint8_t *transform_flip_horizontal(const uint8_t *src, uint32_t width, ui
 	size_t buffer_size = (size_t)width * (size_t)height * 4;
 	uint8_t *dest = malloc(buffer_size);
 	if (dest == NULL) {
-		fprintf(stderr, "transform_flip_horizontal: failed to allocate buffer\n");
+		img2_log(IMG2_LOG_ERROR, "transform_flip_horizontal: failed to allocate buffer");
 		return NULL;
 	}
 
@@ -302,7 +303,7 @@ static uint8_t *transform_flip_horizontal(const uint8_t *src, uint32_t width, ui
 static uint8_t *transform_flip_vertical(const uint8_t *src, uint32_t width, uint32_t height)
 {
 	if (src == NULL) {
-		fprintf(stderr, "transform_flip_vertical: invalid source data\n");
+		img2_log(IMG2_LOG_ERROR, "transform_flip_vertical: invalid source data");
 		return NULL;
 	}
 
@@ -310,7 +311,7 @@ static uint8_t *transform_flip_vertical(const uint8_t *src, uint32_t width, uint
 	size_t buffer_size = (size_t)width * (size_t)height * 4;
 	uint8_t *dest = malloc(buffer_size);
 	if (dest == NULL) {
-		fprintf(stderr, "transform_flip_vertical: failed to allocate buffer\n");
+		img2_log(IMG2_LOG_ERROR, "transform_flip_vertical: failed to allocate buffer");
 		return NULL;
 	}
 
@@ -344,7 +345,7 @@ static uint8_t *transform_flip_vertical(const uint8_t *src, uint32_t width, uint
 static uint8_t *transform_rotate_90cw(const uint8_t *src, uint32_t width, uint32_t height)
 {
 	if (src == NULL) {
-		fprintf(stderr, "transform_rotate_90cw: invalid source data\n");
+		img2_log(IMG2_LOG_ERROR, "transform_rotate_90cw: invalid source data");
 		return NULL;
 	}
 
@@ -352,7 +353,7 @@ static uint8_t *transform_rotate_90cw(const uint8_t *src, uint32_t width, uint32
 	size_t buffer_size = (size_t)height * (size_t)width * 4;
 	uint8_t *dest = malloc(buffer_size);
 	if (dest == NULL) {
-		fprintf(stderr, "transform_rotate_90cw: failed to allocate buffer\n");
+		img2_log(IMG2_LOG_ERROR, "transform_rotate_90cw: failed to allocate buffer");
 		return NULL;
 	}
 
@@ -384,7 +385,7 @@ static uint8_t *transform_rotate_90cw(const uint8_t *src, uint32_t width, uint32
 static uint8_t *transform_rotate_180(const uint8_t *src, uint32_t width, uint32_t height)
 {
 	if (src == NULL) {
-		fprintf(stderr, "transform_rotate_180: invalid source data\n");
+		img2_log(IMG2_LOG_ERROR, "transform_rotate_180: invalid source data");
 		return NULL;
 	}
 
@@ -392,7 +393,7 @@ static uint8_t *transform_rotate_180(const uint8_t *src, uint32_t width, uint32_
 	size_t buffer_size = (size_t)width * (size_t)height * 4;
 	uint8_t *dest = malloc(buffer_size);
 	if (dest == NULL) {
-		fprintf(stderr, "transform_rotate_180: failed to allocate buffer\n");
+		img2_log(IMG2_LOG_ERROR, "transform_rotate_180: failed to allocate buffer");
 		return NULL;
 	}
 
@@ -426,7 +427,7 @@ static uint8_t *transform_rotate_180(const uint8_t *src, uint32_t width, uint32_
 static uint8_t *transform_rotate_270cw(const uint8_t *src, uint32_t width, uint32_t height)
 {
 	if (src == NULL) {
-		fprintf(stderr, "transform_rotate_270cw: invalid source data\n");
+		img2_log(IMG2_LOG_ERROR, "transform_rotate_270cw: invalid source data");
 		return NULL;
 	}
 
@@ -434,7 +435,7 @@ static uint8_t *transform_rotate_270cw(const uint8_t *src, uint32_t width, uint3
 	size_t buffer_size = (size_t)height * (size_t)width * 4;
 	uint8_t *dest = malloc(buffer_size);
 	if (dest == NULL) {
-		fprintf(stderr, "transform_rotate_270cw: failed to allocate buffer\n");
+		img2_log(IMG2_LOG_ERROR, "transform_rotate_270cw: failed to allocate buffer");
 		return NULL;
 	}
 
@@ -454,18 +455,18 @@ int image_apply_orientation(image_t *img, uint16_t orientation)
 {
 	/* Validate input parameters */
 	if (img == NULL) {
-		fprintf(stderr, "image_apply_orientation: NULL image pointer\n");
+		img2_log(IMG2_LOG_ERROR, "image_apply_orientation: NULL image pointer");
 		return -1;
 	}
 
 	if (img->pixels == NULL) {
-		fprintf(stderr, "image_apply_orientation: NULL pixel buffer\n");
+		img2_log(IMG2_LOG_ERROR, "image_apply_orientation: NULL pixel buffer");
 		return -1;
 	}
 
 	/* Validate orientation range */
 	if (orientation < 1 || orientation > 8) {
-		fprintf(stderr, "image_apply_orientation: invalid orientation %u (must be 1-8)\n", orientation);
+		img2_log(IMG2_LOG_ERROR, "image_apply_orientation: invalid orientation %u (must be 1-8)", orientation);
 		return -1;
 	}
 
@@ -501,7 +502,7 @@ int image_apply_orientation(image_t *img, uint16_t orientation)
 				/* Transpose = flip horizontal + rotate 270° CW */
 				uint8_t *temp = transform_flip_horizontal(img->pixels, img->width, img->height);
 				if (temp == NULL) {
-					fprintf(stderr, "image_apply_orientation: failed to flip horizontal for orientation 5\n");
+					img2_log(IMG2_LOG_ERROR, "image_apply_orientation: failed to flip horizontal for orientation 5");
 					return -1;
 				}
 				new_pixels = transform_rotate_270cw(temp, img->width, img->height);
@@ -521,7 +522,7 @@ int image_apply_orientation(image_t *img, uint16_t orientation)
 				/* Transverse = flip horizontal + rotate 90° CW */
 				uint8_t *temp = transform_flip_horizontal(img->pixels, img->width, img->height);
 				if (temp == NULL) {
-					fprintf(stderr, "image_apply_orientation: failed to flip horizontal for orientation 7\n");
+					img2_log(IMG2_LOG_ERROR, "image_apply_orientation: failed to flip horizontal for orientation 7");
 					return -1;
 				}
 				new_pixels = transform_rotate_90cw(temp, img->width, img->height);
@@ -536,12 +537,12 @@ int image_apply_orientation(image_t *img, uint16_t orientation)
 			dimensions_swapped = true;
 			break;
 
-		default: fprintf(stderr, "image_apply_orientation: unhandled orientation %u\n", orientation); return -1;
+		default: img2_log(IMG2_LOG_ERROR, "image_apply_orientation: unhandled orientation %u", orientation); return -1;
 	}
 
 	/* Check if transformation succeeded */
 	if (new_pixels == NULL) {
-		fprintf(stderr, "image_apply_orientation: transformation failed for orientation %u\n", orientation);
+		img2_log(IMG2_LOG_ERROR, "image_apply_orientation: transformation failed for orientation %u", orientation);
 		return -1;
 	}
 
