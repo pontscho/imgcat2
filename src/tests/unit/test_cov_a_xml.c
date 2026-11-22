@@ -94,3 +94,41 @@ CTEST(xml_depth, limit_is_inclusive)
 	ASSERT_EQUAL(-1, parse_on_small_stack(xml, len));
 	free(xml);
 }
+
+/* ===== helpers ===== */
+
+static img2_xml_document_t *s_doc;
+
+/* parses xml into s_doc (replacing the previous one); returns img2_xml_document_parse()'s result */
+static int parse(const char *xml)
+{
+	img2_xml_document_destroy(s_doc);
+	s_doc = img2_xml_document_create();
+	if (s_doc == NULL) {
+		return -2;
+	}
+	return img2_xml_document_parse(s_doc, xml, strlen(xml));
+}
+
+static const char *root_text(void)
+{
+	return img2_xml_element_text(img2_xml_document_root_element(s_doc));
+}
+
+/* ===== '>' and other closing markers in character data ===== */
+
+CTEST(xml_text, closing_markers_are_character_data)
+{
+	/* '>' is legal unescaped in XML character data (XMP writers emit it, e.g. "a > b" in dc:description);
+	 * "/>", "?>" and "-->" outside markup are plain text too */
+	ASSERT_EQUAL(0, parse("<r>a > b</r>"));
+	ASSERT_STR("a > b", root_text());
+	ASSERT_EQUAL(0, parse("<r>> x</r>"));
+	ASSERT_STR("> x", root_text());
+	ASSERT_EQUAL(0, parse("<r>1/>2</r>"));
+	ASSERT_STR("1/>2", root_text());
+	ASSERT_EQUAL(0, parse("<r>/> ?> --></r>"));
+	ASSERT_STR("/> ?> -->", root_text());
+	img2_xml_document_destroy(s_doc);
+	s_doc = NULL;
+}

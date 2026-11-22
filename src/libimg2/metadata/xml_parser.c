@@ -156,18 +156,12 @@ struct img2_xml_document {
 typedef enum {
 	TOKEN_NONE,
 	TOKEN_ELEMENT_OPEN, /* < */
-	TOKEN_ELEMENT_CLOSE, /* > */
 	TOKEN_ELEMENT_END, /* </ */
-	TOKEN_ELEMENT_EMPTY, /* /> */
 	TOKEN_DECLARATION_OPEN, /* <? */
-	TOKEN_DECLARATION_CLOSE, /* ?> */
 	TOKEN_COMMENT_OPEN, /* <!-- */
-	TOKEN_COMMENT_CLOSE, /* --> */
 	TOKEN_TEXT,
 	TOKEN_NAME,
-	TOKEN_ATTRIBUTE,
-	TOKEN_EOF,
-	TOKEN_ERROR
+	TOKEN_EOF
 } token_type_t;
 
 typedef struct {
@@ -240,27 +234,9 @@ static token_type_t next_token(xml_tokenizer_t *tok)
 		}
 	}
 
-	/* Check for closing markers */
-	if (match_string(tok, "/>")) {
-		tok->pos += 2;
-		tok->current_token = TOKEN_ELEMENT_EMPTY;
-		return TOKEN_ELEMENT_EMPTY;
-
-	} else if (match_string(tok, "?>")) {
-		tok->pos += 2;
-		tok->current_token = TOKEN_DECLARATION_CLOSE;
-		return TOKEN_DECLARATION_CLOSE;
-
-	} else if (match_string(tok, "-->")) {
-		tok->pos += 3;
-		tok->current_token = TOKEN_COMMENT_CLOSE;
-		return TOKEN_COMMENT_CLOSE;
-
-	} else if (*p == '>') {
-		tok->pos++;
-		tok->current_token = TOKEN_ELEMENT_CLOSE;
-		return TOKEN_ELEMENT_CLOSE;
-	}
+	/* No closing-marker tokens ("/>", "?>", "-->", ">"): parse_element() reads a tag's end itself and comments /
+	 * declarations are skipped with read_until(), so outside markup these are character data ('>' is legal
+	 * unescaped text) */
 
 	/* Read name (element/attribute name) - single word with name characters */
 	if (isalpha((unsigned char)*p) || *p == '_' || *p == ':') {
@@ -279,19 +255,14 @@ static token_type_t next_token(xml_tokenizer_t *tok)
 		return TOKEN_NAME;
 	}
 
-	/* Read text content (anything else until '<') */
-	if (*p != '<') {
-		tok->token_start = p;
-		while (tok->pos < tok->len && tok->xml[tok->pos] != '<') {
-			tok->pos++;
-		}
-		tok->token_len = tok->xml + tok->pos - tok->token_start;
-		tok->current_token = TOKEN_TEXT;
-		return TOKEN_TEXT;
+	/* Read text content (anything else until '<'; *p is not '<' here) */
+	tok->token_start = p;
+	while (tok->pos < tok->len && tok->xml[tok->pos] != '<') {
+		tok->pos++;
 	}
-
-	tok->current_token = TOKEN_ERROR;
-	return TOKEN_ERROR;
+	tok->token_len = tok->xml + tok->pos - tok->token_start;
+	tok->current_token = TOKEN_TEXT;
+	return TOKEN_TEXT;
 }
 
 static char *read_until(xml_tokenizer_t *tok, const char *delimiter, arena_t *arena)
