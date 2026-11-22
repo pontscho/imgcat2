@@ -167,3 +167,8 @@ if(PROJECT_IS_TOP_LEVEL)
 		RESOURCE_LOCK img2_consumer PASS_REGULAR_EXPRESSION "img2 consumer OK"
 		ENVIRONMENT "TMPDIR=${_img2_consumer_tmp}")
 endif()
+
+# --- coverage lane A begin ---
+# Coverage phase 2, lane A (core, ICO/QOI/PNM/YUV/stb decoders, XML/EXIF, font manager); fixtures built in-test
+img2_add_test(test_cov_a_ico SOURCES unit/test_cov_a_ico.c)
+# --- coverage lane A end ---
