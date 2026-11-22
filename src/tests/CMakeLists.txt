@@ -172,11 +172,20 @@ endif()
 # Coverage (docs/coverage.md) of the GIF, PNG, WebP, JPEG, TIFF, RAW and nanosvg decoders; fixtures built in-test
 img2_add_test(test_cov_b_gif SOURCES unit/test_cov_b_gif.c REQUIRES GIFLIB)
 img2_add_test(test_cov_b_png SOURCES unit/test_cov_b_png.c)
+img2_add_test(test_cov_b_webp SOURCES unit/test_cov_b_webp.c REQUIRES WEBP)
 img2_add_test(test_cov_b_jpeg SOURCES unit/test_cov_b_jpeg.c)
 img2_add_test(test_cov_b_tiff SOURCES unit/test_cov_b_tiff.c REQUIRES TIFF)
 img2_add_test(test_cov_b_svg SOURCES unit/test_cov_b_svg.c)
 img2_add_test(test_cov_b_raw SOURCES unit/test_cov_b_raw.c REQUIRES RAW TIMEOUT 30)
 if(TARGET test_cov_b_raw)
 	target_compile_definitions(test_cov_b_raw PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
+endif()
+# Allocation-failure injection (unit/alloc_fail.h), linked like test_alloc_fail: Linux only
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_cov_b_alloc SOURCES unit/test_cov_b_alloc.c TIMEOUT 120)
+	if(TARGET test_cov_b_alloc)
+		target_link_options(test_cov_b_alloc PRIVATE
+			-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup)
+	endif()
 endif()
 # --- coverage lane B end ---
