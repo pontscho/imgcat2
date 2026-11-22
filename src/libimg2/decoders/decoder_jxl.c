@@ -30,14 +30,18 @@
 /**
  * @brief Get basic info from JXL image (dimensions and frame count)
  *
+ * Walks the frame headers only (no pixel decoding). Stops after MAX_JXL_FRAMES + 1 frames:
+ * more than MAX_JXL_FRAMES frames are clamped to MAX_JXL_FRAMES with a warning.
+ *
  * @param data Raw JXL file data
  * @param len Length of data in bytes
  * @param width Output: image width
  * @param height Output: image height
- * @param num_frames Output: number of frames
- * @return Number of frames on success, -1 on error
+ * @param num_frames Output: number of frames (at most MAX_JXL_FRAMES)
+ * @return IMG2_OK; IMG2_E_LIMIT if the canvas fails img2_image_calc_size() (> IMG2_MAX_DIMENSION,
+ *         > IMG2_MAX_PIXELS); IMG2_E_CODEC on any other error
  */
-static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32_t *height, int *num_frames);
+static img2_status_t jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32_t *height, int *num_frames);
 
 /**
  * @brief Decode static (single-frame) JXL image
@@ -55,7 +59,8 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
  * @param data Raw JXL file data
  * @param len Length of data in bytes
  * @param frame_count Output: number of frames decoded
- * @param num_frames Expected number of frames
+ * @param num_frames Expected number of frames (from jxl_get_info, at most MAX_JXL_FRAMES; with the cap
+ *        reached, decoding stops before the next frame)
  * @param loop_count Output: JxlAnimationHeader.num_loops (0 = forever)
  * @return Array of img2_image_t* frames, or NULL on error
  *
@@ -75,10 +80,10 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **exif_out, img2_xmp_t **xmp_out);
 #endif
 
-static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32_t *height, int *num_frames)
+static img2_status_t jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32_t *height, int *num_frames)
 {
 	if (data == NULL || len == 0 || width == NULL || height == NULL || num_frames == NULL) {
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	*num_frames = 0;
@@ -87,21 +92,21 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 	JxlDecoder *dec = JxlDecoderCreate(NULL);
 	if (dec == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL decoder");
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	// Subscribe to events
 	if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_FRAME) != JXL_DEC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to subscribe to JXL decoder events");
 		JxlDecoderDestroy(dec);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	// Set input data
 	if (JxlDecoderSetInput(dec, data, len) != JXL_DEC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL decoder input");
 		JxlDecoderDestroy(dec);
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	// Close input to signal all data is available
@@ -120,7 +125,7 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 			if (JxlDecoderGetBasicInfo(dec, &info) != JXL_DEC_SUCCESS) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to get JXL basic info");
 				JxlDecoderDestroy(dec);
-				return -1;
+				return IMG2_E_CODEC;
 			}
 
 			*width = info.xsize;
@@ -130,26 +135,31 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 			if (*width > IMG2_MAX_DIMENSION || *height > IMG2_MAX_DIMENSION) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed maximum: %ux%u", *width, *height);
 				JxlDecoderDestroy(dec);
-				return -1;
+				return IMG2_E_LIMIT;
 			}
 
 			if (*width == 0 || *height == 0) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL has invalid dimensions: %ux%u", *width, *height);
 				JxlDecoderDestroy(dec);
-				return -1;
+				return IMG2_E_CODEC;
+			}
+
+			// Every decoded frame is a full canvas: reject a canvas over IMG2_MAX_PIXELS before walking the frames
+			size_t byte_count;
+			if (!img2_image_calc_size(*width, *height, &byte_count)) {
+				img2_log(IMG2_LOG_ERROR, "Error: JXL dimensions exceed the pixel limit: %ux%u", *width, *height);
+				JxlDecoderDestroy(dec);
+				return IMG2_E_LIMIT;
 			}
 
 			basic_info_received = true;
 		} else if (status == JXL_DEC_FRAME) {
-			// Count frames
-			frame_count++;
-
-			// Enforce frame limit
-			if (frame_count > MAX_JXL_FRAMES) {
-				img2_log(IMG2_LOG_ERROR, "Error: JXL frame count exceeds maximum (%d)", MAX_JXL_FRAMES);
-				JxlDecoderDestroy(dec);
-				return -1;
+			// Count frames; stop at the first frame past the cap (the rest is never read)
+			if (frame_count == MAX_JXL_FRAMES) {
+				img2_log(IMG2_LOG_WARN, "Warning: JXL has more than %d frames, limiting to %d", MAX_JXL_FRAMES, MAX_JXL_FRAMES);
+				break;
 			}
+			frame_count++;
 		} else if (status == JXL_DEC_SUCCESS) {
 			// All frames processed
 			break;
@@ -157,12 +167,12 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 			// Decoding error
 			img2_log(IMG2_LOG_ERROR, "Error: JXL decoder error");
 			JxlDecoderDestroy(dec);
-			return -1;
+			return IMG2_E_CODEC;
 		} else {
 			// Unexpected status
 			img2_log(IMG2_LOG_ERROR, "Error: Unexpected JXL decoder status: %d", status);
 			JxlDecoderDestroy(dec);
-			return -1;
+			return IMG2_E_CODEC;
 		}
 	}
 
@@ -171,11 +181,11 @@ static int jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32
 
 	if (!basic_info_received || frame_count == 0) {
 		img2_log(IMG2_LOG_ERROR, "Error: No frames found in JXL image");
-		return -1;
+		return IMG2_E_CODEC;
 	}
 
 	*num_frames = frame_count;
-	return frame_count;
+	return IMG2_OK;
 }
 
 static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
@@ -253,11 +263,11 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 				goto cleanup_error;
 			}
 
-			// Create img2_image_t
-			output = img2_image_alloc(width, height);
-			if (output == NULL) {
+			// Create img2_image_t (LIMIT over IMG2_MAX_PIXELS, NOMEM otherwise)
+			img2_status_t alloc_st = img2_decode_image_alloc(width, height, &output);
+			if (alloc_st != IMG2_OK) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
-				*st = IMG2_E_NOMEM;
+				*st = alloc_st;
 				goto cleanup_error;
 			}
 		} else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
@@ -397,6 +407,8 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 	uint32_t tps_den = 0;
 	uint32_t num_loops = 0;
 	uint32_t frame_delay_ms = 0;
+	// [F14] running pixel total of the output frames
+	uint64_t total_pixels = 0;
 
 	// Event loop
 	while (true) {
@@ -437,6 +449,9 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 		} else if (status == JXL_DEC_FRAME) {
 			// Start of new frame
 			if (current_frame >= num_frames) {
+				if (num_frames == MAX_JXL_FRAMES) {
+					break; // clamped by jxl_get_info (warning printed there): stop before decoding frame 201
+				}
 				img2_log(IMG2_LOG_ERROR, "Error: JXL frame count mismatch: expected %d, got more", num_frames);
 				*st = IMG2_E_CODEC;
 				goto cleanup_error;
@@ -456,11 +471,15 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 				goto cleanup_error;
 			}
 
-			// Allocate img2_image_t for current frame
-			frames[current_frame] = img2_image_alloc(width, height);
-			if (frames[current_frame] == NULL) {
+			// Allocate img2_image_t for current frame ([F14] within the running pixel total)
+			if (img2_decode_add_frame_pixels(&total_pixels, width, height) != IMG2_OK) {
+				*st = IMG2_E_LIMIT;
+				goto cleanup_error;
+			}
+			img2_status_t alloc_st = img2_decode_image_alloc(width, height, &frames[current_frame]);
+			if (alloc_st != IMG2_OK) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to create frame %d", current_frame);
-				*st = IMG2_E_NOMEM;
+				*st = alloc_st;
 				goto cleanup_error;
 			}
 			frames[current_frame]->delay_ms = frame_delay_ms;
@@ -667,10 +686,15 @@ static img2_image_t **decode_jxl_frames(const uint8_t *data, size_t len, int *fr
 	uint32_t height = 0;
 	int num_frames = 0;
 
-	int result = jxl_get_info(data, len, &width, &height, &num_frames);
-	if (result == -1) {
+	img2_status_t info_st = jxl_get_info(data, len, &width, &height, &num_frames);
+	if (info_st != IMG2_OK) {
 		// Error already printed by jxl_get_info
-		return img2_decode_fail(st, IMG2_E_CODEC);
+		return img2_decode_fail(st, info_st);
+	}
+
+	// [F14] every output frame is a full canvas: reject before allocating anything
+	if (num_frames > 1 && img2_decode_check_total_pixels((uint64_t)num_frames, width, height) != IMG2_OK) {
+		return img2_decode_fail(st, IMG2_E_LIMIT);
 	}
 
 	// Route to appropriate decoder

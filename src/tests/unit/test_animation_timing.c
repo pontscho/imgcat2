@@ -17,7 +17,12 @@
 
 #include <img2/img2.h>
 
+#if IMG2_HAS_APNG
+#include <png.h>
+#endif
+
 #include "../ctest.h"
+#include "anim_test_util.h"
 
 #ifndef IMG2_TEST_SRC_DIR
 #define IMG2_TEST_SRC_DIR "../src/tests"
@@ -344,6 +349,100 @@ CTEST(anim_timing, gif_decode_stops_at_frame_cap)
 	ASSERT_EQUAL(IMG2_E_CODEC, img2_decode(buf, 19 + 19 + GIF_TIMED_FRAME_BYTES * 5 + 8 + 12, NULL, &fr));
 	ASSERT_NULL(fr.frames);
 	free(buf);
+}
+
+#if IMG2_HAS_APNG && defined(PNG_WRITE_APNG_SUPPORTED)
+static void apng_write_cb(png_structp png_ptr, png_bytep data, png_size_t n)
+{
+	anim_buf_put((anim_buf_t *)png_get_io_ptr(png_ptr), data, n);
+}
+
+static void apng_flush_cb(png_structp png_ptr)
+{
+	(void)png_ptr;
+}
+
+/*
+ * APNG written with the vendored libpng's APNG patch: w x h RGBA canvas, acTL num_frames = nframes.
+ * frames_written full-canvas frames of delay_cs/100 s follow (0 = header only: IHDR + acTL, then an empty
+ * IDAT and IEND appended by hand, enough for png_read_info). Returns a malloc'ed buffer or NULL.
+ */
+static uint8_t *apng_build(uint32_t w, uint32_t h, uint32_t nframes, uint32_t frames_written, uint16_t delay_cs, uint32_t plays, size_t *len)
+{
+	anim_buf_t b = { 0 };
+	png_bytep volatile row = NULL; /* assigned after setjmp */
+	png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_infop info_ptr = png_ptr != NULL ? png_create_info_struct(png_ptr) : NULL;
+	if (info_ptr == NULL) {
+		png_destroy_write_struct(&png_ptr, NULL);
+		return NULL;
+	}
+	if (setjmp(png_jmpbuf(png_ptr))) {
+		png_destroy_write_struct(&png_ptr, &info_ptr);
+		free(row);
+		anim_buf_free(&b);
+		return NULL;
+	}
+	png_set_write_fn(png_ptr, &b, apng_write_cb, apng_flush_cb);
+	png_set_IHDR(png_ptr, info_ptr, w, h, 8, PNG_COLOR_TYPE_RGB_ALPHA, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+	png_set_acTL(png_ptr, info_ptr, nframes, plays);
+	png_write_info(png_ptr, info_ptr);
+	if (frames_written == 0) {
+		static const uint8_t tail[] = { 0, 0, 0, 0, 'I', 'D', 'A', 'T', 0x35, 0xAF, 0x06, 0x1E, 0, 0, 0, 0, 'I', 'E', 'N', 'D', 0xAE, 0x42, 0x60, 0x82 };
+		anim_buf_put(&b, tail, sizeof(tail));
+	} else {
+		row = malloc((size_t)w * 4);
+		if (row == NULL) {
+			png_error(png_ptr, "out of memory");
+		}
+		for (uint32_t i = 0; i < frames_written; i++) {
+			memset(row, (int)(i & 0xFF), (size_t)w * 4);
+			png_write_frame_head(png_ptr, info_ptr, NULL, w, h, 0, 0, delay_cs, 100, PNG_DISPOSE_OP_NONE, PNG_BLEND_OP_SOURCE);
+			for (uint32_t y = 0; y < h; y++) {
+				png_write_row(png_ptr, row);
+			}
+			png_write_frame_tail(png_ptr, info_ptr);
+		}
+		png_write_end(png_ptr, info_ptr);
+	}
+	png_destroy_write_struct(&png_ptr, &info_ptr);
+	free(row);
+	if (b.failed) {
+		anim_buf_free(&b);
+		return NULL;
+	}
+	*len = b.len;
+	return b.data;
+}
+#endif
+
+CTEST(anim_timing, apng_frame_cap_keeps_200_frames)
+{
+#if IMG2_HAS_APNG && defined(PNG_WRITE_APNG_SUPPORTED)
+	/* 230 frames of 30 ms, played twice -> the first 200 (warning), loop count kept */
+	size_t len = 0;
+	uint8_t *data = apng_build(1, 1, 230, 230, 3, 2, &len);
+	ASSERT_NOT_NULL(data);
+	anim_check_uniform(data, len, 200, 30u, 2);
+	free(data);
+#else
+	return; /* skipped: no APNG read/write support in this libpng */
+#endif
+}
+
+CTEST(anim_timing, apng_total_pixels_is_limit)
+{
+#if IMG2_HAS_APNG && defined(PNG_WRITE_APNG_SUPPORTED)
+	/* [F14] acTL announces 17 frames of an 8192 x 8192 canvas (each within IMG2_MAX_PIXELS) = 1.14e9 > 2^30:
+	 * rejected after png_read_info, before any frame (or IDAT) is read */
+	size_t len = 0;
+	uint8_t *data = apng_build(8192, 8192, 17, 0, 3, 0, &len);
+	ASSERT_NOT_NULL(data);
+	anim_check_status(data, len, IMG2_E_LIMIT);
+	free(data);
+#else
+	return; /* skipped: no APNG read/write support in this libpng */
+#endif
 }
 
 CTEST(anim_timing, max_frames_keeps_loop_count)

@@ -361,10 +361,18 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   `<= IMG2_MAX_PIXELS` (200 megapixels); violations are `IMG2_E_LIMIT`.
 - `img2_decode_opts_t.max_frames > 0` keeps only the first N frames. It trims the result after decoding,
   so it does not bound decode time or memory.
-- **[F14]** Animated GIF, APNG and WebP decodes are capped at 2^30 pixels summed over all output frames (each
-  frame is a full canvas, 4 GiB of RGBA at the cap): checked up front from the frame count and again while
-  allocating frame by frame; exceeding it frees everything and returns `IMG2_E_LIMIT`. GIF/APNG/WebP also keep
-  their 200-frame cap. Other multi-frame decoders (TIFF pages, HEIF/AVIF image lists, JXL) have no total cap.
+- **[F14]** Animated GIF, APNG, WebP and JPEG XL decodes are capped at 2^30 pixels summed over all output
+  frames (each frame is a full canvas, 4 GiB of RGBA at the cap): checked up front from the frame count and
+  again while allocating frame by frame; exceeding it frees everything and returns `IMG2_E_LIMIT`. HEIF/AVIF
+  image lists (frames may differ in size) sum the image handles' sizes before decoding anything and keep a
+  running total while decoding. TIFF pages have no total cap.
+- **Frame cap**: GIF, APNG, WebP, JPEG XL and HEIF/AVIF image lists keep the first 200 frames of a longer
+  animation and log a WARN line (`... limiting to 200`); the rest is not decoded. JPEG XL stops its frame-header
+  walk at the 201st frame (imgcat2 1.0 and libimg2 before S13b failed such files with `IMG2_E_CODEC`).
+- Frame and canvas allocations of the animated decoders (and of the JPEG XL/HEIF/AVIF still paths) report
+  `IMG2_E_LIMIT` when the size fails the `IMG2_MAX_DIMENSION`/`IMG2_MAX_PIXELS` gate and `IMG2_E_NOMEM` only for
+  a real allocation failure. JPEG XL checks the canvas against both limits from the basic info, before any frame
+  is walked or decoded (a canvas over `IMG2_MAX_DIMENSION` was `IMG2_E_CODEC` before S13b).
 - **[F16]** GIF: before giflib decodes anything, the records are walked without LZW-decoding the rasters to
   count the frames and check the logical screen (`IMG2_E_LIMIT`) and the total above; `img2_is_animated`
   on a GIF only walks the records up to the second image descriptor. The GIF decode then reads the records
@@ -452,8 +460,10 @@ TIFF, HEIF and AVIF frames arrive already oriented by their codecs; their EXIF o
 - Only frame 0 is encoded (no animated output).
 - HEIF/AVIF image sequences report no timing (`delay_ms = 0`, `loop_count = 0`): the decoders read the
   top-level image list, not the libheif sequence (track) API that carries per-sample durations (TODO in
-  `decoder_heif.c`/`decoder_avif.c`). There is no HEIF/AVIF or JPEG XL animation fixture, so only GIF, APNG and
-  WebP timing are covered by `test_animation_timing`.
+  `decoder_heif.c`/`decoder_avif.c`). A file holding only a sequence track (no primary item) fails with
+  `IMG2_E_CODEC`. Tests: `test_animation_timing` (GIF/APNG/WebP fixtures, synthetic GIF and APNG),
+  `test_animation_jxl`, `test_animation_webp` and `test_animation_heif` (fixtures encoded in-test with the
+  vendored libjxl, libwebp and libheif encoders).
 - The macOS fat archive path (`libtool -static`) is written but untested.
 - Host-library packages: with any `IMG2_USE_SYSTEM_*` (or resvg) the installed package links those host
   libraries (configure warns), and with a static link they must come after the fat archive, which cannot

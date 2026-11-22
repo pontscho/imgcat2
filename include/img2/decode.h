@@ -33,7 +33,8 @@ typedef struct img2_decode_opts {
  *
  * buf is untrusted: buf NULL / len 0 / out NULL -> IMG2_E_ARG; len > IMG2_MAX_FILE_SIZE ->
  * IMG2_E_LIMIT; every frame is limited to IMG2_MAX_DIMENSION / IMG2_MAX_PIXELS (else IMG2_E_LIMIT),
- * and the frames of an animated GIF, APNG or WebP to 2^30 pixels in total (else IMG2_E_LIMIT).
+ * and the frames of an animated GIF, APNG, WebP, JPEG XL or HEIF/AVIF image list to 2^30 pixels in total
+ * (else IMG2_E_LIMIT). Animations longer than 200 frames are clamped to their first 200 frames.
  *
  * @param buf  Encoded image data
  * @param len  Length of buf in bytes

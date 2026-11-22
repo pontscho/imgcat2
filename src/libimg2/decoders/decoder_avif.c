@@ -315,6 +315,32 @@ static img2_image_t **decode_avif_static(const uint8_t *data, size_t len, int *f
 }
 
 /**
+ * @brief [F14] Sum the sizes of the first count top-level images (heif_image_handle_get_width/height, i.e.
+ *        after transformations) against IMG2_MAX_TOTAL_PIXELS without decoding them
+ *
+ * @return IMG2_OK, IMG2_E_LIMIT (total exceeded, logged), IMG2_E_CODEC (handle lookup failed, logged)
+ */
+static img2_status_t avif_check_total_pixels(struct heif_context *ctx, const heif_item_id *ids, int count)
+{
+	uint64_t total = 0;
+	for (int i = 0; i < count; i++) {
+		struct heif_image_handle *handle = NULL;
+		struct heif_error err = heif_context_get_image_handle(ctx, ids[i], &handle);
+		if (err.code != heif_error_Ok) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to get image handle %d: %s", i, err.message);
+			return IMG2_E_CODEC;
+		}
+		int width = heif_image_handle_get_width(handle);
+		int height = heif_image_handle_get_height(handle);
+		heif_image_handle_release(handle);
+		if (width > 0 && height > 0 && img2_decode_add_frame_pixels(&total, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
+			return IMG2_E_LIMIT;
+		}
+	}
+	return IMG2_OK;
+}
+
+/**
  * @brief Decode AVIF image sequence with all frames
  *
  * Decodes all images in an AVIF image sequence (animated AVIF).
@@ -388,6 +414,14 @@ static img2_image_t **decode_avif_animated(const uint8_t *data, size_t len, int 
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
+	// [F14] reject before decoding anything: the images' (transformed) sizes must fit IMG2_MAX_TOTAL_PIXELS
+	img2_status_t pre_st = avif_check_total_pixels(ctx, image_ids, num_images);
+	if (pre_st != IMG2_OK) {
+		free(image_ids);
+		heif_context_free(ctx);
+		return img2_decode_fail(st, pre_st);
+	}
+
 	// Allocate frames array
 	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_images);
 	if (frames == NULL) {
@@ -403,6 +437,7 @@ static img2_image_t **decode_avif_animated(const uint8_t *data, size_t len, int 
 	}
 
 	// Decode each image
+	uint64_t total_pixels = 0;
 	for (int i = 0; i < num_images; i++) {
 		// Get image handle
 		struct heif_image_handle *handle = NULL;
@@ -438,13 +473,19 @@ static img2_image_t **decode_avif_animated(const uint8_t *data, size_t len, int 
 			goto cleanup_error;
 		}
 
-		// Create output frame
-		frames[i] = img2_image_alloc((uint32_t)width, (uint32_t)height);
-		if (frames[i] == NULL) {
+		// Create output frame ([F14] within the running pixel total)
+		if (img2_decode_add_frame_pixels(&total_pixels, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
+			heif_image_release(img);
+			heif_image_handle_release(handle);
+			*st = IMG2_E_LIMIT;
+			goto cleanup_error;
+		}
+		img2_status_t alloc_st = img2_decode_image_alloc((uint32_t)width, (uint32_t)height, &frames[i]);
+		if (alloc_st != IMG2_OK) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", i);
 			heif_image_release(img);
 			heif_image_handle_release(handle);
-			*st = IMG2_E_NOMEM;
+			*st = alloc_st;
 			goto cleanup_error;
 		}
 

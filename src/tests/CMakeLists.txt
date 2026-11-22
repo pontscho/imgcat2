@@ -47,6 +47,10 @@ img2_add_test(test_animation_timing SOURCES unit/test_animation_timing.c LINK li
 if(TARGET test_animation_timing)
 	target_compile_definitions(test_animation_timing PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
 endif()
+# S13b: animated JXL / WebP / multi-image HEIF+AVIF, fixtures encoded in-test with the vendored encoders
+img2_add_test(test_animation_jxl SOURCES unit/test_animation_jxl.c LINK lib REQUIRES JXL)
+img2_add_test(test_animation_webp SOURCES unit/test_animation_webp.c LINK lib REQUIRES WEBP)
+img2_add_test(test_animation_heif SOURCES unit/test_animation_heif.c LINK lib REQUIRES HEIF)
 
 # [L4] Public API test: links img2 only (the fat archive if built; no img2_testing, no internal include dirs);
 # includes only <img2/img2.h>
