@@ -10,6 +10,7 @@
 #ifndef IMG2_INTERNAL_DECODERS_DECODER_H
 #define IMG2_INTERNAL_DECODERS_DECODER_H
 
+#include <limits.h>
 #include <png.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -314,6 +315,10 @@ img2_status_t img2_decode_svg_nanosvg(const uint8_t *data, size_t len, const img
  * @return IMG2_OK or an error status
  */
 img2_status_t img2_decode_svg_resvg(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out);
+
+/* [F5] stb_image and qoi.h take the input length as int (decoder_stb.c / decoder_qoi.c pass (int)len): the
+ * dispatcher rejects len > IMG2_MAX_FILE_SIZE first, so that limit must fit in an int */
+_Static_assert(IMG2_MAX_FILE_SIZE <= INT_MAX, "IMG2_MAX_FILE_SIZE must fit the int length of stb_image / qoi.h");
 
 /* [L6] Every decoder entry point, declared unconditionally (unbuilt ones are simply never referenced). */
 img2_status_t img2_decode_png(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out);
