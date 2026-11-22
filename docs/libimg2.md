@@ -373,7 +373,9 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   image lists (frames may differ in size) sum the image handles' sizes before decoding anything and keep a
   running total while decoding. HEIF/AVIF sequence tracks (sample count unknown up front) check the track
   resolution against `IMG2_MAX_PIXELS`/`IMG2_MAX_DIMENSION` before the first sample and keep the running total
-  per decoded frame. TIFF pages have no total cap.
+  per decoded frame. Multi-page TIFF reads every page's directory first: each page against
+  `IMG2_MAX_DIMENSION`/`IMG2_MAX_PIXELS` and the pages' sum against the same 2^30 total, before any page is
+  allocated or decoded.
 - **Frame cap**: GIF, APNG, WebP, JPEG XL, HEIF/AVIF image lists and HEIF/AVIF sequence tracks keep the first
   200 frames of a longer animation and log a WARN line (`... limiting to 200`); the rest is not decoded (a
   sequence decodes one sample past the cap to detect it). JPEG XL stops its frame-header walk at the 201st

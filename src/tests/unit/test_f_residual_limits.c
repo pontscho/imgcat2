@@ -168,3 +168,62 @@ CTEST(f_residual_limits, gif_descriptor_beyond_frame_cap_not_checked)
 	cb_free(&b);
 }
 #endif
+
+/* ===== [F14] TIFF ===== */
+
+#ifdef IMG2_HAVE_TIFF
+static void tiff_entry(cb_buf_t *b, unsigned tag, unsigned type, uint32_t count, uint32_t value)
+{
+	cb_le16(b, tag);
+	cb_le16(b, type);
+	cb_le32(b, count);
+	if (type == 3) { /* SHORT, left-justified */
+		cb_le16(b, value);
+		cb_le16(b, 0);
+	} else {
+		cb_le32(b, value);
+	}
+}
+
+/* Little-endian TIFF of `pages` 8-bit grey pages of w[p] x h[p] (one uncompressed strip each, no strip data:
+ * the directories are valid, a read of the pixels would fail) */
+static void tiff_pages(cb_buf_t *b, int pages, const uint32_t *w, const uint32_t *h)
+{
+	enum { N_ENTRIES = 9, IFD_SIZE = 2 + N_ENTRIES * 12 + 4 };
+	cb_str(b, "II");
+	cb_le16(b, 42);
+	cb_le32(b, 8);
+	for (int p = 0; p < pages; p++) {
+		uint32_t at = 8u + (uint32_t)p * IFD_SIZE;
+		cb_le16(b, N_ENTRIES);
+		tiff_entry(b, 256, 4, 1, w[p]);        /* ImageWidth */
+		tiff_entry(b, 257, 4, 1, h[p]);        /* ImageLength */
+		tiff_entry(b, 258, 3, 1, 8);           /* BitsPerSample */
+		tiff_entry(b, 259, 3, 1, 1);           /* Compression: none */
+		tiff_entry(b, 262, 3, 1, 1);           /* Photometric: min-is-black */
+		tiff_entry(b, 273, 4, 1, 8);           /* StripOffsets */
+		tiff_entry(b, 277, 3, 1, 1);           /* SamplesPerPixel */
+		tiff_entry(b, 278, 4, 1, h[p]);        /* RowsPerStrip */
+		tiff_entry(b, 279, 4, 1, w[p] * h[p]); /* StripByteCounts */
+		cb_le32(b, p + 1 < pages ? at + IFD_SIZE : 0);
+	}
+}
+
+CTEST(f_residual_limits, tiff_pages_beyond_total_pixels)
+{
+	/* six 14000 x 14000 pages (1.96e8 each, within IMG2_MAX_PIXELS; 1.18e9 together > 2^30): the first page's
+	 * 784 MB raster used to be allocated before any total was looked at */
+	const uint32_t big[6] = { 14000, 14000, 14000, 14000, 14000, 14000 };
+	cb_buf_t b = { 0 };
+	tiff_pages(&b, 6, big, big);
+	fr_expect_limit(img2_decode_tiff, b.d, b.n);
+	cb_free(&b);
+
+	/* a page over IMG2_MAX_PIXELS after a small one: rejected before the first page is decoded */
+	const uint32_t mixed[2] = { 4, 15000 };
+	tiff_pages(&b, 2, mixed, mixed);
+	fr_expect_limit(img2_decode_tiff, b.d, b.n);
+	cb_free(&b);
+	fr_check();
+}
+#endif
