@@ -329,4 +329,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		target_link_options(test_f_residual_limits PRIVATE -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc)
 	endif()
 endif()
+# F27 font family names from file names (library) and in `--fonts` (CLI)
+img2_add_test(test_f_residual SOURCES unit/test_f_residual.c LINK cli)
 # --- f-residual end ---

@@ -218,6 +218,18 @@ static bool sfnt_is_valid(const uint8_t *data, size_t size)
 }
 
 /**
+ * @brief [F27] Replace C0 controls and DEL in an untrusted font family name with '?' (in place)
+ */
+static void replace_controls(char *s)
+{
+	for (char *p = s; *p != '\0'; p++) {
+		if ((unsigned char)*p < 0x20 || (unsigned char)*p == 0x7F) {
+			*p = '?';
+		}
+	}
+}
+
+/**
  * @brief Extract font family name from TTF name table using stb_truetype
  */
 static char *parse_font_family_from_ttf(const char *font_path)
@@ -269,11 +281,7 @@ static char *parse_font_family_from_ttf(const char *font_path)
 	}
 	if (family != NULL) {
 		/* [F27] the name table is untrusted: no C0 controls / DEL in names shown by --fonts */
-		for (char *p = family; *p != '\0'; p++) {
-			if ((unsigned char)*p < 0x20 || (unsigned char)*p == 0x7F) {
-				*p = '?';
-			}
-		}
+		replace_controls(family);
 	}
 
 	free(data);
@@ -309,6 +317,8 @@ static char *extract_family_name(const char *filename)
 		*dash = '\0';
 	}
 
+	/* [F27] a file name is untrusted as well: same filtering as the name-table path */
+	replace_controls(name);
 	return name;
 }
 
