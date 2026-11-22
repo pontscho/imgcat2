@@ -102,8 +102,15 @@ static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *f
 	cinfo.err = jpeg_std_error(&jerr.pub);
 	jerr.pub.error_exit = jpeg_error_exit;
 
+	// Allocated after setjmp and freed on the longjmp path (libjpeg errors in jpeg_read_scanlines, e.g. a
+	// 12-bit file, or in jpeg_finish_decompress, e.g. a second scan): must be volatile
+	img2_image_t *volatile img = NULL;
+	uint8_t *volatile row_buffer = NULL;
+
 	if (setjmp(jerr.setjmp_buffer)) {
 		// longjmp returns here if error occurs
+		free(row_buffer);
+		img2_image_destroy(img);
 		jpeg_destroy_decompress(&cinfo);
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
@@ -148,17 +155,18 @@ static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *f
 	}
 
 	// Create img2_image_t structure for RGBA output
-	img2_image_t *img = NULL;
-	img2_status_t alloc_st = img2_decode_image_alloc(width, height, &img);
+	img2_image_t *new_img = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc(width, height, &new_img);
 	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create image_t structure");
 		jpeg_destroy_decompress(&cinfo);
 		return img2_decode_fail(st, alloc_st);
 	}
+	img = new_img;
 
 	// Allocate row buffer for RGB scanline (libjpeg outputs RGB)
 	size_t row_stride = width * channels; // RGB: 3 bytes per pixel
-	uint8_t *row_buffer = (uint8_t *)malloc(row_stride);
+	row_buffer = (uint8_t *)malloc(row_stride);
 	if (row_buffer == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JPEG row buffer");
 		img2_image_destroy(img);
@@ -194,6 +202,7 @@ static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *f
 
 	// Free row buffer
 	free(row_buffer);
+	row_buffer = NULL;
 
 	// Finish decompression
 #ifdef IMG2_HAVE_JPEGQS
