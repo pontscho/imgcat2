@@ -316,9 +316,12 @@ Every diagnostic goes through one process-global sink; the library never writes 
 - **[E8]/[R21]** After `img2_set_log_callback()` returns, threads that are already logging may still call the
   previous `fn`/`user`; keep the previous `user` valid until those calls finish (or until `img2_shutdown()`).
 - **[SM4] Untrusted text warning:** messages can embed strings taken from the input file (EXIF/XMP fields,
-  SVG text, vendor messages quoting file data), which may contain terminal control/escape bytes. The default
-  stderr sink writes them unmodified (byte compatibility with imgcat2). Hosts that show messages on a terminal
-  or in logs should install a callback with `img2_set_log_callback` and sanitise there.
+  SVG text, vendor messages quoting file data), which may contain terminal control/escape bytes. Every message
+  is filtered before it reaches the default stderr sink or a callback (**[F22]**, `core/log.c`): C0 controls
+  other than tab (and a final newline) and DEL become `?`. Bytes from 0x80 up are passed through unchanged, so
+  UTF-8 C1 controls (U+0080-U+009F, e.g. CSI U+009B) and raw 0x80-0x9F bytes still reach the sink; hosts that
+  show messages on a terminal which interprets C1 controls should install a callback with
+  `img2_set_log_callback` and filter those there.
 
 ## Threading model
 

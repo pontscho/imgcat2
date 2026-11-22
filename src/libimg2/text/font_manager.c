@@ -503,7 +503,7 @@ static bool img2_font_manager_init_locked(void)
 		g_fallback_font->family = strdup("DejaVu Sans Mono");
 	}
 	if (g_fallback_font != NULL && g_fallback_font->family == NULL) {
-		/* [F12] never intern a handle with a NULL family: no fallback (img2_font_load_fallback -> NOT_FOUND) */
+		/* [F12] never intern a handle with a NULL family: no fallback (img2_font_load_fallback -> IMG2_E_NOMEM) */
 		free(g_fallback_font);
 		g_fallback_font = NULL;
 	}
