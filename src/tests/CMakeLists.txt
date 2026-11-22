@@ -300,3 +300,7 @@ img2_add_test(test_fuzz_regress SOURCES unit/test_fuzz_regress.c TIMEOUT 30)
 # --- iso-widen ---
 # ISO above 65535: ISOSpeedRatings 65535 resolved through the EXIF 2.3 LONG sensitivity tags (metadata/exif_reader.c)
 img2_add_test(test_iso_widen SOURCES unit/test_iso_widen.c REQUIRES EXIF_READER)
+
+# --- svg-state ---
+# nanosvg.h transform parsers read stack args[] they had not written: an SVG decode depended on earlier decodes
+img2_add_test(test_svg_state SOURCES unit/test_svg_state.c)
