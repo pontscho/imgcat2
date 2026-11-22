@@ -165,6 +165,7 @@ img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **o
 	err = heif_context_get_encoder_for_format(ctx, heif_compression_HEVC, &encoder);
 	if (err.code != heif_error_Ok || encoder == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: No HEVC encoder available: %s", err.message);
+		heif_encoder_release(encoder); /* a plugin's new_encoder error comes with the encoder already created */
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
 		return IMG2_E_CODEC;

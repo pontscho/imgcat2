@@ -1184,43 +1184,27 @@ encoders/encoder_heif.c:151 line = heif_image_release(heif_img);
 encoders/encoder_heif.c:152 line = heif_context_free(ctx);
 encoders/encoder_heif.c:153 line = return IMG2_E_CODEC;
 encoders/encoder_heif.c:154 line = }
-reason: configuration-specific: kvazaar (HEVC) is built in; OK with a NULL encoder is impossible
-encoders/encoder_heif.c:166 region 52 = if (err.code != heif_error_Ok || encoder == NULL) {
+reason: heif_context_get_encoder_for_format() sets *encoder = new heif_encoder before it returns the plugin's new_encoder result (heif_encoding.cc), and NULL only together with an error: Ok with a NULL encoder is impossible
 encoders/encoder_heif.c:166 branch-true 35 = if (err.code != heif_error_Ok || encoder == NULL) {
-encoders/encoder_heif.c:166 branch-true 6 = if (err.code != heif_error_Ok || encoder == NULL) {
-encoders/encoder_heif.c:167 line = img2_log(IMG2_LOG_ERROR, "Error: No HEVC encoder available: %s", err.message);
-encoders/encoder_heif.c:168 line = heif_image_release(heif_img);
-encoders/encoder_heif.c:169 line = heif_context_free(ctx);
-encoders/encoder_heif.c:170 line = return IMG2_E_CODEC;
-encoders/encoder_heif.c:171 line = }
-reason: heif_encoder_set_lossy_quality() with the clamped 0..100 cannot fail
-encoders/encoder_heif.c:175 region 33 = if (err.code != heif_error_Ok) {
-encoders/encoder_heif.c:175 branch-true 6 = if (err.code != heif_error_Ok) {
-encoders/encoder_heif.c:176 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set HEIF quality: %s", err.message);
-encoders/encoder_heif.c:177 line = heif_encoder_release(encoder);
-encoders/encoder_heif.c:178 line = heif_image_release(heif_img);
-encoders/encoder_heif.c:179 line = heif_context_free(ctx);
-encoders/encoder_heif.c:180 line = return IMG2_E_CODEC;
-encoders/encoder_heif.c:181 line = }
 reason: the single write call either stores everything or fails before anything was stored
-encoders/encoder_heif.c:215 region 35 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:215 branch-true 7 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:216 line = free(write_state.buffer);
-encoders/encoder_heif.c:217 line = }
+encoders/encoder_heif.c:216 region 35 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:216 branch-true 7 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:217 line = free(write_state.buffer);
+encoders/encoder_heif.c:218 line = }
 reason: libheif always writes at least ftyp/meta after a successful encode
-encoders/encoder_heif.c:227 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_heif.c:227 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_heif.c:227 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_heif.c:228 line = img2_log(IMG2_LOG_ERROR, "Error: HEIF encoder produced no output");
-encoders/encoder_heif.c:229 line = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:229 region 35 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:229 region 7 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:229 branch-true 7 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:229 branch-false 7 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:230 line = free(write_state.buffer);
-encoders/encoder_heif.c:231 line = }
-encoders/encoder_heif.c:232 line = return IMG2_E_CODEC;
-encoders/encoder_heif.c:233 line = }
+encoders/encoder_heif.c:228 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_heif.c:228 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_heif.c:228 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_heif.c:229 line = img2_log(IMG2_LOG_ERROR, "Error: HEIF encoder produced no output");
+encoders/encoder_heif.c:230 line = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:230 region 35 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:230 region 7 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:230 branch-true 7 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:230 branch-false 7 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:231 line = free(write_state.buffer);
+encoders/encoder_heif.c:232 line = }
+encoders/encoder_heif.c:233 line = return IMG2_E_CODEC;
+encoders/encoder_heif.c:234 line = }
 
 # ===== encoders/encoder_jpeg.c =====
 reason: jpeg_write_scanlines() returns 0 only for a suspending destination; the memory destination grows or longjmps

@@ -255,4 +255,5 @@ img2_add_test(test_cov_p3_gaps SOURCES unit/test_cov_p3_gaps.c REQUIRES GIFLIB)#
 # process-global, so each plugin test has its own executable)
 img2_add_test(test_heif_fix_edges SOURCES unit/test_heif_fix_edges.c REQUIRES HEIF)
 img2_add_test(test_heif_fix_decplugin SOURCES unit/test_heif_fix_decplugin.c REQUIRES HEIF TIMEOUT 60)
+img2_add_test(test_heif_fix_encplugin SOURCES unit/test_heif_fix_encplugin.c REQUIRES HEIF)
 # --- heif-fix end ---
