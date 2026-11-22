@@ -5,7 +5,7 @@
  * LibRaw's default data error callback prints "<file>: Unexpected end of file" or "<file>: data corrupted at N"
  * to stderr. Two DNGs written in-test trigger it: an uncompressed raw strip that starts 64 bytes before the end of
  * the file (end of data while reading it), and a lossless-JPEG raw (compression 7, encoded in-test with
- * libjpeg-turbo) with a marker-like FF D0 pair inside its entropy-coded data (corrupt data before the end).
+ * libjpeg-turbo) whose SOF3 claims 12-bit samples for 16-bit data (corrupt data before the end).
  * fd 2 is captured through a pipe: nothing may reach it, the log callback gets the text at IMG2_LOG_WARN.
  */
 
@@ -202,20 +202,19 @@ CTEST(jpeg_log_raw, corrupt_data_reaches_callback_not_stderr)
 	uint8_t *lj = ljpeg_encode(&lj_len);
 	ASSERT_NOT_NULL(lj);
 
-	/* entropy-coded data starts after the SOS segment */
-	size_t sos = 0;
-	for (size_t i = 2; i + 3 < lj_len; i++) {
-		if (lj[i] == 0xFF && lj[i + 1] == 0xDA) {
-			sos = i;
+	/* SOF3 sample precision 16 -> 12: the bit stream stays valid, but LibRaw then predicts the first sample from
+	 * 1 << 11 instead of 1 << 15 and the decoded samples leave the 12-bit range it checks: a data error before the
+	 * end of data (corrupting the entropy-coded bytes instead makes LibRaw's ljpeg_diff() shift by -1, UB) */
+	int patched = 0;
+	for (size_t i = 2; i + 4 < lj_len; i++) {
+		if (lj[i] == 0xFF && lj[i + 1] == 0xC3) {
+			ASSERT_EQUAL(16, lj[i + 4]);
+			lj[i + 4] = 12;
+			patched = 1;
 			break;
 		}
 	}
-	ASSERT_TRUE(sos != 0);
-	const size_t data = sos + 2 + (((size_t)lj[sos + 2] << 8) | lj[sos + 3]);
-	ASSERT_TRUE(data + 16 < lj_len);
-	const size_t at = data + (lj_len - 2 - data) / 2;
-	lj[at] = 0xFF;
-	lj[at + 1] = 0xD0; /* LibRaw's ljpeg bit reader stops at a non-zero byte after 0xFF */
+	ASSERT_TRUE(patched);
 
 	cb_buf_t b = { 0 };
 	ljpeg_dng_build(&b, lj, lj_len);
