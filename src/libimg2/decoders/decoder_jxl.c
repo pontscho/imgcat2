@@ -556,50 +556,71 @@ cleanup_error:
 }
 
 #ifdef IMG2_HAVE_EXIF_READER
+/* Upper bound of the top-level boxes jxl_find_box() looks at (real files have a handful; partial codestream
+ * 'jxlp' boxes can add a few hundred) */
+#define JXL_MAX_BOXES 4096
+
+static uint64_t jxl_be(const uint8_t *p, int n)
+{
+	uint64_t v = 0;
+	for (int i = 0; i < n; i++) {
+		v = (v << 8) | p[i];
+	}
+	return v;
+}
+
 /**
- * @brief Find a box in JXL ISOBMFF container by scanning memory
+ * @brief Find a top-level box of a JPEG XL container (ISO/IEC 18181-2) by walking the ISOBMFF box headers
  *
- * WORKAROUND: The libjxl box API is complex and hard to use correctly.
- * This function directly scans the file memory for box headers.
+ * Box header: 32-bit big-endian size (header included) and 4-byte type; size 1 = a 64-bit size follows the
+ * type, size 0 = the box extends to the end of the file. A bare codestream has no boxes. The walk stops at the
+ * first malformed header (size smaller than the header or past the end of the data) and after JXL_MAX_BOXES
+ * boxes. Only top-level boxes are matched: bytes inside another box's payload (codestream 'jxlc' / 'jxlp',
+ * other boxes) are never taken for a box. Brotli-compressed 'brob' boxes are not decompressed, so a compressed
+ * Exif / xml box is not found.
  *
- * @param data File data
+ * @param data File data (decoded successfully as JPEG XL)
  * @param len File length
  * @param box_type 4-character box type (e.g. "Exif")
- * @param box_data_out Output: pointer to box data (within input data buffer)
- * @param box_size_out Output: size of box data
+ * @param box_data_out Output: pointer to the box payload (within data)
+ * @param box_size_out Output: payload size
  * @return 0 on success, -1 if not found
  */
 static int jxl_find_box(const uint8_t *data, size_t len, const char *box_type, const uint8_t **box_data_out, size_t *box_size_out)
 {
-	if (data == NULL || len < 12 || box_type == NULL || box_data_out == NULL || box_size_out == NULL) {
-		return -1;
+	if (JxlSignatureCheck(data, len) != JXL_SIG_CONTAINER) {
+		return -1; /* bare codestream: no boxes */
 	}
 
-	// Scan for box headers in ISOBMFF format:
-	// 4 bytes: box size (big-endian)
-	// 4 bytes: box type
-	// N bytes: box data
-
-	for (size_t i = 0; i + 8 < len; i++) {
-		// Read box size (big-endian uint32)
-		uint32_t box_size = ((uint32_t)data[i] << 24) | ((uint32_t)data[i + 1] << 16) | ((uint32_t)data[i + 2] << 8) | ((uint32_t)data[i + 3]);
-
-		// Check if box type matches
-		if (data[i + 4] == box_type[0] && data[i + 5] == box_type[1] && data[i + 6] == box_type[2] && data[i + 7] == box_type[3]) {
-
-			// Found the box!
-			// Box data starts at i+8, size is (box_size - 8)
-			if (box_size >= 8 && i + box_size <= len) {
-				*box_data_out = data + i + 8;
-				*box_size_out = box_size - 8;
-				return 0;
-			}
+	size_t pos = 0;
+	for (int n = 0; n < JXL_MAX_BOXES; n++) {
+		size_t left = len - pos;
+		if (left < 8) {
+			return -1; /* end of the data (or trailing bytes too short for a box header) */
 		}
-
-		// Skip to next potential box (advance by 1 byte for safety)
+		const uint8_t *hdr = data + pos;
+		uint64_t size = jxl_be(hdr, 4);
+		uint64_t hdr_len = 8;
+		if (size == 1) {
+			if (left < 16) {
+				return -1;
+			}
+			size = jxl_be(hdr + 8, 8);
+			hdr_len = 16;
+		} else if (size == 0) {
+			size = left;
+		}
+		if (size < hdr_len || size > left) {
+			return -1; /* malformed header: nothing after it can be located */
+		}
+		if (memcmp(hdr + 4, box_type, 4) == 0) {
+			*box_data_out = hdr + hdr_len;
+			*box_size_out = (size_t)(size - hdr_len);
+			return 0;
+		}
+		pos += (size_t)size;
 	}
-
-	return -1; // Not found
+	return -1;
 }
 
 static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **exif_out, img2_xmp_t **xmp_out)

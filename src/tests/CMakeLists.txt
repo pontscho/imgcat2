@@ -242,4 +242,5 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 			-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup,--wrap=free)
 	endif()
 endif()
+img2_add_test(test_cov_p3_jxl SOURCES unit/test_cov_p3_jxl.c REQUIRES JXL EXIF_READER)
 # --- coverage phase 3 end ---
