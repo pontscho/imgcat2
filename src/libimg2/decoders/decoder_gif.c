@@ -276,6 +276,9 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
  * DGifSavedExtensionToGCB works unchanged. Once max_images images are stored it returns
  * without reading any further record, so images beyond the cap are never decoded (or read).
  * On error the partially filled image stays in SavedImages; DGifCloseFile frees it.
+ * Two deviations from DGifSlurp: an extension without data sub-blocks is complete after DGifGetExtension
+ * (DGifSlurp reads one more block length and swallows the next record), and gif->Error is set on every
+ * error return (DGifSlurp leaves it 0 for bad image dimensions and a failed raster allocation).
  *
  * @param gif Opened giflib handle
  * @param max_images Stop after this many images (> 0)
@@ -301,10 +304,12 @@ static int gif_slurp_capped(GifFileType *gif, int max_images)
 			int width = sp->ImageDesc.Width;
 			int height = sp->ImageDesc.Height;
 			if (width <= 0 || height <= 0 || width > (INT_MAX / height)) {
+				gif->Error = D_GIF_ERR_DATA_TOO_BIG; /* giflib leaves Error unset here (GifErrorString(0) is NULL) */
 				return GIF_ERROR;
 			}
 			sp->RasterBits = (GifByteType *)malloc((size_t)width * (size_t)height * sizeof(GifPixelType));
 			if (sp->RasterBits == NULL) {
+				gif->Error = D_GIF_ERR_NOT_ENOUGH_MEM;
 				return GIF_ERROR;
 			}
 			if (sp->ImageDesc.Interlace) {
@@ -335,17 +340,15 @@ static int gif_slurp_capped(GifFileType *gif, int max_images)
 			if (DGifGetExtension(gif, &ext_function, &ext_data) == GIF_ERROR) {
 				return GIF_ERROR;
 			}
-			if (ext_data != NULL && GifAddExtensionBlock(&gif->ExtensionBlockCount, &gif->ExtensionBlocks, ext_function, ext_data[0], &ext_data[1]) == GIF_ERROR) {
-				return GIF_ERROR;
-			}
-			for (;;) {
-				if (DGifGetExtensionNext(gif, &ext_data) == GIF_ERROR) {
+			/* An extension without data sub-blocks has already been read up to its terminator (ext_data NULL):
+			 * unlike DGifSlurp, do not read another block length (it would consume the next record) */
+			int function = ext_function;
+			while (ext_data != NULL) {
+				if (GifAddExtensionBlock(&gif->ExtensionBlockCount, &gif->ExtensionBlocks, function, ext_data[0], &ext_data[1]) == GIF_ERROR) {
 					return GIF_ERROR;
 				}
-				if (ext_data == NULL) {
-					break;
-				}
-				if (GifAddExtensionBlock(&gif->ExtensionBlockCount, &gif->ExtensionBlocks, CONTINUE_EXT_FUNC_CODE, ext_data[0], &ext_data[1]) == GIF_ERROR) {
+				function = CONTINUE_EXT_FUNC_CODE;
+				if (DGifGetExtensionNext(gif, &ext_data) == GIF_ERROR) {
 					return GIF_ERROR;
 				}
 			}

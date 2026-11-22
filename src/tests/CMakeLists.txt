@@ -167,3 +167,8 @@ if(PROJECT_IS_TOP_LEVEL)
 		RESOURCE_LOCK img2_consumer PASS_REGULAR_EXPRESSION "img2 consumer OK"
 		ENVIRONMENT "TMPDIR=${_img2_consumer_tmp}")
 endif()
+
+# --- coverage lane B begin ---
+# Coverage (docs/coverage.md) of the GIF, PNG, WebP, JPEG, TIFF, RAW and nanosvg decoders; fixtures built in-test
+img2_add_test(test_cov_b_gif SOURCES unit/test_cov_b_gif.c REQUIRES GIFLIB)
+# --- coverage lane B end ---
