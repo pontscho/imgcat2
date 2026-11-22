@@ -42,16 +42,16 @@
  */
 static char *inline_svg_styles(const char *svg_data)
 {
-	// Find <style> tag
-	const char *style_start = strstr(svg_data, "<style>");
-	const char *style_end = strstr(svg_data, "</style>");
+	// Find <style> tag, and the </style> after it (an earlier "</style>", e.g. in a comment, does not count)
+	const char *style_tag_start = strstr(svg_data, "<style>");
+	const char *style_end = style_tag_start != NULL ? strstr(style_tag_start + 7, "</style>") : NULL;
 
-	if (style_start == NULL || style_end == NULL) {
+	if (style_end == NULL) {
 		// No CSS to inline, return copy of original
 		return strdup(svg_data);
 	}
 
-	style_start += 7; // skip "<style>"
+	const char *style_start = style_tag_start + 7; // skip "<style>"
 	size_t style_len = style_end - style_start;
 
 	// Extract CSS content
@@ -71,17 +71,10 @@ static char *inline_svg_styles(const char *svg_data)
 		return NULL;
 	}
 
-	size_t out_pos = 0;
-	const char *read_pos = svg_data;
-
 	// Copy everything before <style> tag and skip style section
-	const char *style_tag_start = strstr(svg_data, "<style>");
-	if (style_tag_start != NULL) {
-		size_t pre_style_len = style_tag_start - svg_data;
-		memcpy(output, svg_data, pre_style_len);
-		out_pos = pre_style_len;
-		read_pos = style_end + 8; // skip "</style>"
-	}
+	size_t out_pos = (size_t)(style_tag_start - svg_data);
+	memcpy(output, svg_data, out_pos);
+	const char *read_pos = style_end + 8; // skip "</style>"
 
 	// Parse and apply CSS classes
 	while (*read_pos != '\0') {
@@ -105,9 +98,9 @@ static char *inline_svg_styles(const char *svg_data)
 			break;
 		}
 
-		// Copy up to class attribute
+		// Copy up to class attribute (keeping a byte for the terminator: the data may end after this attribute)
 		size_t copy_len = class_start - read_pos;
-		if (out_pos + copy_len > out_size) {
+		if (out_pos + copy_len >= out_size) {
 			out_size = (out_pos + copy_len + 4096) * 2;
 			char *new_output = (char *)realloc(output, out_size);
 			if (new_output == NULL) {
