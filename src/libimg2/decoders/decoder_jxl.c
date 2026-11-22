@@ -470,6 +470,12 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
+			// [F1] one buffer per frame, inside the frames array (JXL_DEC_FRAME checked the index)
+			if (current_frame >= num_frames || frames[current_frame] != NULL) {
+				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested for unexpected frame %d", current_frame);
+				*st = IMG2_E_CODEC;
+				goto cleanup_error;
+			}
 
 			// Allocate img2_image_t for current frame ([F14] within the running pixel total)
 			if (img2_decode_add_frame_pixels(&total_pixels, width, height) != IMG2_OK) {
