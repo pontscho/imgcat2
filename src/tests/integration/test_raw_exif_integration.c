@@ -28,10 +28,12 @@
  */
 static uint8_t *load_test_file(const char *filename, size_t *out_size)
 {
-	/* Construct path relative to test binary location
-	 * Test runs from build/src/tests/, so we need ../../../src/tests/data/raw/ */
+	/* IMG2_TEST_SRC_DIR: absolute (img2_add_test()); the fallback is relative to build/src/tests/ */
+#ifndef IMG2_TEST_SRC_DIR
+#define IMG2_TEST_SRC_DIR "../../../src/tests"
+#endif
 	char path[512];
-	snprintf(path, sizeof(path), "../../../src/tests/data/raw/%s", filename);
+	snprintf(path, sizeof(path), IMG2_TEST_SRC_DIR "/data/raw/%s", filename);
 
 	uint8_t *data = NULL;
 	if (!read_file_secure(path, &data, out_size)) {

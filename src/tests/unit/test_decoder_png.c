@@ -17,10 +17,14 @@
 #include "../ctest.h"
 #include "../decoder_internal.h"
 
+#ifndef IMG2_TEST_SRC_DIR
+#define IMG2_TEST_SRC_DIR "../src/tests"
+#endif
+
 /**
- * @brief Directory of the PNG fixtures, relative to the build directory (test working directory)
+ * @brief Directory of the PNG fixtures (IMG2_TEST_SRC_DIR: absolute, set by img2_add_test())
  */
-#define PNG_FIXTURE_DIR "../src/tests/data/png/"
+#define PNG_FIXTURE_DIR IMG2_TEST_SRC_DIR "/data/png/"
 
 /**
  * @brief Load a PNG fixture file into memory

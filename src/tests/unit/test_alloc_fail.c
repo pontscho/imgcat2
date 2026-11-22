@@ -159,7 +159,7 @@ CTEST(alloc_fail, core_operations)
 	af_img_ctx_t c = { af_pattern(6, 4), IMG2_FILTER_DEFAULT, 1 };
 	ASSERT_NOT_NULL(c.src);
 	const img2_filter_t filters[] = { IMG2_FILTER_DEFAULT, IMG2_FILTER_MITCHELL };
-	for (size_t i = 0; i < 2; i++) {
+	for (size_t i = 0; i < 2 && !AF_ASAN; i++) { /* AF_ASAN: alloc_fail.h */
 		c.filter = filters[i];
 		ASSERT_TRUE(af_for_each_failure(op_scale, &c, AF_MAX_RUNS) >= 3);
 		ASSERT_EQUAL(0, s_bad);

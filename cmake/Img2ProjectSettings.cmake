@@ -1,5 +1,6 @@
 # Purpose: Project-only compile settings, applied per target (vendored dependencies never get the warnings).
-# Inputs:  IMGCAT2_WARNING_FLAGS, IMGCAT2_CLANG_TIDY, IMG2_HARDENING_FLAGS (cmake/Img2Hardening.cmake).
+# Inputs:  IMGCAT2_WARNING_FLAGS, IMGCAT2_CLANG_TIDY, IMG2_HARDENING_FLAGS (cmake/Img2Hardening.cmake),
+#          IMG2_SANITIZE_PROJECT_FLAGS (cmake/Img2Sanitize.cmake).
 # Outputs: function img2_apply_project_settings(<tgt>), CMAKE_<LANG>_IMPLICIT_LINK_LIBRARIES without gcc_s.
 
 # Project-only compile settings: -O3 -g, warnings (-Werror with IMG2_WERROR), hardening and clang-tidy go on
@@ -7,7 +8,8 @@
 # and clang-tidy (they get -O3 -g and the same IMG2_HARDENING_FLAGS from the vendor section), and nothing is
 # global, so consumer targets see none of them.
 function(img2_apply_project_settings tgt)
-	target_compile_options(${tgt} PRIVATE -O3 -g ${IMGCAT2_WARNING_FLAGS} ${IMG2_HARDENING_FLAGS})
+	target_compile_options(${tgt} PRIVATE -O3 -g ${IMGCAT2_WARNING_FLAGS} ${IMG2_HARDENING_FLAGS}
+		${IMG2_SANITIZE_PROJECT_FLAGS})
 	if(IMGCAT2_CLANG_TIDY)
 		set_target_properties(${tgt} PROPERTIES C_CLANG_TIDY "${IMGCAT2_CLANG_TIDY}")
 	endif()

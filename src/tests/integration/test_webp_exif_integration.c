@@ -57,7 +57,10 @@ static uint8_t *load_file(const char *path, size_t *size)
 /**
  * WebP test file with EXIF metadata (loaded from disk)
  */
-#define WEBP_WITH_EXIF_PATH "../src/tests/data/webp/sample_exif.webp"
+#ifndef IMG2_TEST_SRC_DIR
+#define IMG2_TEST_SRC_DIR "../src/tests"
+#endif
+#define WEBP_WITH_EXIF_PATH IMG2_TEST_SRC_DIR "/data/webp/sample_exif.webp"
 
 /**
  * Test that WebP decoder extracts EXIF metadata
@@ -109,7 +112,7 @@ CTEST(webp_exif_integration, decode_without_exif)
 {
 	/* Load another WebP with EXIF from file */
 	size_t data_size = 0;
-	uint8_t *data = load_file("../src/tests/data/webp/example.webp", &data_size);
+	uint8_t *data = load_file(IMG2_TEST_SRC_DIR "/data/webp/example.webp", &data_size);
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;

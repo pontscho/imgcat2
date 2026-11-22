@@ -37,6 +37,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 
 include(Img2Hardening)        # IMG2_HARDENING_FLAGS: our targets and (C/C++) the vendored codecs [F32]
+include(Img2Sanitize)         # IMG2_SANITIZE (ASan+UBSan / TSan build, default off): extends IMG2_HARDENING_FLAGS
 include(Img2VendorHelpers)
 include(Img2Features)
 img2_vendor_section_begin()   # vendors see the executable link flags (-static, stack size) as before

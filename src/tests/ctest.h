@@ -86,10 +86,19 @@ struct ctest {
 #define CTEST_IMPL_TEARDOWN_TPNAME(sname, tname) CTEST_IMPL_NAME(sname##_##tname##_teardown_ptr)
 
 #define CTEST_IMPL_MAGIC                         (0xdeadbeef)
-#ifdef __APPLE__
-#define CTEST_IMPL_SECTION __attribute__((used, section("__DATA, .ctest"), aligned(1)))
+/* ctest_main() finds the test records by walking the .ctest section in steps of sizeof(struct ctest), so the
+ * records must be packed. clang's AddressSanitizer pads instrumented globals with redzones (also in named
+ * sections), which made the walk stop at the first record: 0 tests ran and the binary reported success.
+ * GCC does not instrument globals in user-named sections. */
+#if defined(__clang__)
+#define CTEST_IMPL_NO_ASAN_GLOBAL no_sanitize("address"),
 #else
-#define CTEST_IMPL_SECTION __attribute__((used, section(".ctest"), aligned(1)))
+#define CTEST_IMPL_NO_ASAN_GLOBAL
+#endif
+#ifdef __APPLE__
+#define CTEST_IMPL_SECTION __attribute__((CTEST_IMPL_NO_ASAN_GLOBAL used, section("__DATA, .ctest"), aligned(1)))
+#else
+#define CTEST_IMPL_SECTION __attribute__((CTEST_IMPL_NO_ASAN_GLOBAL used, section(".ctest"), aligned(1)))
 #endif
 
 #define CTEST_IMPL_STRUCT(sname, tname, tskip, tdata, tsetup, tteardown)                                                                                                          \

@@ -74,7 +74,11 @@ endif()
 target_compile_definitions(test_public_api PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
 img2_apply_project_settings(test_public_api)   # dynamic (PIE) link, like every img2_add_test() test
 add_test(NAME test_public_api COMMAND test_public_api)
-set_tests_properties(test_public_api PROPERTIES TIMEOUT 10 LABELS "unit;lib"
+set(_img2_public_api_timeout 10)
+if(IMG2_SANITIZE)   # same factor as img2_add_test()
+	set(_img2_public_api_timeout 100)
+endif()
+set_tests_properties(test_public_api PROPERTIES TIMEOUT ${_img2_public_api_timeout} LABELS "unit;lib"
 	ENVIRONMENT "TMPDIR=${PROJECT_BINARY_DIR}/test-tmp")
 
 # ============================================================================
@@ -229,6 +233,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	if(TARGET test_cov_c_alloc)
 		target_link_options(test_cov_c_alloc PRIVATE
 			-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup)
+		# Label no-sanitize (scripts/sanitize.sh skips it, docs/sanitizers.md): it forks children of a process
+		# that has run kvazaar's worker threads, and they are expected to crash inside kvazaar after injected
+		# allocation failures. Under ASan every such crash is a report and a child symbolising it blocks on the
+		# parent's symbolizer pipe; under TSan the children deadlock (fork of a multi-threaded process); its leak
+		# checks read glibc mallinfo2(), which the sanitizer allocators bypass. It runs in the normal build.
+		set_property(TEST test_cov_c_alloc APPEND PROPERTY LABELS no-sanitize)
 	endif()
 endif()
 # --- coverage lane C end ---

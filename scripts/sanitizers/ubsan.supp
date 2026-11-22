@@ -1,0 +1,39 @@
+# UndefinedBehaviorSanitizer suppressions of the IMG2_SANITIZE=address,undefined build (scripts/sanitize.sh,
+# docs/sanitizers.md). Vendor sources only: libimg2's own targets are compiled with
+# -fno-sanitize-recover=undefined, whose handlers abort before any suppression is consulted, so no entry here can
+# hide a finding in libimg2 code. One entry per documented vendor finding (docs/sanitizers.md, "Vendor findings").
+
+# kvazaar (HEVC encoder, via libheif): AVX2 strategies load 4 / 8 pixels through int32_t / int64_t / uint64_t
+# pointer casts of byte buffers (unaligned loads; fine on x86, undefined in C).
+alignment:*/vendor/kvazaar/src/strategies/avx2/*
+# kvazaar encoderstate.c (:427, :690): &frame->sao_luma[i] / &frame->sao_chroma[i] computed while that SAO array
+# is NULL (applying an offset to a null pointer; the pointer is not dereferenced for the disabled plane).
+pointer-overflow:*/vendor/kvazaar/src/encoderstate.c
+# kvazaar encoder_state-bitstream.c:984 (decoded picture hash SEI): checksum[i][0] << 24 on a uint8_t promoted to
+# int overflows into the sign bit for bytes >= 128 (the result is then stored as uint32_t). Data-dependent;
+# reproducer: imgcat2 --heif 60 -o o.heif src/tests/data/raw/nikon_z_9_high_efficiency_compressed_dx_cropped_max_overexposed.nef
+shift-base:*/vendor/kvazaar/src/encoder_state-bitstream.c
+# kvazaar strategy dispatch: function pointers of type quant_func (coeff_t *coef) point to implementations
+# declared with const coeff_t *coef (kvz_quant_avx2 & co.): call through an incompatible function type.
+function:*/vendor/kvazaar/src/*
+
+# jpeg-quantsmooth (quantsmooth.h, do_quantsmooth): a2 = a2 / a3 with a3 == 0 is NaN, and range = roundf(a2) converts
+# it to int (x86: INT_MIN). Reproducer: test_raw_exif_integration decode_nef_nikon (the JPEG preview of
+# src/tests/data/raw/nikon_d3.nef).
+float-cast-overflow:*/vendor/jpeg-quantsmooth/quantsmooth.h
+# ... and the INT_MIN range then overflows coef1 - range (same root cause, same reproducer).
+signed-integer-overflow:*/vendor/jpeg-quantsmooth/quantsmooth.h
+
+# libwebp lossless encoder (predictor_enc.c, GetBestPredictorsAndSubSampling): all_argb + num_argb and the next
+# pointer are computed from the WebPSafeCalloc() result before its NULL check (allocation failure only;
+# reproducer: test_alloc_fail encode_every_format).
+pointer-overflow:*/vendor/libwebp/src/enc/predictor_enc.c
+
+# openjpeg (JPEG 2000 codec of libheif): opj_setup_decoder() & co. call the codec through function pointers of
+# generic type (void (*)(void *, opj_dparameters_t *)) that point to opj_j2k_* / opj_jp2_* functions taking the
+# concrete codec struct. Reproducer: imgcat2 --info src/tests/data/heif/j2k_64x48.heif.
+function:*/vendor/openjpeg/src/lib/openjp2/*
+
+# libjxl fast-lossless encoder: memcpy(output, writer.data.get() + pos, 0) with a NULL source when a group's
+# bit writer is empty (enc_fast_lossless.cc, JxlFastLosslessWriteOutput).
+nonnull-attribute:*/vendor/libjxl/lib/jxl/enc_fast_lossless.cc

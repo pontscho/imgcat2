@@ -1,0 +1,8 @@
+# LeakSanitizer suppressions of the IMG2_SANITIZE=address,undefined build (scripts/sanitize.sh, docs/sanitizers.md).
+# Vendor and test-fixture frames only; never a libimg2 frame. One entry per documented finding.
+
+# libpng 1.6.59 APNG patch, write side: png_write_reset() (called by png_write_frame_tail()) zeroes row_number,
+# so the first png_write_row() of every later frame runs png_write_start_row() again, which allocates row_buf
+# (and prev_row / tst_row) without freeing the previous frame's buffers: one leak per frame after the first.
+# libimg2 never writes APNG; only the fixture builder apng_build() of test_animation_timing does.
+leak:apng_build

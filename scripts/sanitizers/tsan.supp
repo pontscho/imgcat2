@@ -1,0 +1,8 @@
+# ThreadSanitizer suppressions of the IMG2_SANITIZE=thread build (scripts/sanitize.sh, docs/sanitizers.md).
+# Vendor frames only, never a libimg2 frame. One entry per documented finding.
+
+# libde265 (util.cc:50, DE265_LOGGING): log_set_current_POC() writes the file-static current_poc without a lock
+# from every decoder context; libheif decodes the tiles of a grid image on several threads (std::async), each with
+# its own libde265 decoder, so the writes race. Debug-log state only (upstream libde265 issue #535, acknowledged
+# in the source). Reproducer: test_heif_exif_integration (grid HEIC fixtures).
+race:log_set_current_POC

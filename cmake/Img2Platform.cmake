@@ -15,7 +15,9 @@ set(IMG2_EXE_LINK_FLAGS "")
 if(UNIX AND NOT APPLE)
 	# Linux: Full static linking
 	set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
-	list(APPEND IMG2_EXE_LINK_FLAGS -static)
+	if(NOT IMG2_SANITIZE)   # the sanitizer runtimes need a dynamic link (cmake/Img2Sanitize.cmake)
+		list(APPEND IMG2_EXE_LINK_FLAGS -static)
+	endif()
 
 elseif(APPLE)
 	# macOS: Static link third-party libs

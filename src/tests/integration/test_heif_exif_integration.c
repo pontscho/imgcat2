@@ -57,7 +57,10 @@ static uint8_t *load_file(const char *path, size_t *size)
 /**
  * HEIF test file with EXIF metadata (loaded from disk)
  */
-#define HEIF_WITH_EXIF_PATH "../../../src/tests/data/heif/sample_exif.heif"
+#ifndef IMG2_TEST_SRC_DIR
+#define IMG2_TEST_SRC_DIR "../../../src/tests"
+#endif
+#define HEIF_WITH_EXIF_PATH IMG2_TEST_SRC_DIR "/data/heif/sample_exif.heif"
 
 /**
  * Test that HEIF decoder extracts EXIF metadata
@@ -108,7 +111,7 @@ CTEST(heif_exif_integration, decode_with_exif)
 CTEST(heif_exif_integration, decode_without_exif)
 {
 	/* Minimal HEIF without EXIF (if available) */
-	const char *path = "../../../src/tests/data/heif/sample_no_exif.heif";
+	const char *path = IMG2_TEST_SRC_DIR "/data/heif/sample_no_exif.heif";
 	size_t data_size = 0;
 	uint8_t *data = load_file(path, &data_size);
 

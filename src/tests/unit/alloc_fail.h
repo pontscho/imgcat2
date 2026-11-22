@@ -23,6 +23,22 @@
 #include <stddef.h>
 #include <string.h>
 
+/* AF_ASAN: 1 in an AddressSanitizer build (IMG2_SANITIZE=address,..., docs/sanitizers.md). Under ASan the vendored
+ * stb_image_resize2.h switches to its ASan-only STBIR__SEPARATE_ALLOCATIONS mode, whose cleanup after a failed
+ * allocation dereferences the not yet allocated split_info array (stbir__free_internal_mem: vendor bug, ASan
+ * builds only). Tests skip injecting failures into the resampler's allocations when AF_ASAN is 1; the normal and
+ * coverage builds run them. */
+#if defined(__SANITIZE_ADDRESS__)
+#define AF_ASAN 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define AF_ASAN 1
+#endif
+#endif
+#ifndef AF_ASAN
+#define AF_ASAN 0
+#endif
+
 void *__real_malloc(size_t size);
 void *__real_calloc(size_t nmemb, size_t size);
 void *__real_realloc(void *ptr, size_t size);

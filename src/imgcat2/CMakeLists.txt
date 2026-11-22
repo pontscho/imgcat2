@@ -20,7 +20,9 @@ if(IMG2_BUILD_CLI)
 	# Needs PIC vendored archives (IMG2_POSITION_INDEPENDENT_CODE). Option and probe live here (CLI only), so
 	# an add_subdirectory() consumer's cache never sees them.
 	set(_imgcat2_pie_arg "")
-	if(UNIX AND NOT APPLE)
+	if(IMG2_SANITIZE)
+		message(STATUS "imgcat2: sanitizer build, dynamic PIE link (no -static / -static-pie)")
+	elseif(UNIX AND NOT APPLE)
 		option(IMG2_STATIC_PIE "Link imgcat2 as a static PIE (-static-pie) on Linux when supported" ON)
 		if(IMG2_STATIC_PIE AND NOT IMG2_POSITION_INDEPENDENT_CODE)
 			message(STATUS "imgcat2: IMG2_POSITION_INDEPENDENT_CODE is OFF, linking with plain -static (no static PIE)")

@@ -15,7 +15,7 @@
 #include "image.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
-#include "stb_image_resize2.h"
+#include "stbir_impl.h" /* stb_image_resize2.h with the UBSan attributes of the sanitizer build */
 #pragma GCC diagnostic pop
 #include "log.h"
 

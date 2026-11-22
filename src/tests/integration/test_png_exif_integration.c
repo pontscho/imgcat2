@@ -57,7 +57,10 @@ static uint8_t *load_file(const char *path, size_t *size)
 /**
  * PNG test file with EXIF metadata (loaded from disk)
  */
-#define PNG_WITH_EXIF_PATH "../src/tests/data/png/sample_exif.png"
+#ifndef IMG2_TEST_SRC_DIR
+#define IMG2_TEST_SRC_DIR "../src/tests"
+#endif
+#define PNG_WITH_EXIF_PATH IMG2_TEST_SRC_DIR "/data/png/sample_exif.png"
 
 /**
  * Test that PNG decoder extracts EXIF metadata from eXIf chunk
@@ -110,7 +113,7 @@ CTEST(png_exif_integration, decode_without_exif)
 {
 	/* Load a PNG without EXIF from file */
 	size_t data_size = 0;
-	uint8_t *data = load_file("../src/tests/data/png/hell.png", &data_size);
+	uint8_t *data = load_file(IMG2_TEST_SRC_DIR "/data/png/hell.png", &data_size);
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
@@ -154,7 +157,7 @@ CTEST(png_exif_integration, decode_with_text_chunks)
 {
 	/* Load test PNG with tEXt chunks from file */
 	size_t data_size = 0;
-	uint8_t *data = load_file("../src/tests/data/png/sample_text.png", &data_size);
+	uint8_t *data = load_file(IMG2_TEST_SRC_DIR "/data/png/sample_text.png", &data_size);
 	ASSERT_NOT_NULL(data);
 
 	int frame_count = 0;
