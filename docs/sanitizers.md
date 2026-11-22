@@ -81,9 +81,13 @@ Every fix has a test that failed or was flagged on the unfixed code.
    `exif_data[0] << 24` in `int` (signed overflow for a first byte >= 0x80). Red: `test_cov_c_heif`
    `exif_payload_layouts` (prefix `FF FF FF 00`) flagged by UBSan in both decoders.
 3. `decoders/decoder_raw.c`: LibRaw's float ISO was converted with `(uint16_t)` (undefined above 65535); ISO
-   102400 (Nikon Z 9 fixture) came out as 36864. Now saturated at 65535 (EXIF ISOSpeedRatings is a SHORT).
-   Red: `test_sanitize_regress` `raw_iso_above_65535_saturates` ("expected 65535, got 36864"; UBSan
-   float-cast-overflow). Golden: the three `nikon_z_9` info/json cases now print ISO 65535.
+   102400 (Nikon Z 9 fixture) came out as 36864. First saturated at 65535 (EXIF ISOSpeedRatings is a SHORT);
+   since S18 `img2_exif_t.iso_speed` is a `uint32_t`: the float is rounded, saturated at `UINT32_MAX` (NaN or
+   <= 0: no ISO), and the EXIF reader resolves an ISOSpeedRatings of 65535 through the EXIF 2.3 LONG tags
+   (SensitivityType, StandardOutputSensitivity, RecommendedExposureIndex, ISOSpeed). Red: `test_sanitize_regress`
+   `raw_iso_above_65535_exact` (was `..._saturates`: "expected 65535, got 36864"; UBSan float-cast-overflow;
+   S18: "expected 102400, got 65535"). Golden: the three `nikon_z_9` info/json cases printed ISO 65535 after the
+   fix, the real ISO 102400 since S18.
 4. `decoders/decoder_nanosvg.c`: `roundf(width)` was converted to `uint32_t` before the dimension check
    (undefined for sizes >= 2^32 or infinite); a width of 4294967808 became 512 and decoded. The size is now
    clamped to `IMG2_MAX_DIMENSION + 1` first (IMG2_E_LIMIT). Red: `test_sanitize_regress`

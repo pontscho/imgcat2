@@ -315,7 +315,7 @@ Phase 3:
     WOFF / collection signature) were accepted.
 
 Sanitizer sweep (S16, ASan + UBSan / TSan, [docs/sanitizers.md](sanitizers.md)): HEIF/AVIF Exif offset shift
-overflow, RAW ISO float-to-uint16 conversion (ISO 102400 read as 36864), SVG size float-to-uint32 conversion
+overflow, RAW ISO float-to-uint16 conversion (ISO 102400 read as 36864; ISO is a uint32_t since S18), SVG size float-to-uint32 conversion
 (sizes >= 2^32 wrapped below the limit), and the ctest runner that ran 0 tests under clang's ASan.
 
 Core-fix (audit follow-up): no new bugs. The reachable exclusions behave correctly once tested (stb_image's
@@ -365,7 +365,8 @@ safe only because `IMG2_MAX_PIXELS` (2e8) keeps it below 2^32, and is now comput
 | `test_cov_p3_jxl` | phase 3: JXL container box walk (lookalikes, bare codestream, largesize, size 0, malformed headers, box cap, brob) |
 | `test_cov_p3_font` | phase 3: sfnt validation (guard-page font buffers; truncated directory, tables past the end, short cmap/head/maxp, 32-bit wrap, versions) |
 | `test_cov_p3_gaps` | phase 3: GIF with a 0x0 logical screen and two frames (decoder.h total check with a zero-area canvas) |
-| `test_sanitize_regress` | sanitizer sweep (docs/sanitizers.md): RAW ISO above 65535 saturates, SVG sizes beyond 2^32 / infinite are IMG2_E_LIMIT |
+| `test_sanitize_regress` | sanitizer sweep (docs/sanitizers.md): RAW ISO above 65535 is exact (102400), SVG sizes beyond 2^32 / infinite are IMG2_E_LIMIT |
 | `test_core_fix_alloc` | core-fix: stb_image PSD/HDR with a zero width or height (E_CODEC, no leak: live-block counter), 2-page TIFF counting no directories (two allocation faults) |
 | `test_core_fix_raw` | core-fix: RAW make emptied by LibRaw (Make "   "; UniqueCameraModel " X" is rejected), 2-colour preview of a CFA TIFF (raw fallback), hand-built Canon CR3 with an H.265 (CISZ) preview |
 | `test_core_fix_new` | core-fix: `new LibRaw` throwing `std::bad_alloc` (`libraw_init()` NULL) via `--wrap=_Znwm` |
+| `test_iso_widen` | S18: ISOSpeedRatings 65535 resolved through SensitivityType / SOS / REI / ISOSpeed (every type, absent type, LONG 0 ignored, out-of-line and truncated LONG tags); the RAW side is in `test_fuzz_regress` (102400 kept, 2^32 saturates at UINT32_MAX) |
