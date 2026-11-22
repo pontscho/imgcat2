@@ -372,6 +372,14 @@ static img2_image_t **decode_heif_static(const uint8_t *data, size_t len, int *f
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
+	// [P33] The handle's size (after transformations: the decoded size) before heif_decode_image allocates
+	img2_status_t pre_st = img2_decode_check_header_size("HEIF", heif_image_handle_get_width(handle), heif_image_handle_get_height(handle));
+	if (pre_st != IMG2_OK) {
+		heif_image_handle_release(handle);
+		heif_context_free(ctx);
+		return img2_decode_fail(st, pre_st);
+	}
+
 	// Decode image to RGBA
 	struct heif_image *img = NULL;
 	err = heif_decode_image(handle, &img, heif_colorspace_RGB, heif_chroma_interleaved_RGBA, NULL);
@@ -585,7 +593,9 @@ static img2_status_t heif_check_total_pixels(struct heif_context *ctx, const hei
 		int width = heif_image_handle_get_width(handle);
 		int height = heif_image_handle_get_height(handle);
 		heif_image_handle_release(handle);
-		if (width > 0 && height > 0 && img2_decode_add_frame_pixels(&total, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
+		if (img2_decode_check_header_size("HEIF", width, height) != IMG2_OK) {
+			return IMG2_E_LIMIT; /* [P33] one image alone over the limits */
+		} else if (width > 0 && height > 0 && img2_decode_add_frame_pixels(&total, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
 			return IMG2_E_LIMIT;
 		}
 	}

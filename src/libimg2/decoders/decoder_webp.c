@@ -461,8 +461,16 @@ static img2_image_t **decode_webp_frames(const uint8_t *data, size_t len, int *f
 	*frame_count = 0;
 	*loop_count = 0;
 
-	// Check if animated
-	if (img2_webp_is_animated(data, len)) {
+	// [P33] The size is the canvas for an animation, else the image: WebPDecodeRGBA allocates the output and
+	// WebPAnimDecoderNew two canvases before the size could be checked. Then the img2_webp_is_animated() test.
+	WebPBitstreamFeatures features;
+	if (WebPGetFeatures(data, len, &features) != VP8_STATUS_OK) {
+		return decode_webp_static(data, len, frame_count, st); /* reports the error */
+	}
+	img2_status_t pre_st = img2_decode_check_header_size("WebP", features.width, features.height);
+	if (pre_st != IMG2_OK) {
+		return img2_decode_fail(st, pre_st);
+	} else if (features.has_animation) {
 		return decode_webp_animated(data, len, frame_count, loop_count, st);
 	}
 

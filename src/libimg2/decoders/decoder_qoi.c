@@ -50,6 +50,17 @@ static img2_image_t **decode_qoi_static(const uint8_t *data, size_t len, int *fr
 	// Initialize output
 	*frame_count = 0;
 
+	// [P33] qoi_decode() allocates and fills width x height pixels (up to its own 400e6 pixel cap) before the
+	// size could be checked: check the header (magic, big-endian width / height) first
+	if (len >= QOI_HEADER_SIZE && memcmp(data, "qoif", 4) == 0) {
+		const uint32_t w = (uint32_t)data[4] << 24 | (uint32_t)data[5] << 16 | (uint32_t)data[6] << 8 | data[7];
+		const uint32_t h = (uint32_t)data[8] << 24 | (uint32_t)data[9] << 16 | (uint32_t)data[10] << 8 | data[11];
+		img2_status_t pre_st = img2_decode_check_header_size("QOI", w, h);
+		if (pre_st != IMG2_OK) {
+			return img2_decode_fail(st, pre_st);
+		}
+	}
+
 	// Decode QOI image
 	qoi_desc desc;
 	void *pixels = qoi_decode(data, (int)len, &desc, 4); // 4 = RGBA

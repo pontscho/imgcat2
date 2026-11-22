@@ -290,3 +290,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	endif()
 endif()
 # --- core-fix end ---
+
+# --- sec-fix ---
+# Security fixes (P-numbers of the audit). [P33] header dimensions over the limits rejected before the codecs
+# allocate: allocations above 256 MiB fail and are counted through GNU ld --wrap (Linux only)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_sec_fix_limits SOURCES unit/test_sec_fix_limits.c TIMEOUT 60)
+	if(TARGET test_sec_fix_limits)
+		target_link_options(test_sec_fix_limits PRIVATE -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc)
+		set_property(TEST test_sec_fix_limits APPEND PROPERTY ENVIRONMENT "OMP_NUM_THREADS=2")
+	endif()
+endif()
+# --- sec-fix end ---
