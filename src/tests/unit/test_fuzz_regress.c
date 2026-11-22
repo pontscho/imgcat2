@@ -27,6 +27,26 @@ static img2_status_t decode_copy(const uint8_t *buf, size_t len, size_t pad_zero
 	return st;
 }
 
+/*
+ * Sanitizer findings without an observable effect in a plain build (undefined behaviour that x86 happens to
+ * compute "harmlessly") fail these tests only in the sanitized IMG2_FUZZ build (build-fuzz/, IMG2_BUILD_TESTS=ON,
+ * UBSan aborts): there they are the red/green evidence; elsewhere they pin the decode result.
+ */
+
+/*
+ * fuzz_decode crash-4d517aea (minimised): nanosvgrast.h nsvg__addActive converted an edge's fixed-point x / dx
+ * (8222224 * 1024 = 8.4e9) to int: float-cast-overflow, and the per-scanline x += dx could overflow int too.
+ */
+static const char k_svg_edge_overflow[] = "<svg width='9><polygon points='0,0 8222224,8'><";
+
+CTEST(fuzz_regress, svg_edge_x_saturates)
+{
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_OK, decode_copy((const uint8_t *)k_svg_edge_overflow, sizeof(k_svg_edge_overflow) - 1, 0, IMG2_MIME_UNKNOWN, &fr));
+	ASSERT_EQUAL(1, fr.count);
+	img2_frames_free(&fr);
+}
+
 #if defined(IMG2_HAVE_RAW) && defined(IMG2_HAVE_EXIF_READER)
 /*
  * fuzz_decode (seed src/tests/data/raw/nikon_z_9_..._max_overexposed.dng, ISO 102400): decoder_raw.c converted

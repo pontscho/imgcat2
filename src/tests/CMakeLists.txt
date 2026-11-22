@@ -237,4 +237,9 @@ endif()
 # Reproducers of the libFuzzer findings (docs/fuzzing.md, src/tests/fuzz), embedded in the test; per-format cases are
 # compiled in by the IMG2_HAVE_* macros of img2_testing
 img2_add_test(test_fuzz_regress SOURCES unit/test_fuzz_regress.c TIMEOUT 30)
+if(IMG2_FUZZ AND TARGET test_fuzz_regress)
+	# Sanitized build (red/green evidence of the UB findings): no ASan redzones around globals, else ctest.h's
+	# walk over the adjacent test records of the .ctest section finds no tests
+	target_compile_options(test_fuzz_regress PRIVATE -mllvm -asan-globals=0)
+endif()
 # --- fuzz regressions end ---
