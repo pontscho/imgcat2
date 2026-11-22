@@ -273,8 +273,8 @@ static img2_image_t **decode_svg_nanosvg_frames(const uint8_t *data, size_t len,
 	uint32_t width, height;
 	if (svg_image->width > 0.0f && svg_image->height > 0.0f) {
 		// Use SVG's explicit dimensions
-		width = (uint32_t)roundf(svg_image->width);
-		height = (uint32_t)roundf(svg_image->height);
+		width = (uint32_t)roundf(fminf(svg_image->width, (float)IMG2_MAX_DIMENSION + 1.0f)); /* > max: E_LIMIT below; */
+		height = (uint32_t)roundf(fminf(svg_image->height, (float)IMG2_MAX_DIMENSION + 1.0f)); /* never >= 2^32 / inf */
 	} else {
 		// No dimensions specified, use default 512x512
 		width = 512;

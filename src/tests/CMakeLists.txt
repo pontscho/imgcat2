@@ -259,3 +259,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 img2_add_test(test_cov_p3_jxl SOURCES unit/test_cov_p3_jxl.c REQUIRES JXL EXIF_READER)
 img2_add_test(test_cov_p3_gaps SOURCES unit/test_cov_p3_gaps.c REQUIRES GIFLIB)# --- coverage phase 3 end ---
+
+# Regression tests of the sanitizer sweep (docs/sanitizers.md)
+img2_add_test(test_sanitize_regress SOURCES unit/test_sanitize_regress.c REQUIRES RAW EXIF_READER TIMEOUT 30)

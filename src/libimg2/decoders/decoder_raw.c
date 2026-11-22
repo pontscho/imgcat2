@@ -84,7 +84,7 @@ static img2_exif_t *extract_raw_exif(libraw_data_t *raw)
 
 	// ISO speed
 	if (raw->other.iso_speed > 0) {
-		exif->iso_speed = (uint16_t)raw->other.iso_speed;
+		exif->iso_speed = raw->other.iso_speed >= 65535.0f ? UINT16_MAX : (uint16_t)raw->other.iso_speed; /* EXIF SHORT: saturate */
 		exif->has_iso = true;
 	}
 
