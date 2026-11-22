@@ -57,7 +57,7 @@ static void safe_walk(const char *s, safe_emit_fn emit, void *ctx)
 	const unsigned char *p = (const unsigned char *)s;
 	while (*p != '\0') {
 		size_t run = 0;
-		while (p[run] >= 0x20 && p[run] < 0x7F) {
+		while ((p[run] >= 0x20 && p[run] < 0x7F) || p[run] == '\n' || p[run] == '\t') { /* \n, \t: no terminal state */
 			run++;
 		}
 		if (run > 0) {

@@ -213,13 +213,13 @@ CTEST(sec_fix_cli, iterm2_size_increase)
 
 /* ---- P38 / P39: terminal control characters of EXIF / XMP strings and file paths ---- */
 
-/* no C0 control but '\n', no DEL, no raw C1 byte (0x80-0x9F outside UTF-8), no UTF-8 encoded C1 */
+/* no C0 control but '\n' / '\t', no DEL, no raw C1 byte (0x80-0x9F outside UTF-8), no UTF-8 encoded C1 */
 static int count_controls(const char *s, size_t n)
 {
 	int bad = 0;
 	for (size_t i = 0; i < n; i++) {
 		const unsigned char c = (unsigned char)s[i];
-		if ((c < 0x20 && c != '\n') || c == 0x7F || c == 0x9B || (c == 0xC2 && i + 1 < n && (unsigned char)s[i + 1] >= 0x80 && (unsigned char)s[i + 1] <= 0x9F)) {
+		if ((c < 0x20 && c != '\n' && c != '\t') || c == 0x7F || c == 0x9B || (c == 0xC2 && i + 1 < n && (unsigned char)s[i + 1] >= 0x80 && (unsigned char)s[i + 1] <= 0x9F)) {
 			bad++;
 		}
 	}
@@ -421,7 +421,8 @@ CTEST(sec_fix_cli, safe_text_escapes)
 		const char *out;
 	} cases[] = {
 		{ "plain ASCII ~", "plain ASCII ~" },
-		{ "\x01\t\n\x1f\x7f", "\\x01\\x09\\x0a\\x1f\\x7f" },
+		{ "\x01\t\n\x1f\x7f", "\\x01\t\n\\x1f\\x7f" },
+		{ "line 1\n\tline 2\x1b[2J\r\n", "line 1\n\tline 2\\x1b[2J\\x0d\n" }, /* \n, \t raw; ESC, CR escaped */
 		{ "\x80\x9b\x9f", "\\x80\\x9b\\x9f" },                        /* raw C1 bytes */
 		{ "\xc2\x80\xc2\x9b\xc2\x9f", "\\xc2\\x80\\xc2\\x9b\\xc2\\x9f" }, /* UTF-8 C1 */
 		{ "\xc2\xa0\xc3\xa9\xdf\xbf", "\xc2\xa0\xc3\xa9\xdf\xbf" },     /* 2-byte UTF-8 */
