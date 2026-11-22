@@ -289,12 +289,20 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
-	uint32_t width, height;
+	uint32_t width = 0, height = 0;
 	TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
 	TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
 
+	// Reject oversized images before the raster is sized: width * height must not wrap (32 bits)
+	size_t byte_count;
+	if (!img2_image_calc_size(width, height, &byte_count)) {
+		img2_log(IMG2_LOG_ERROR, "Error: TIFF dimensions %ux%u exceed the limits", width, height);
+		TIFFClose(tif);
+		return img2_decode_fail(st, IMG2_E_LIMIT);
+	}
+
 	// Allocate raster buffer (ABGR format)
-	uint32_t *raster = (uint32_t *)_TIFFmalloc(width * height * sizeof(uint32_t));
+	uint32_t *raster = (uint32_t *)_TIFFmalloc((tmsize_t)byte_count);
 	if (raster == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate raster buffer");
 		TIFFClose(tif);
@@ -320,7 +328,7 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
 	}
 
 	// Convert ABGR to RGBA (libtiff returns ABGR packed in uint32_t)
-	for (uint32_t i = 0; i < width * height; i++) {
+	for (size_t i = 0; i < byte_count / 4; i++) {
 		uint32_t abgr = raster[i];
 		img->pixels[i * 4 + 0] = TIFFGetR(abgr);
 		img->pixels[i * 4 + 1] = TIFFGetG(abgr);
@@ -429,11 +437,18 @@ static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int
 			goto cleanup_error;
 		}
 
-		uint32_t width, height;
+		uint32_t width = 0, height = 0;
 		TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
 		TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
 
-		uint32_t *raster = (uint32_t *)_TIFFmalloc(width * height * sizeof(uint32_t));
+		size_t byte_count;
+		if (!img2_image_calc_size(width, height, &byte_count)) {
+			img2_log(IMG2_LOG_ERROR, "Error: TIFF page %d dimensions %ux%u exceed the limits", i, width, height);
+			*st = IMG2_E_LIMIT;
+			goto cleanup_error;
+		}
+
+		uint32_t *raster = (uint32_t *)_TIFFmalloc((tmsize_t)byte_count);
 		if (raster == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate raster for page %d", i);
 			*st = IMG2_E_NOMEM;
@@ -456,7 +471,7 @@ static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int
 		}
 
 		// Convert ABGR to RGBA
-		for (uint32_t j = 0; j < width * height; j++) {
+		for (size_t j = 0; j < byte_count / 4; j++) {
 			uint32_t abgr = raster[j];
 			frames[i]->pixels[j * 4 + 0] = TIFFGetR(abgr);
 			frames[i]->pixels[j * 4 + 1] = TIFFGetG(abgr);

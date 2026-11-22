@@ -173,4 +173,5 @@ endif()
 img2_add_test(test_cov_b_gif SOURCES unit/test_cov_b_gif.c REQUIRES GIFLIB)
 img2_add_test(test_cov_b_png SOURCES unit/test_cov_b_png.c)
 img2_add_test(test_cov_b_jpeg SOURCES unit/test_cov_b_jpeg.c)
+img2_add_test(test_cov_b_tiff SOURCES unit/test_cov_b_tiff.c REQUIRES TIFF)
 # --- coverage lane B end ---
