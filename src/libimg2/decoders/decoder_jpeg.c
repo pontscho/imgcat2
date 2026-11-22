@@ -247,8 +247,7 @@ static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *f
 			free(exif);
 		}
 		if (xmp) {
-			img2_xmp_clear(xmp);
-			free(xmp);
+			free(xmp); /* never initialised here: img2_xmp_clear() would free garbage pointers */
 		}
 	}
 #endif

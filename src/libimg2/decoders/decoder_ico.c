@@ -400,7 +400,7 @@ static img2_image_t *decode_dib(const uint8_t *data, size_t len)
 
 	// Validate palette bounds
 	size_t palette_offset = 40;
-	size_t palette_bytes = palette_size * 4;
+	size_t palette_bytes = (size_t)palette_size * 4; /* size_t: a huge clr_used must not wrap to a small size */
 	if (palette_offset + palette_bytes > len) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid palette size");
 		return NULL;
@@ -551,7 +551,7 @@ static img2_image_t **decode_ico_frames(const uint8_t *data, size_t len, int *fr
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid ICO entry offset or size");
 		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
-	if (entry->image_offset + entry->bytes_in_res > len) {
+	if ((size_t)entry->image_offset + entry->bytes_in_res > len) { /* size_t: no uint32 wrap-around */
 		img2_log(IMG2_LOG_ERROR, "Error: ICO entry extends beyond file");
 		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
