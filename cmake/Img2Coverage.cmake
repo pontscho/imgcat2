@@ -17,7 +17,10 @@ if(IMG2_COVERAGE)
 			"-fprofile-instr-generate -fcoverage-mapping); C compiler is ${CMAKE_C_COMPILER_ID}. "
 			"Configure with -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ (scripts/coverage.sh does).")
 	endif()
-	set(IMG2_COVERAGE_FLAGS -fprofile-instr-generate -fcoverage-mapping)
+	# -fprofile-update=atomic: test_threads decodes on several threads at once; with plain increments the
+	# counters lose updates, and outcomes clang derives by subtraction (branch / region counts) then read
+	# spuriously non-zero or zero, which makes scripts/coverage_check.py flaky.
+	set(IMG2_COVERAGE_FLAGS -fprofile-instr-generate -fcoverage-mapping -fprofile-update=atomic)
 	message(STATUS "img2: coverage instrumentation ON (libimg2 sources only)")
 endif()
 
