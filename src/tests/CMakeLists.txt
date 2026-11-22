@@ -332,3 +332,8 @@ img2_add_test(test_jpeg_log_raw SOURCES unit/test_jpeg_log_raw.c REQUIRES RAW)
 # nanosvgrast.h inserted each new active edge by a linear scan: SVG <text> rendering was quadratic in the text
 # length (fuzzing S17). Ratio-based timing (16x the text < 40x the time) and pixels pinned to the pre-fix render
 img2_add_test(test_svg_text_perf SOURCES unit/test_svg_text_perf.c TIMEOUT 120)
+
+# --- svg-text-cap ---
+# nanosvg.h dropped a <text> / <tspan> content run that did not fit the 4094-byte text buffer whole (an 8000-char run
+# rendered nothing): now truncated at a UTF-8 code point boundary, the budget shared by the runs of one <text>
+img2_add_test(test_svg_text_cap SOURCES unit/test_svg_text_cap.c TIMEOUT 60)
