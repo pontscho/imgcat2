@@ -258,7 +258,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	endif()
 endif()
 img2_add_test(test_cov_p3_jxl SOURCES unit/test_cov_p3_jxl.c REQUIRES JXL EXIF_READER)
-img2_add_test(test_cov_p3_gaps SOURCES unit/test_cov_p3_gaps.c REQUIRES GIFLIB)# --- coverage phase 3 end ---
+img2_add_test(test_cov_p3_gaps SOURCES unit/test_cov_p3_gaps.c REQUIRES GIFLIB)
+# --- coverage phase 3 end ---
 
 # Regression tests of the sanitizer sweep (docs/sanitizers.md)
 img2_add_test(test_sanitize_regress SOURCES unit/test_sanitize_regress.c REQUIRES RAW EXIF_READER TIMEOUT 30)
+
+# --- heif-fix begin ---
+# HEIF/AVIF exclusion audit: byte-patched edge cases, and fake libheif codec plugins (the plugin registry is
+# process-global, so each plugin test has its own executable)
+img2_add_test(test_heif_fix_edges SOURCES unit/test_heif_fix_edges.c REQUIRES HEIF)
+img2_add_test(test_heif_fix_decplugin SOURCES unit/test_heif_fix_decplugin.c REQUIRES HEIF TIMEOUT 60)
+img2_add_test(test_heif_fix_encplugin SOURCES unit/test_heif_fix_encplugin.c REQUIRES HEIF)
+# --- heif-fix end ---
