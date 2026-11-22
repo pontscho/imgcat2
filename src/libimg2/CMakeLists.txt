@@ -124,6 +124,7 @@ endif()
 target_link_libraries(img2 PRIVATE Threads::Threads)
 img2_apply_project_settings(img2)
 img2_coverage_instrument(img2)   # IMG2_COVERAGE only (cmake/Img2Coverage.cmake)
+img2_fuzz_instrument(img2)       # IMG2_FUZZ only (cmake/Img2Fuzz.cmake)
 
 # [S6 item 11 / R13] -UNDEBUG object variant of img2's own sources for the no-terminate guard (img2_symbols):
 # same sources, include dirs and definitions as img2, assert() live. Lives here because source-file

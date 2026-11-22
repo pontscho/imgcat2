@@ -3,4 +3,5 @@
 origin
 build
 build-cov
+build-fuzz
 tmp

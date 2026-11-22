@@ -37,6 +37,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 
 include(Img2Hardening)        # IMG2_HARDENING_FLAGS: our targets and (C/C++) the vendored codecs [F32]
+include(Img2Fuzz)             # IMG2_FUZZ (libFuzzer + ASan/UBSan, default OFF): replaces the hardening flags
 include(Img2VendorHelpers)
 include(Img2Features)
 img2_vendor_section_begin()   # vendors see the executable link flags (-static, stack size) as before
@@ -91,6 +92,9 @@ img2_add_format_target()
 if(IMG2_BUILD_TESTS)
 	enable_testing()
 	add_subdirectory(src/tests)
+endif()
+if(IMG2_FUZZ)
+	add_subdirectory(src/tests/fuzz)
 endif()
 
 # Install rules and the img2Config.cmake package (IMG2_INSTALL)

@@ -1,0 +1,16 @@
+# -fsanitize-ignorelist of libimg2's own sources in IMG2_FUZZ builds (cmake/Img2Fuzz.cmake).
+# libimg2 aborts on UBSan findings (-fno-sanitize-recover=undefined); the header-only vendored code it compiles
+# into its own translation units is exempted here only for confirmed benign upstream idioms, each with a reason.
+
+# stb_image_resize2.h's sRGB encoders index a biased table base, e.g. (fp32_to_srgb8_tab4 - (127-13)*8)[i] in
+# stbir__encode_uint8_srgb4_linearalpha: the biased pointer is outside the array (array-bounds report "index -912
+# out of bounds for type 'const stbir_uint32[104]'"), the element actually read is in bounds (i >= (127-13)*8 by
+# the preceding min/max clamp). Pointer arithmetic idiom, not a memory error (ASan stays on for it).
+[array-bounds]
+src:*/vendor/stb/stb_image_resize2.h
+
+# stb_image_resize2.h's STBIR_MOVE_2 copies two floats as one stbir_uint64 (stbir__calculate_coefficients_*,
+# "load of misaligned address ... for type 'stbir_uint64'"): a type-punned 8-byte move on a 4-byte aligned float
+# array, fine on every target the library supports (x86-64, arm64 allow unaligned scalar loads).
+[alignment]
+src:*/vendor/stb/stb_image_resize2.h
