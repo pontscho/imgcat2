@@ -319,3 +319,14 @@ endif()
 # when the re-encoded image is larger; [P38/P39] control characters of EXIF / XMP text and paths escaped
 img2_add_test(test_sec_fix_cli SOURCES unit/test_sec_fix_cli.c LINK cli REQUIRES EXIF_READER)
 # --- sec-fix end ---
+
+# --- f-residual ---
+# Residual audit findings (F-numbers). [F16] GIF image descriptors / [F14] TIFF pages checked against the pixel
+# limits before their rasters are allocated: allocations above 256 MiB fail and are counted (GNU ld --wrap, Linux)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_f_residual_limits SOURCES unit/test_f_residual_limits.c TIMEOUT 60)
+	if(TARGET test_f_residual_limits)
+		target_link_options(test_f_residual_limits PRIVATE -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc)
+	endif()
+endif()
+# --- f-residual end ---
