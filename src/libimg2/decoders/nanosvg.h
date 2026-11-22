@@ -1602,14 +1602,18 @@ static int nsvg__parseMatrix(float* xform, const char* str)
 	float t[6];
 	int na = 0;
 	int len = nsvg__parseTransformArgs(str, t, 6, &na);
-	if (na != 6) return len;
+	if (na != 6) {
+		// incomplete matrix: identity (the caller premultiplies xform; leaving it unwritten used stale stack values)
+		nsvg__xformIdentity(xform);
+		return len;
+	}
 	memcpy(xform, t, sizeof(float)*6);
 	return len;
 }
 
 static int nsvg__parseTranslate(float* xform, const char* str)
 {
-	float args[2];
+	float args[2] = {0.0f, 0.0f};	// numbers missing from the list are 0 (was: stale stack values)
 	float t[6];
 	int na = 0;
 	int len = nsvg__parseTransformArgs(str, args, 2, &na);
@@ -1622,7 +1626,7 @@ static int nsvg__parseTranslate(float* xform, const char* str)
 
 static int nsvg__parseScale(float* xform, const char* str)
 {
-	float args[2];
+	float args[2] = {1.0f, 1.0f};	// scale() without numbers is identity (was: stale stack values)
 	int na = 0;
 	float t[6];
 	int len = nsvg__parseTransformArgs(str, args, 2, &na);
@@ -1634,7 +1638,7 @@ static int nsvg__parseScale(float* xform, const char* str)
 
 static int nsvg__parseSkewX(float* xform, const char* str)
 {
-	float args[1];
+	float args[1] = {0.0f};	// skewX() without a number is identity (was: a stale stack value)
 	int na = 0;
 	float t[6];
 	int len = nsvg__parseTransformArgs(str, args, 1, &na);
@@ -1645,7 +1649,7 @@ static int nsvg__parseSkewX(float* xform, const char* str)
 
 static int nsvg__parseSkewY(float* xform, const char* str)
 {
-	float args[1];
+	float args[1] = {0.0f};	// skewY() without a number is identity (was: a stale stack value)
 	int na = 0;
 	float t[6];
 	int len = nsvg__parseTransformArgs(str, args, 1, &na);
@@ -1656,7 +1660,7 @@ static int nsvg__parseSkewY(float* xform, const char* str)
 
 static int nsvg__parseRotate(float* xform, const char* str)
 {
-	float args[3];
+	float args[3] = {0.0f, 0.0f, 0.0f};	// numbers missing from the list are 0, e.g. the centre y of 'rotate(30 0)' (was: stale stack values)
 	int na = 0;
 	float m[6];
 	float t[6];

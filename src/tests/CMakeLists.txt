@@ -296,3 +296,7 @@ endif()
 # compiled in by the IMG2_HAVE_* macros of img2_testing
 img2_add_test(test_fuzz_regress SOURCES unit/test_fuzz_regress.c TIMEOUT 30)
 # --- fuzz regressions end ---
+
+# --- svg-state ---
+# nanosvg.h transform parsers read stack args[] they had not written: an SVG decode depended on earlier decodes
+img2_add_test(test_svg_state SOURCES unit/test_svg_state.c)
