@@ -51,6 +51,25 @@ CTEST(fuzz_regress, svg_edge_x_saturates)
 	img2_frames_free(&fr);
 }
 
+/*
+ * fuzz_decode_forced crash-1fd75303 (SVG, decoder_nanosvg.c:276 float-cast-overflow): the parsed SVG width / height
+ * (float) went through (uint32_t)roundf() before the dimension check. 4294967808 = 2^32 + 512 is a float; a GCC build
+ * truncated it to 512 and rendered a 512 x 4 image instead of rejecting it.
+ */
+CTEST(fuzz_regress, svg_huge_width_is_limit)
+{
+	static const char svg[] = "<svg xmlns='http://www.w3.org/2000/svg' width='4294967808' height='4'></svg>";
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_E_LIMIT, decode_copy((const uint8_t *)svg, sizeof(svg) - 1, 0, IMG2_MIME_UNKNOWN, &fr));
+}
+
+CTEST(fuzz_regress, svg_huge_height_is_limit)
+{
+	static const char svg[] = "<svg xmlns='http://www.w3.org/2000/svg' width='4' height='1e30'></svg>";
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_E_LIMIT, decode_copy((const uint8_t *)svg, sizeof(svg) - 1, 0, IMG2_MIME_UNKNOWN, &fr));
+}
+
 #if defined(IMG2_HAVE_HEIF) && defined(IMG2_HAVE_EXIF_READER)
 /*
  * fuzz_decode crash-d2efec66 (29 KB HEIF, mutated src/tests/data/heif/samplefilehub.heif): the HEIF and AVIF EXIF
