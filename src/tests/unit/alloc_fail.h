@@ -14,6 +14,13 @@
  * later one succeeds; af_disarm() stops counting; af_fired() tells whether the armed failure happened.
  * af_for_each_failure() runs an operation with n = 0, 1, 2, ... until a run completes without the injected
  * failure firing, so every allocation of the operation is failed once.
+ *
+ * Two faults in one run: af_arm2(n1, n2) (n1 < n2) fails the n1-th and the n2-th wrapped allocation after the
+ * call; af_fire_count() tells how many of them happened (af_fired(): at least one).
+ *
+ * Live-block counter (optional): define AF_WRAP_FREE before including this header and link with
+ * -Wl,--wrap=free as well; af_live() is then the number of blocks allocated through the wrappers and not yet
+ * freed (compare it around an operation to detect a leak). Without AF_WRAP_FREE af_live() is meaningless.
  */
 
 #ifndef IMGCAT2_TESTS_ALLOC_FAIL_H
@@ -50,19 +57,32 @@ void *__wrap_realloc(void *ptr, size_t size);
 char *__wrap_strdup(const char *s);
 
 static long s_af_countdown = -1; /* -1: disarmed */
+static long s_af_gap = -1;       /* af_arm2: successful calls between the first and the second failure, -1: none */
 static bool s_af_fired;
+static int s_af_fires;           /* injected failures since the last arm */
 static long s_af_calls; /* wrapped calls seen while armed */
+static long s_af_live;  /* AF_WRAP_FREE: blocks allocated through the wrappers and not yet freed */
 
 static inline void af_arm(long n)
 {
 	s_af_fired = false;
+	s_af_fires = 0;
 	s_af_calls = 0;
+	s_af_gap = -1;
 	s_af_countdown = n;
+}
+
+/** Fail the n1-th and the n2-th (0-based, n1 < n2) wrapped allocation after the call */
+static inline void af_arm2(long n1, long n2)
+{
+	af_arm(n1);
+	s_af_gap = n2 > n1 ? n2 - n1 - 1 : -1;
 }
 
 static inline void af_disarm(void)
 {
 	s_af_countdown = -1;
+	s_af_gap = -1;
 }
 
 static inline bool af_fired(void)
@@ -70,9 +90,19 @@ static inline bool af_fired(void)
 	return s_af_fired;
 }
 
+static inline int af_fire_count(void)
+{
+	return s_af_fires;
+}
+
 static inline long af_calls(void)
 {
 	return s_af_calls;
+}
+
+static inline long af_live(void)
+{
+	return s_af_live;
 }
 
 /* true: the current call must fail */
@@ -83,8 +113,10 @@ static bool af_tick(void)
 	}
 	s_af_calls++;
 	if (s_af_countdown == 0) {
-		s_af_countdown = -1;
+		s_af_countdown = s_af_gap;
+		s_af_gap = -1;
 		s_af_fired = true;
+		s_af_fires++;
 		return true;
 	}
 	s_af_countdown--;
@@ -93,17 +125,30 @@ static bool af_tick(void)
 
 void *__wrap_malloc(size_t size)
 {
-	return af_tick() ? NULL : __real_malloc(size);
+	void *p = af_tick() ? NULL : __real_malloc(size);
+	s_af_live += p != NULL;
+	return p;
 }
 
 void *__wrap_calloc(size_t nmemb, size_t size)
 {
-	return af_tick() ? NULL : __real_calloc(nmemb, size);
+	void *p = af_tick() ? NULL : __real_calloc(nmemb, size);
+	s_af_live += p != NULL;
+	return p;
 }
 
 void *__wrap_realloc(void *ptr, size_t size)
 {
-	return af_tick() ? NULL : __real_realloc(ptr, size);
+	if (af_tick()) {
+		return NULL;
+	}
+	void *p = __real_realloc(ptr, size);
+	if (ptr == NULL && p != NULL) {
+		s_af_live++;
+	} else if (ptr != NULL && size == 0 && p == NULL) {
+		s_af_live--; /* glibc: realloc(p, 0) frees p */
+	}
+	return p;
 }
 
 char *__wrap_strdup(const char *s)
@@ -115,9 +160,21 @@ char *__wrap_strdup(const char *s)
 	char *p = __real_malloc(n);
 	if (p != NULL) {
 		memcpy(p, s, n);
+		s_af_live++;
 	}
 	return p;
 }
+
+#ifdef AF_WRAP_FREE
+void __real_free(void *ptr);
+void __wrap_free(void *ptr);
+
+void __wrap_free(void *ptr)
+{
+	s_af_live -= ptr != NULL;
+	__real_free(ptr);
+}
+#endif
 
 /**
  * @brief Run op(ctx) once per allocation it performs, failing that allocation

@@ -97,7 +97,7 @@ reason: s_font_implicit_ref set while s_refs == 0 is impossible: the implicit re
 core/init.c:52 branch-false 54 = if (img2_font_manager_init_lazy() && s_refs == 0 && !s_font_implicit_ref) {
 
 # ===== decoders/decoder.c =====
-reason: dispatcher output validation: every registered decoder returns an error or 1..n non-NULL frames from img2_image_alloc() (dimensions within limits, pixels set); defensive
+reason: dispatcher output validation (contract, defensive): the registry is a const table without public registration, and every registered decoder returns an error or >= 1 non-NULL frames from img2_image_alloc() (dimensions 1..IMG2_MAX_DIMENSION, pixels set) through img2_frames_adopt(); verified per decoder by the coverage audits (ico/qoi/stb/pnm/yuv/nanosvg, png/gif/webp/jpeg/tiff/raw, jxl/heif/avif)
 decoders/decoder.c:241 region 41 = if (out->count <= 0 || frames == NULL) {
 decoders/decoder.c:241 branch-true 25 = if (out->count <= 0 || frames == NULL) {
 decoders/decoder.c:241 branch-true 6 = if (out->count <= 0 || frames == NULL) {
@@ -152,14 +152,6 @@ decoders/decoder_qoi.c:45 branch-true 34 = if (data == NULL || len == 0 || frame
 # ===== decoders/decoder_stb.c =====
 reason: static helper argument check: the only caller passes a local frame counter
 decoders/decoder_stb.c:45 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
-reason: stb_image never returns pixels with a width or height <= 0
-decoders/decoder_stb.c:62 region 33 = if (width <= 0 || height <= 0) {
-decoders/decoder_stb.c:62 branch-true 20 = if (width <= 0 || height <= 0) {
-decoders/decoder_stb.c:62 branch-true 6 = if (width <= 0 || height <= 0) {
-decoders/decoder_stb.c:63 line = img2_log(IMG2_LOG_ERROR, "Error: stb_image returned invalid dimensions: %dx%d", width, height);
-decoders/decoder_stb.c:64 line = stbi_image_free(pixels);
-decoders/decoder_stb.c:65 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_stb.c:66 line = }
 
 # ===== decoders/decoder_pnm.c =====
 reason: pnm_mul_size(): every caller passes a >= 1, and the products (width * height <= 2^32, * channels <= 4, * bytes per sample <= 2) cannot overflow a 64-bit size_t (32-bit only)
@@ -197,13 +189,13 @@ decoders/decoder_yuv.c:175 region 3>139:39 = YUV_ERR(err, err_len, "missing para
 decoders/decoder_yuv.c:175 branch-true 3>139:24 = YUV_ERR(err, err_len, "missing parameters");
 decoders/decoder_yuv.c:175 branch-true 3>139:7 = YUV_ERR(err, err_len, "missing parameters");
 decoders/decoder_yuv.c:175 branch-false 3>139:24 = YUV_ERR(err, err_len, "missing parameters");
-reason: unknown format with an error buffer: img2_yuv_parse_spec() rejects unknown names first; img2_yuv_frame_size() passes no buffer
+reason: unknown format with a non-NULL error buffer of length 0 (the false outcome): only img2_yuv_parse_spec() can pass err_len == 0, and it rejects unknown names before yuv_compute_layout(); decode_yuv_frames() passes a 160-byte buffer (the covered true outcome), img2_yuv_frame_size() passes none
 decoders/decoder_yuv.c:245 branch-false 12>139:24 = default: YUV_ERR(err, err_len, "unknown format (supported: %s)", YUV_SPEC_FORMATS); return -1;
 reason: stride * (rows - 1) cannot overflow when stride * rows did not
 decoders/decoder_yuv.c:276 branch-false 56 = ok = size_mul(L->y_stride, h - 1, &last_rows_off) && size_add(last_rows_off, L->y_row_bytes, &L->required);
 decoders/decoder_yuv.c:276 branch-false 8 = ok = size_mul(L->y_stride, h - 1, &last_rows_off) && size_add(last_rows_off, L->y_row_bytes, &L->required);
 decoders/decoder_yuv.c:286 branch-false 14 = ok = ok && size_mul(L->c_stride, L->c_rows - 1, &last_rows_off) && size_add(last_plane_off, last_rows_off, &L->required) && size_add(L->required, L->c_row_bytes, &L->required);
-reason: parse_field() is only called with split, non-empty fields
+reason: parse_field() never gets s == NULL: fields[0..2] are set when the spec has >= 3 fields, fields[3] / fields[4] are read only when present; empty fields ("i420::10") do occur and take the covered *s == '\0' outcome
 decoders/decoder_yuv.c:318 branch-true 6 = if (s == NULL || *s == '\0') {
 reason: internal callers always pass params and frame_count
 decoders/decoder_yuv.c:523 branch-false 6 = if (frame_count != NULL) {
@@ -384,7 +376,7 @@ decoders/decoder_png.c:575 line = img2_log(IMG2_LOG_ERROR, "Error: PNG does not 
 decoders/decoder_png.c:576 line = png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 decoders/decoder_png.c:577 line = return img2_decode_fail(st, IMG2_E_CODEC);
 decoders/decoder_png.c:578 line = }
-reason: num_frames == 0: decode_png_animated() runs only when the same acTL announced more than one frame
+reason: num_frames == 0: png_set_acTL() rejects an acTL with 0 frames, so num_frames >= 1; libpng counts a hidden default image (IDAT without a leading fcTL) as one extra frame, which the decoder subtracts again (>= 1 left)
 decoders/decoder_png.c:592 region 23 = if (num_frames == 0) {
 decoders/decoder_png.c:592 branch-true 6 = if (num_frames == 0) {
 decoders/decoder_png.c:593 line = img2_log(IMG2_LOG_ERROR, "Error: APNG has no frames");
@@ -608,13 +600,6 @@ decoders/decoder_tiff.c:390 branch-true 6 = if (data == NULL || len == 0 || fram
 decoders/decoder_tiff.c:391 line = img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_multipage");
 decoders/decoder_tiff.c:392 line = return img2_decode_fail(st, IMG2_E_ARG);
 decoders/decoder_tiff.c:393 line = }
-reason: no pages after tiff_is_multipage() counted more than one directory in the same data
-decoders/decoder_tiff.c:406 region 21 = if (num_dirs == 0) {
-decoders/decoder_tiff.c:406 branch-true 6 = if (num_dirs == 0) {
-decoders/decoder_tiff.c:407 line = img2_log(IMG2_LOG_ERROR, "Error: TIFF has no pages");
-decoders/decoder_tiff.c:408 line = TIFFClose(tif);
-decoders/decoder_tiff.c:409 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_tiff.c:410 line = }
 reason: every frame is set when the page loop completes
 decoders/decoder_tiff.c:501 branch-false 15 = if (exif && frames[0]) {
 reason: static helper argument check: the only caller passes a local frame counter
@@ -623,28 +608,16 @@ decoders/decoder_tiff.c:539 branch-true 34 = if (data == NULL || len == 0 || fra
 # ===== decoders/decoder_raw.c =====
 reason: called with LibRaw's char arrays only
 decoders/decoder_raw.c:32 branch-true 6 = if (!str || str[0] == '\0') {
-reason: LibRaw fills make for every file it opens ("DNG" for DNG without Make); a non-DNG raw without make is not opened
-decoders/decoder_raw.c:61 branch-false 6 = if (raw->idata.make[0] != '\0') {
 reason: the timestamp comes from LibRaw's mktime() of a parsed date: localtime_r() cannot fail
 decoders/decoder_raw.c:79 branch-false 7 = if (localtime_r(&raw->other.timestamp, &tm_info)) {
 reason: LibRaw allocates xmpdata with its length
 decoders/decoder_raw.c:186 branch-true 29 = if (!raw->idata.xmpdata || raw->idata.xmplen == 0) {
-reason: 2-colour bitmaps: make_mem_thumb / make_mem_image produce 1 or 3 colours for every format LibRaw opens here
-decoders/decoder_raw.c:232 branch-false 30 = return (bmp->colors == 1 || bmp->colors == 3) && (size_t)bmp->data_size >= (size_t)bmp->width * bmp->height * (size_t)bmp->colors;
 reason: static helper argument check: the only caller passes a local frame counter
 decoders/decoder_raw.c:266 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
-reason: libraw_init() fails only on allocation failure, which crashes inside LibRaw first (its memory manager memsets a failed malloc; new uses operator new, not wrapped)
-decoders/decoder_raw.c:276 region 19 = if (raw == NULL) {
-decoders/decoder_raw.c:276 branch-true 6 = if (raw == NULL) {
-decoders/decoder_raw.c:277 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to initialize LibRAW");
-decoders/decoder_raw.c:278 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_raw.c:279 line = }
 reason: make_mem_thumb() returns NULL for previews without data
 decoders/decoder_raw.c:302 branch-false 16 = if (thumb && thumb->data_size > 0) {
 reason: img2_decode_jpeg() never returns IMG2_OK without a frame
 decoders/decoder_raw.c:314 branch-false 82 = if (img2_decode_jpeg(thumb->data, thumb->data_size, NULL, &tf) == IMG2_OK && tf.count > 0) {
-reason: non-JPEG, non-bitmap previews (LIBRAW_IMAGE_H265) exist only in Canon CR3 HEIF-capture files; JPEG XL previews need LIBRAW_RAWOPTIONS_ALLOW_JPEGXL_PREVIEWS (not set); no CR3 fixture can be built in-test
-decoders/decoder_raw.c:319 branch-false 15 = } else if (thumb->type == LIBRAW_IMAGE_BITMAP && raw_bitmap_ok(thumb)) {
 reason: output_bps is 8 and LibRaw converts to RGB (or keeps 1 colour for monochrome sensors)
 decoders/decoder_raw.c:405 region 33 = if (!raw_bitmap_ok(processed)) {
 decoders/decoder_raw.c:405 branch-true 6 = if (!raw_bitmap_ok(processed)) {
@@ -951,9 +924,9 @@ decoders/decoder_jxl.c:284 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to que
 decoders/decoder_jxl.c:285 line = *st = IMG2_E_CODEC;
 decoders/decoder_jxl.c:286 line = goto cleanup_error;
 decoders/decoder_jxl.c:287 line = }
-decoders/decoder_jxl.c:290 region 43 = if (buffer_size != width * height * 4) {
-decoders/decoder_jxl.c:290 branch-true 8 = if (buffer_size != width * height * 4) {
-decoders/decoder_jxl.c:291 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch: expected %zu, got %zu", (size_t)(width * height * 4), buffer_size);
+decoders/decoder_jxl.c:290 region 51 = if (buffer_size != (size_t)width * height * 4) {
+decoders/decoder_jxl.c:290 branch-true 8 = if (buffer_size != (size_t)width * height * 4) {
+decoders/decoder_jxl.c:291 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch: expected %zu, got %zu", (size_t)width * height * 4, buffer_size);
 decoders/decoder_jxl.c:292 line = *st = IMG2_E_CODEC;
 decoders/decoder_jxl.c:293 line = goto cleanup_error;
 decoders/decoder_jxl.c:294 line = }
@@ -1052,9 +1025,9 @@ decoders/decoder_jxl.c:490 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to que
 decoders/decoder_jxl.c:491 line = *st = IMG2_E_CODEC;
 decoders/decoder_jxl.c:492 line = goto cleanup_error;
 decoders/decoder_jxl.c:493 line = }
-decoders/decoder_jxl.c:496 region 43 = if (buffer_size != width * height * 4) {
-decoders/decoder_jxl.c:496 branch-true 8 = if (buffer_size != width * height * 4) {
-decoders/decoder_jxl.c:497 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu", current_frame, (size_t)(width * height * 4), buffer_size);
+decoders/decoder_jxl.c:496 region 51 = if (buffer_size != (size_t)width * height * 4) {
+decoders/decoder_jxl.c:496 branch-true 8 = if (buffer_size != (size_t)width * height * 4) {
+decoders/decoder_jxl.c:497 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu", current_frame, (size_t)width * height * 4, buffer_size);
 decoders/decoder_jxl.c:498 line = *st = IMG2_E_CODEC;
 decoders/decoder_jxl.c:499 line = goto cleanup_error;
 decoders/decoder_jxl.c:500 line = }
@@ -1263,7 +1236,7 @@ encoders/encoder_png.c:46 line = }
 reason: return after png_error(), which does not return (longjmp)
 encoders/encoder_png.c:63 line = return;
 encoders/encoder_png.c:63 region 4 = return;
-reason: configuration-specific: libpng calls the flush callback only for png_write_flush() / row flushing (unused) or after IEND with PNG_WRITE_FLUSH_AFTER_IEND_SUPPORTED (not defined in the vendored libpng)
+reason: structural: libpng calls the flush callback only from png_write_flush() (directly, or per row when png_set_flush() set a flush distance) and after IEND under PNG_WRITE_FLUSH_AFTER_IEND_SUPPORTED; libimg2 never calls png_set_flush() / png_write_flush(), and the vendored libpng does not define PNG_WRITE_FLUSH_AFTER_IEND_SUPPORTED
 encoders/encoder_png.c:83 line = {
 encoders/encoder_png.c:83 region 1 = {
 encoders/encoder_png.c:83 function png_memory_flush_func = {
@@ -1354,7 +1327,7 @@ text/font_manager.c:472 line = return true;
 text/font_manager.c:473 line = }
 reason: both entry creation sites skip the entry when the path copy fails
 text/font_manager.c:546 branch-false 23 = bool is_embedded = (entry->path != NULL && strcmp(entry->path, "[embedded]") == 0);
-reason: callers hold s_font_lock after font_lock_initialized() built the cache; only an unsupported concurrent final img2_shutdown() clears it
+reason: contract-dependent: callers hold s_font_lock after font_lock_initialized() built the cache; g_initialized can only be false here if another thread's final img2_shutdown() runs between the lazy init and the lock, which core/init.c documents as unsupported (no single-thread path: no user callback runs in that window, and a re-entrant img2_shutdown() from the log callback would deadlock on s_font_lock)
 text/font_manager.c:695 branch-true 6 = if (!g_initialized || g_fallback_font == NULL) {
 text/font_manager.c:711 region 22 = if (!g_initialized) {
 text/font_manager.c:711 branch-true 6 = if (!g_initialized) {
@@ -1363,5 +1336,5 @@ text/font_manager.c:713 line = return NULL;
 text/font_manager.c:714 line = }
 reason: both entry creation sites skip the entry when the path copy fails
 text/font_manager.c:871 branch-false 24 = infos[i].embedded = (entry->path != NULL && strcmp(entry->path, "[embedded]") == 0);
-reason: stbtt_GetCodepointShape() returns an allocated vertex array whenever it returns a positive count
+reason: stbtt_GetCodepointShape() returns an allocated vertex array whenever it returns a positive count (TrueType outlines: count 0 on allocation failure; CFF outlines: an allocation failure crashes inside stb_truetype before returning, see docs/coverage.md, known limitations)
 text/font_manager.c:946 branch-true 20 = if (count <= 0 || verts == NULL) {

@@ -86,6 +86,9 @@ Clang 17.0.6, Linux x86-64. Raw = `llvm-cov report` (`report.txt`); "checker" = 
 | **Phase 3, raw** | **96.56% (207 of 6012)** | **99.34% (2 of 301)** | **92.90% (577 of 8122)** | **91.50% (376 of 4422)** |
 | Phase 3, checker (union) | 96.56% (207 of 6012) | 99.34% (2 of 301) | 93.00% (574 of 8200) | 91.50% (376 of 4422) |
 | **Phase 3, after exclusions** | **100%** (207 excluded) | **100%** (2) | **100%** (574) | **100%** (376) |
+| Core-fix (audit follow-up), raw | 96.61% (204 of 6012) | 99.34% (2 of 301) | 93.03% (566 of 8122) | 91.66% (369 of 4422) |
+| Core-fix, checker (union) | 96.61% (204 of 6012) | 99.34% (2 of 301) | 93.13% (563 of 8200) | 91.66% (369 of 4422) |
+| **Core-fix, after exclusions** | **100%** (204 excluded) | **100%** (2) | **100%** (563) | **100%** (369) |
 
 Raw and checker numbers differ only for lines: `llvm-cov report` sums per-function line statistics and, for a
 `static inline` helper compiled into several translation units (`decoders/decoder.h`), counts the best single
@@ -93,7 +96,7 @@ instance (decoder.h: 3 of 35 lines missed); the checker uses llvm-cov's per-file
 in which a line is covered when any instance ran it (decoder.h: 0 missed; lines 117-119 run in the HEIF/AVIF
 instances only). Regions, functions and branches are identical in both.
 
-Per file, phase 3 raw (`report.txt`); every miss is a manifest entry:
+Per file, phase 3 raw (`report.txt`; decoder_raw/stb/tiff rows after core-fix); every miss is a manifest entry:
 
 | File | Lines | Missed | Branches | Missed | Regions missed | Functions missed |
 |---|---|---|---|---|---|---|
@@ -114,9 +117,9 @@ Per file, phase 3 raw (`report.txt`); every miss is a manifest entry:
 | decoders/decoder_png.c | 93.54% | 39 | 83.93% | 45 | 19 | 0 |
 | decoders/decoder_pnm.c | 97.78% | 8 | 97.31% | 7 | 3 | 0 |
 | decoders/decoder_qoi.c | 100.00% | 0 | 92.86% | 1 | 0 | 0 |
-| decoders/decoder_raw.c | 97.03% | 8 | 91.79% | 11 | 2 | 0 |
-| decoders/decoder_stb.c | 91.49% | 4 | 83.33% | 3 | 1 | 0 |
-| decoders/decoder_tiff.c | 90.44% | 28 | 83.02% | 18 | 11 | 1 (tiff_write_proc) |
+| decoders/decoder_raw.c | 98.14% | 5 | 94.78% | 7 | 1 | 0 |
+| decoders/decoder_stb.c | 100.00% | 0 | 94.44% | 1 | 0 | 0 |
+| decoders/decoder_tiff.c | 91.81% | 24 | 83.96% | 17 | 10 | 1 (tiff_write_proc) |
 | decoders/decoder_webp.c | 90.59% | 24 | 82.20% | 21 | 8 | 0 |
 | decoders/decoder_yuv.c | 98.91% | 4 | 94.77% | 16 | 5 | 0 |
 | decoders/magic.c | 100.00% | 0 | 95.04% | 13 | 0 | 0 |
@@ -190,9 +193,10 @@ the code structure makes impossible, 64-bit-only overflow guards, configuration-
 that cannot fail with the arguments given) may be excluded; "hard to trigger" is not unreachable. Entries whose
 reason starts with `RESOURCE-BOUND` are reachable in principle but need more memory than a unit test can use.
 
-Manifest size (phase 3): 1159 entries under 220 reasons: 574 lines, 207 regions, 287 true and 89 false branch
-outcomes, 2 functions. Largest files: decoder_jxl.c 251, decoder_heif.c 130, decoder_png.c 103,
-decoder_avif.c 84, decoder_gif.c 58, decoder_tiff.c 58, encoder_heif.c 58, core/image.c 57.
+Manifest size (core-fix): 1138 entries under 214 reasons: 563 lines, 204 regions, 283 true and 86 false branch
+outcomes, 2 functions (phase 3: 1159; the audit follow-up replaced 21 reachable entries of decoder_stb.c,
+decoder_tiff.c and decoder_raw.c with tests). Largest files: decoder_jxl.c 251, decoder_heif.c 130,
+decoder_png.c 103, decoder_avif.c 84, decoder_gif.c 58, encoder_heif.c 58, core/image.c 57, decoder_tiff.c 52.
 
 ## Allocation failures
 
@@ -215,6 +219,15 @@ vendored codecs allocate on their own. Faults are injected by link-time interpos
   the first and later runs of an operation, so `af_count_allocs()` + `af_fail_range()` users run the operation
   once before counting (`test_cov_a_alloc` font operations). `af_for_each_failure()` is unaffected (it stops when
   a run completes without the injected failure).
+* `alloc_fail.h` extensions (core-fix, backward compatible): `af_arm2(n1, n2)` fails two allocations of one run
+  (`af_fire_count()` tells how many fired); with `AF_WRAP_FREE` defined before the include and `--wrap=free`
+  added to the link, `af_live()` is the live-block count of the wrappers (a leak is a non-zero difference).
+  `test_core_fix_alloc` uses both: stb_image's `malloc(0)` buffer of a 0x0 PSD/HDR is freed, and a 2-page TIFF
+  counts no directories only when the second open's directory hash set and the later directory registration
+  both fail (`decoder_tiff.c` "TIFF has no pages"; one fault cannot reach it).
+* `operator new` failures: `test_core_fix_new` links `unit/core_fix_new_wrap.cpp` with
+  `-Wl,--wrap=_Znwm,--wrap=_Znam`; `core_fix_new_arm(n)` makes the n-th `new` throw `std::bad_alloc`. LibRaw's
+  references to `operator new` are in the static archive, so `libraw_init()` returning NULL is testable.
 * Leak checks of the lane tests use glibc `mallinfo2()` heap totals around repeated runs after a warm-up that
   saturates tcache (`cb_heap_in_use()`, `test_cov_c_alloc`); they pass vacuously on other C libraries.
 * `test_cov_c_alloc` probes the kvazaar (HEIF encoder) allocation failures in forked children (most of them crash
@@ -305,11 +318,16 @@ Sanitizer sweep (S16, ASan + UBSan / TSan, [docs/sanitizers.md](sanitizers.md)):
 overflow, RAW ISO float-to-uint16 conversion (ISO 102400 read as 36864), SVG size float-to-uint32 conversion
 (sizes >= 2^32 wrapped below the limit), and the ctest runner that ran 0 tests under clang's ASan.
 
+Core-fix (audit follow-up): no new bugs. The reachable exclusions behave correctly once tested (stb_image's
+`malloc(0)` buffer is freed, 2-colour RAW previews and H.265 CR3 previews fall back to raw processing,
+`libraw_init()` failure and a TIFF without counted directories return `IMG2_E_CODEC`). Hardening without a red
+test: `decoders/decoder_jxl.c` computed the expected RGBA8 buffer size `width * height * 4` in `uint32_t`; it was
+safe only because `IMG2_MAX_PIXELS` (2e8) keeps it below 2^32, and is now computed in `size_t`.
+
 ## Known limitations
 
 * Vendored code that crashes after an allocation failure (not ours to patch; these paths are not
-  failure-injected): nanosvg `nsvg__addPoint` (realloc without a NULL check), LibRaw's memory manager (memsets a
-  failed malloc in its constructor), jpeg-quantsmooth `upsample_row` (unchecked allocation), libtiff
+  failure-injected): nanosvg `nsvg__addPoint` (realloc without a NULL check), jpeg-quantsmooth `upsample_row` (unchecked allocation), libtiff
   `TIFFRGBAImageBegin` (NULL ExtraSamples array after `TIFFFetchNormalTag` ran out of memory), kvazaar (most of
   its own allocation failures, e.g. `kvz_config_init(NULL)`).
 * libheif 1.23.7: `heif_track_encode_end_of_sequence()` does not clear the track's active encoder, so releasing
@@ -321,10 +339,17 @@ overflow, RAW ISO float-to-uint16 conversion (ISO 102400 read as 36864), SVG siz
   time; only the sfnt header, table directory and the tables `stbtt_InitFont()` reads are validated.
 * JXL: Brotli-compressed (`brob`) Exif/XMP boxes are not decompressed (no metadata from them).
 * `metadata/xml_parser.c` does not decode entities (`&amp;` etc. stay literal in XMP strings).
+* stb_truetype (vendored, not patched): the CFF/OTF outline path `stbtt__GetGlyphShapeT2()`
+  (vendor/stb/stb_truetype.h:2275) does not check `STBTT_malloc()`; when the glyph has vertices and the allocation
+  fails, `stbtt__csctx_v()` writes through the NULL vertex array (stb_truetype.h:1929-1931): a crash, not an error
+  return. libimg2 compiles the implementation in `text/font_manager.c` with the default `STBTT_malloc` (malloc);
+  redefining the macro cannot help (it must still return NULL on failure, and a fallback buffer or an abort would
+  change the semantics). Reproducer: put a CFF-flavoured `.otf` in a temporary `$HOME` font directory (the
+  embedded font is TrueType), let the font manager pick it, then call `img2_font_face_glyph_shape()` for a glyph
+  with an outline under `alloc_fail.h` with the allocation after the charstring count pass armed -> SIGSEGV in
+  `stbtt__csctx_v`. Not failure-injected by the tests; `font_manager.c:946` stays excluded for that reason.
 * Excluded but reachable in principle (`RESOURCE-BOUND`): the running total-pixel check of HEIF/AVIF sequences
-  (needs > 2^30 decoded pixels, >= 4 GiB of frames in memory). Not proven unreachable: `decoder_raw.c:319` false
-  outcome (non-JPEG, non-bitmap previews exist only in Canon CR3 HEIF-capture files; no fixture can be built
-  in-test).
+  (needs > 2^30 decoded pixels, >= 4 GiB of frames in memory).
 
 ## Tests added
 
@@ -341,3 +366,6 @@ overflow, RAW ISO float-to-uint16 conversion (ISO 102400 read as 36864), SVG siz
 | `test_cov_p3_font` | phase 3: sfnt validation (guard-page font buffers; truncated directory, tables past the end, short cmap/head/maxp, 32-bit wrap, versions) |
 | `test_cov_p3_gaps` | phase 3: GIF with a 0x0 logical screen and two frames (decoder.h total check with a zero-area canvas) |
 | `test_sanitize_regress` | sanitizer sweep (docs/sanitizers.md): RAW ISO above 65535 saturates, SVG sizes beyond 2^32 / infinite are IMG2_E_LIMIT |
+| `test_core_fix_alloc` | core-fix: stb_image PSD/HDR with a zero width or height (E_CODEC, no leak: live-block counter), 2-page TIFF counting no directories (two allocation faults) |
+| `test_core_fix_raw` | core-fix: RAW make emptied by LibRaw (Make "   "; UniqueCameraModel " X" is rejected), 2-colour preview of a CFA TIFF (raw fallback), hand-built Canon CR3 with an H.265 (CISZ) preview |
+| `test_core_fix_new` | core-fix: `new LibRaw` throwing `std::bad_alloc` (`libraw_init()` NULL) via `--wrap=_Znwm` |
