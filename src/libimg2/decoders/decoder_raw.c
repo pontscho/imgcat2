@@ -249,6 +249,24 @@ static void raw_bitmap_to_rgba(uint8_t *dst, const libraw_processed_image_t *bmp
 }
 
 /**
+ * @brief LibRaw data error callback: the text of LibRaw's default_data_callback
+ *        (vendor/libraw/src/utils/utils_libraw.cpp) through img2_log instead of stderr
+ *
+ * @param file Datastream name: NULL for libraw_open_buffer()
+ * @param offset -1 at end of data, else the stream position of the corrupt data
+ */
+static void log_raw_data_error(void *data, const char *file, const INT64 offset)
+{
+	(void)data;
+	const char *name = file != NULL ? file : "unknown file";
+	if (offset < 0) {
+		img2_log(IMG2_LOG_WARN, "%s: Unexpected end of file", name);
+	} else {
+		img2_log(IMG2_LOG_WARN, "%s: data corrupted at %lld", name, (long long)offset);
+	}
+}
+
+/**
  * @brief Decode static RAW image (single frame)
  *
  * Decodes a RAW camera image to RGBA8888 format.
@@ -278,6 +296,7 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to initialize LibRAW");
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
+	libraw_set_dataerror_handler(raw, log_raw_data_error, NULL); /* default: fprintf(stderr, ...) */
 
 	// Open buffer
 	// Cast away const - libraw API doesn't accept const but won't modify data

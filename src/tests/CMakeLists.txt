@@ -324,3 +324,6 @@ img2_add_test(test_sec_fix_cli SOURCES unit/test_sec_fix_cli.c LINK cli REQUIRES
 # libjpeg warnings ("Corrupt JPEG data: ...") routed through img2_log (core/log_jpeg.c): the host callback gets them,
 # nothing is written to fd 2 behind its back
 img2_add_test(test_jpeg_log SOURCES unit/test_jpeg_log.c)
+# LibRaw data errors ("unknown file: Unexpected end of file" / "data corrupted at N") routed the same way
+# (decoders/decoder_raw.c, libraw_set_dataerror_handler)
+img2_add_test(test_jpeg_log_raw SOURCES unit/test_jpeg_log_raw.c REQUIRES RAW)
