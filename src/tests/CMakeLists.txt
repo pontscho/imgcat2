@@ -247,4 +247,5 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		target_link_options(test_cov_p3_font PRIVATE -Wl,--wrap=malloc,--wrap=free)
 	endif()
 endif()
-img2_add_test(test_cov_p3_jxl SOURCES unit/test_cov_p3_jxl.c REQUIRES JXL EXIF_READER)# --- coverage phase 3 end ---
+img2_add_test(test_cov_p3_jxl SOURCES unit/test_cov_p3_jxl.c REQUIRES JXL EXIF_READER)
+img2_add_test(test_cov_p3_gaps SOURCES unit/test_cov_p3_gaps.c REQUIRES GIFLIB)# --- coverage phase 3 end ---
