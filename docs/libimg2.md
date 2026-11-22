@@ -325,9 +325,12 @@ Every diagnostic goes through one process-global sink; the library never writes 
 - **[E8]/[R21]** After `img2_set_log_callback()` returns, threads that are already logging may still call the
   previous `fn`/`user`; keep the previous `user` valid until those calls finish (or until `img2_shutdown()`).
 - **[SM4] Untrusted text warning:** messages can embed strings taken from the input file (EXIF/XMP fields,
-  SVG text, vendor messages quoting file data), which may contain terminal control/escape bytes. The default
-  stderr sink writes them unmodified (byte compatibility with imgcat2). Hosts that show messages on a terminal
-  or in logs should install a callback with `img2_set_log_callback` and sanitise there.
+  SVG text, vendor messages quoting file data), which may contain terminal control/escape bytes. Every message
+  is filtered before it reaches the default stderr sink or a callback (**[F22]**, `core/log.c`): C0 controls
+  other than tab (and a final newline) and DEL become `?`. Bytes from 0x80 up are passed through unchanged, so
+  UTF-8 C1 controls (U+0080-U+009F, e.g. CSI U+009B) and raw 0x80-0x9F bytes still reach the sink; hosts that
+  show messages on a terminal which interprets C1 controls should install a callback with
+  `img2_set_log_callback` and filter those there.
 
 ## Threading model
 
@@ -382,7 +385,9 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   image lists (frames may differ in size) sum the image handles' sizes before decoding anything and keep a
   running total while decoding. HEIF/AVIF sequence tracks (sample count unknown up front) check the track
   resolution against `IMG2_MAX_PIXELS`/`IMG2_MAX_DIMENSION` before the first sample and keep the running total
-  per decoded frame. TIFF pages have no total cap.
+  per decoded frame. Multi-page TIFF reads every page's directory first: each page against
+  `IMG2_MAX_DIMENSION`/`IMG2_MAX_PIXELS` and the pages' sum against the same 2^30 total, before any page is
+  allocated or decoded.
 - **Frame cap**: GIF, APNG, WebP, JPEG XL, HEIF/AVIF image lists and HEIF/AVIF sequence tracks keep the first
   200 frames of a longer animation and log a WARN line (`... limiting to 200`); the rest is not decoded (a
   sequence decodes one sample past the cap to detect it). JPEG XL stops its frame-header walk at the 201st
@@ -394,7 +399,11 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   a real allocation failure. JPEG XL checks the canvas against both limits from the basic info, before any frame
   is walked or decoded (a canvas over `IMG2_MAX_DIMENSION` was `IMG2_E_CODEC` before S13b).
 - **[F16]** GIF: before giflib decodes anything, the records are walked without LZW-decoding the rasters to
-  count the frames and check the logical screen (`IMG2_E_LIMIT`) and the total above; `img2_is_animated`
+  count the frames and check the logical screen (`IMG2_E_LIMIT`) and the total above. The walk also checks
+  the image descriptors of the first 200 images, whose rasters giflib allocates at the descriptor's own size:
+  each against `IMG2_MAX_DIMENSION`/`IMG2_MAX_PIXELS` and their sum against the 2^30 total (`IMG2_E_LIMIT`
+  before any raster is allocated). A descriptor larger than the logical screen is still accepted and clipped
+  to the screen when composited. `img2_is_animated`
   on a GIF only walks the records up to the second image descriptor. The GIF decode then reads the records
   one by one and stops after the 200th image: later rasters are never LZW-decoded, and a defect after the
   201st image descriptor (corrupt or truncated data past the cap) no longer fails the decode. HEIF/AVIF:

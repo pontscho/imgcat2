@@ -176,11 +176,14 @@ static void gif_track_netscape_loop(int function, const GifByteType *ext, bool *
  * @param screen_height Output: logical screen height (may be NULL)
  * @param image_count Output: number of image descriptors seen (also valid after a walk error)
  * @param loop_out Output: NETSCAPE2.0 loop count of the records walked, -1 if none (may be NULL)
+ * @param limit_images Check the raster size of the first limit_images image descriptors (0 = no checks)
  * @param error_code Output: giflib error code on failure
  * @return 0 on success (also when stopped early), -1 if DGifOpen failed, -2 on a giflib error while
- *         walking (a walk to the trailer without any image is an error: D_GIF_ERR_NO_IMAG_DSCR, as in DGifSlurp)
+ *         walking (a walk to the trailer without any image is an error: D_GIF_ERR_NO_IMAG_DSCR, as in DGifSlurp),
+ *         -3 (logged) if a checked descriptor is over IMG2_MAX_DIMENSION / IMG2_MAX_PIXELS or the checked
+ *         descriptors together are over IMG2_MAX_TOTAL_PIXELS [F16]
  */
-static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uint32_t *screen_width, uint32_t *screen_height, int *image_count, int *loop_out, int *error_code)
+static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uint32_t *screen_width, uint32_t *screen_height, int *image_count, int *loop_out, int limit_images, int *error_code)
 {
 	gif_mem_reader reader;
 	reader.data = data;
@@ -203,7 +206,9 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 	}
 
 	bool ok = true;
+	bool over_limit = false;
 	bool prev_app = false;
+	uint64_t raster_pixels = 0; /* [F16] pixels of the checked descriptors' rasters (gif_slurp_capped allocates them) */
 	GifRecordType record_type = UNDEFINED_RECORD_TYPE;
 	do {
 		if (DGifGetRecordType(gif, &record_type) == GIF_ERROR) {
@@ -220,6 +225,12 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 			}
 			(*image_count)++;
 			prev_app = false; /* the extension block list of this image ends here */
+			/* [F16] the raster of a descriptor is allocated at its own size (not clipped to the screen): check it
+			 * before the slurp allocates; a size <= 0 is left to the slurp's own check (CODEC, as giflib) */
+			if (*image_count <= limit_images && (img2_decode_check_header_size("GIF image", gif->Image.Width, gif->Image.Height) != IMG2_OK || img2_decode_add_frame_pixels(&raster_pixels, (uint32_t)gif->Image.Width, (uint32_t)gif->Image.Height) != IMG2_OK)) {
+				over_limit = true;
+				break;
+			}
 			if (stop_after > 0 && *image_count >= stop_after) {
 				break;
 			}
@@ -257,14 +268,14 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 
 	if (!ok) {
 		*error_code = gif->Error;
-	} else if (*image_count == 0) {
+	} else if (*image_count == 0) { /* (over_limit implies an image) */
 		*error_code = D_GIF_ERR_NO_IMAG_DSCR;
 		ok = false;
 	}
 
 	int close_error;
 	DGifCloseFile(gif, &close_error);
-	return ok ? 0 : -2;
+	return over_limit ? -3 : (ok ? 0 : -2);
 }
 
 /**
@@ -303,6 +314,7 @@ static int gif_slurp_capped(GifFileType *gif, int max_images)
 			SavedImage *sp = &gif->SavedImages[gif->ImageCount - 1];
 			int width = sp->ImageDesc.Width;
 			int height = sp->ImageDesc.Height;
+			/* width * height <= IMG2_MAX_PIXELS here: gif_walk_records() checked the first MAX_GIF_FRAMES descriptors [F16] */
 			if (width <= 0 || height <= 0 || width > (INT_MAX / height)) {
 				gif->Error = D_GIF_ERR_DATA_TOO_BIG; /* giflib leaves Error unset here (GifErrorString(0) is NULL) */
 				return GIF_ERROR;
@@ -398,10 +410,13 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 	{
 		uint32_t screen_width = 0;
 		uint32_t screen_height = 0;
-		int walk = gif_walk_records(data, len, 0, &screen_width, &screen_height, &total_images, &walk_loop, &error_code);
+		int walk = gif_walk_records(data, len, 0, &screen_width, &screen_height, &total_images, &walk_loop, MAX_GIF_FRAMES, &error_code);
 		if (walk == -1) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to open GIF: %s", GifErrorString(error_code));
 			return img2_decode_fail(st, IMG2_E_CODEC);
+		}
+		if (walk == -3) {
+			return img2_decode_fail(st, IMG2_E_LIMIT); /* [F16] a decoded raster would be over the limits */
 		}
 		/* A defect after the first MAX_GIF_FRAMES + 1 image descriptors is beyond the frame cap:
 		 * the capped decode below never reads that far, so it is not an error */
@@ -657,7 +672,7 @@ bool img2_gif_is_animated(const uint8_t *data, size_t size)
 	/* Record walk only: raster data is skipped, not LZW-decoded; stop at the 2nd image descriptor */
 	int error_code = 0;
 	int image_count = 0;
-	if (gif_walk_records(data, size, 2, NULL, NULL, &image_count, NULL, &error_code) != 0) {
+	if (gif_walk_records(data, size, 2, NULL, NULL, &image_count, NULL, 0, &error_code) != 0) {
 		return false;
 	}
 

@@ -224,7 +224,8 @@ void print_font_list(void)
 
 	/* Print fonts grouped by family */
 	for (family_list_t *fam = families; fam != NULL; fam = fam->next) {
-		printf("%s: ", fam->family);
+		cli_fputs_safe(fam->family, stdout); /* [F27] family names come from font files */
+		fputs(": ", stdout);
 
 		bool first = true;
 		for (size_t i = 0; i < list.count; i++) {

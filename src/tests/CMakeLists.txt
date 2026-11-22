@@ -332,3 +332,16 @@ img2_add_test(test_jpeg_log_raw SOURCES unit/test_jpeg_log_raw.c REQUIRES RAW)
 # nanosvgrast.h inserted each new active edge by a linear scan: SVG <text> rendering was quadratic in the text
 # length (fuzzing S17). Ratio-based timing (16x the text < 40x the time) and pixels pinned to the pre-fix render
 img2_add_test(test_svg_text_perf SOURCES unit/test_svg_text_perf.c TIMEOUT 120)
+
+# --- f-residual ---
+# Residual audit findings (F-numbers). [F16] GIF image descriptors / [F14] TIFF pages checked against the pixel
+# limits before their rasters are allocated: allocations above 256 MiB fail and are counted (GNU ld --wrap, Linux)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_f_residual_limits SOURCES unit/test_f_residual_limits.c TIMEOUT 60)
+	if(TARGET test_f_residual_limits)
+		target_link_options(test_f_residual_limits PRIVATE -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc)
+	endif()
+endif()
+# F27 font family names from file names (library) and in `--fonts` (CLI)
+img2_add_test(test_f_residual SOURCES unit/test_f_residual.c LINK cli)
+# --- f-residual end ---

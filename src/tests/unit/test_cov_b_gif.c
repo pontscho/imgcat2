@@ -250,9 +250,10 @@ CTEST(cov_b_gif, raster_errors_after_a_clean_walk)
 	ASSERT_EQUAL(IMG2_E_CODEC, gif_decode(&b, &fr));
 	cb_free(&b);
 
-	/* image descriptors the walk accepts but the decoder rejects: zero width, zero height, w * h > INT_MAX */
-	const unsigned dims[3][2] = { { 0, 1 }, { 1, 0 }, { 65535, 65535 } };
-	for (int i = 0; i < 3; i++) {
+	/* image descriptors the walk accepts but the decoder rejects: zero width, zero height (w * h > INT_MAX, as
+	 * any descriptor over IMG2_MAX_PIXELS, is IMG2_E_LIMIT from the walk since [F16]: test_f_residual_limits.c) */
+	const unsigned dims[2][2] = { { 0, 1 }, { 1, 0 } };
+	for (int i = 0; i < 2; i++) {
 		gif_header(&b, 1, 1, 1, k_pal4);
 		gif_image(&b, 0, 0, dims[i][0], dims[i][1], 0, -1, NULL, 2, px, 1);
 		cb_u8(&b, 0x3B);

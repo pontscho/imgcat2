@@ -460,13 +460,18 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			frame_delay_ms = 0;
 			JxlFrameHeader frame_header;
 			if (tps_num != 0 && JxlDecoderGetFrameHeader(dec, &frame_header) == JXL_DEC_SUCCESS) {
-				uint64_t ms = (uint64_t)frame_header.duration * 1000u * tps_den / tps_num;
-				frame_delay_ms = ms > UINT32_MAX ? UINT32_MAX : (uint32_t)ms;
+				frame_delay_ms = img2_decode_ticks_to_ms(frame_header.duration, tps_num, tps_den);
 			}
 		} else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
 			// Ensure we have basic info
 			if (!basic_info_received) {
 				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested before basic info");
+				*st = IMG2_E_CODEC;
+				goto cleanup_error;
+			}
+			// [F1] one buffer per frame, inside the frames array (JXL_DEC_FRAME checked the index)
+			if (current_frame >= num_frames || frames[current_frame] != NULL) {
+				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested for unexpected frame %d", current_frame);
 				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}

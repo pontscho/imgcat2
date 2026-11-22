@@ -382,6 +382,7 @@ static img2_image_t **decode_tiff_static(const uint8_t *data, size_t len, int *f
  * @return Array of img2_image_t* frames, or NULL on error
  *
  * @note Maximum MAX_TIFF_FRAMES frames (200) to prevent DoS
+ * @note [F14] the pages' pixels are summed against IMG2_MAX_TOTAL_PIXELS before any page is allocated
  * @note TIFF pages have no timing info - uniform frame rate
  * @note Output format is RGBA8888
  */
@@ -410,10 +411,40 @@ static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int
 	}
 
 	// Enforce MAX_TIFF_FRAMES limit
-	int num_frames = (int)num_dirs;
-	if (num_frames > MAX_TIFF_FRAMES) {
-		img2_log(IMG2_LOG_WARN, "Warning: TIFF has %d pages, limiting to %d", num_frames, MAX_TIFF_FRAMES);
-		num_frames = MAX_TIFF_FRAMES;
+	int num_frames = MAX_TIFF_FRAMES;
+	if (num_dirs > (tdir_t)MAX_TIFF_FRAMES) {
+		img2_log(IMG2_LOG_WARN, "Warning: TIFF has %lu pages, limiting to %d", (unsigned long)num_dirs, MAX_TIFF_FRAMES);
+	} else {
+		num_frames = (int)num_dirs; /* compared as tdir_t: never negative */
+	}
+
+	/* [F14] every page's size against the limits and the running total before anything is allocated */
+	uint32_t page_width[MAX_TIFF_FRAMES];
+	uint32_t page_height[MAX_TIFF_FRAMES];
+	uint64_t total_pixels = 0;
+	for (int i = 0; i < num_frames; i++) {
+		if (!TIFFSetDirectory(tif, (tdir_t)i)) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to set TIFF directory %d", i);
+			TIFFClose(tif);
+			return img2_decode_fail(st, IMG2_E_CODEC);
+		}
+
+		uint32_t width = 0, height = 0;
+		TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
+		TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
+
+		size_t byte_count;
+		if (!img2_image_calc_size(width, height, &byte_count)) {
+			img2_log(IMG2_LOG_ERROR, "Error: TIFF page %d dimensions %ux%u exceed the limits", i, width, height);
+			TIFFClose(tif);
+			return img2_decode_fail(st, IMG2_E_LIMIT);
+		}
+		if (img2_decode_add_frame_pixels(&total_pixels, width, height) != IMG2_OK) {
+			TIFFClose(tif);
+			return img2_decode_fail(st, IMG2_E_LIMIT);
+		}
+		page_width[i] = width;
+		page_height[i] = height;
 	}
 
 	// Allocate frames array
@@ -437,16 +468,10 @@ static img2_image_t **decode_tiff_multipage(const uint8_t *data, size_t len, int
 			goto cleanup_error;
 		}
 
-		uint32_t width = 0, height = 0;
-		TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
-		TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
-
-		size_t byte_count;
-		if (!img2_image_calc_size(width, height, &byte_count)) {
-			img2_log(IMG2_LOG_ERROR, "Error: TIFF page %d dimensions %ux%u exceed the limits", i, width, height);
-			*st = IMG2_E_LIMIT;
-			goto cleanup_error;
-		}
+		/* checked above (the page's directory gives the same size again) */
+		uint32_t width = page_width[i];
+		uint32_t height = page_height[i];
+		size_t byte_count = (size_t)width * height * 4u;
 
 		uint32_t *raster = (uint32_t *)_TIFFmalloc((tmsize_t)byte_count);
 		if (raster == NULL) {

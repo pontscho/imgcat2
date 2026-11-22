@@ -10,6 +10,7 @@
 #ifndef IMG2_INTERNAL_DECODERS_DECODER_H
 #define IMG2_INTERNAL_DECODERS_DECODER_H
 
+#include <limits.h>
 #include <png.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -161,6 +162,28 @@ static inline img2_status_t img2_decode_check_total_pixels(uint64_t frame_count,
 }
 
 /**
+ * @brief Internal [F17]: a duration of @p ticks at @p tps_num / @p tps_den ticks per second, in milliseconds
+ *
+ * @return floor(ticks * 1000 * tps_den / tps_num) saturated at UINT32_MAX; 0 if tps_num is 0
+ */
+static inline uint32_t img2_decode_ticks_to_ms(uint32_t ticks, uint32_t tps_num, uint32_t tps_den)
+{
+	if (tps_num == 0) {
+		return 0;
+	}
+	/* ticks * tps_den fits in 64 bits, the factor 1000 may not: split the quotient, q * 1000 + r * 1000 / tps_num
+	 * (r < tps_num < 2^32, so r * 1000 fits) */
+	uint64_t scaled = (uint64_t)ticks * tps_den;
+	uint64_t q = scaled / tps_num;
+	uint64_t r = scaled % tps_num;
+	if (q > UINT32_MAX / 1000u) {
+		return UINT32_MAX;
+	}
+	uint64_t ms = q * 1000u + r * 1000u / tps_num;
+	return ms > UINT32_MAX ? UINT32_MAX : (uint32_t)ms;
+}
+
+/**
  * @brief Free multi-frame decoder output
  *
  * Cleans up memory allocated by decoder functions:
@@ -292,6 +315,10 @@ img2_status_t img2_decode_svg_nanosvg(const uint8_t *data, size_t len, const img
  * @return IMG2_OK or an error status
  */
 img2_status_t img2_decode_svg_resvg(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out);
+
+/* [F5] stb_image and qoi.h take the input length as int (decoder_stb.c / decoder_qoi.c pass (int)len): the
+ * dispatcher rejects len > IMG2_MAX_FILE_SIZE first, so that limit must fit in an int */
+_Static_assert(IMG2_MAX_FILE_SIZE <= INT_MAX, "IMG2_MAX_FILE_SIZE must fit the int length of stb_image / qoi.h");
 
 /* [L6] Every decoder entry point, declared unconditionally (unbuilt ones are simply never referenced). */
 img2_status_t img2_decode_png(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out);

@@ -22,7 +22,8 @@ typedef struct img2_decode_opts {
 	int max_frames;                  /**< <= 0: no extra limit; N > 0: keep the first N frames. Applied after
 	                                      decoding (the decoder still decodes every frame it supports), so it
 	                                      trims the result and does not bound decode time or memory */
-	int jpeg_deblock;                /**< -1 = default (quantsmooth when built), 0 = off, 1 = on */
+	int jpeg_deblock;                /**< -1 = default (quantsmooth when built), 0 = off, 1 = on; any other
+	                                      value: img2_decode() returns IMG2_E_ARG */
 } img2_decode_opts_t;
 
 /** Default decode options. NOTE: a zeroed struct means jpeg_deblock = off */
@@ -31,7 +32,8 @@ typedef struct img2_decode_opts {
 /**
  * @brief Decode an image buffer
  *
- * buf is untrusted: buf NULL / len 0 / out NULL -> IMG2_E_ARG; len > IMG2_MAX_FILE_SIZE ->
+ * buf is untrusted: buf NULL / len 0 / out NULL / opts->jpeg_deblock not -1, 0 or 1 -> IMG2_E_ARG;
+ * len > IMG2_MAX_FILE_SIZE ->
  * IMG2_E_LIMIT; every frame is limited to IMG2_MAX_DIMENSION / IMG2_MAX_PIXELS (else IMG2_E_LIMIT),
  * and the frames of an animated GIF, APNG, WebP, JPEG XL or HEIF/AVIF image list/sequence to 2^30 pixels in total
  * (else IMG2_E_LIMIT). Animations longer than 200 frames are clamped to their first 200 frames.
