@@ -201,7 +201,51 @@ static img2_xmp_t *extract_raw_xmp(libraw_data_t *raw)
 
 	return xmp;
 }
+
+/**
+ * @brief Give @p img LibRaw's metadata, replacing any the JPEG decoder found in an embedded preview
+ *        (LibRaw prepends its own EXIF block to previews that lack one)
+ */
+static void raw_attach_metadata(img2_image_t *img, libraw_data_t *raw)
+{
+	if (img->exif != NULL) {
+		img2_exif_clear(img->exif);
+		free(img->exif);
+	}
+	if (img->xmp != NULL) {
+		img2_xmp_clear(img->xmp);
+		free(img->xmp);
+	}
+	img->exif = extract_raw_exif(raw);
+	img->xmp = extract_raw_xmp(raw);
+}
 #endif
+
+/**
+ * @brief Whether a LibRaw bitmap holds width x height pixels of 8-bit grey (1 colour) or RGB (3 colours)
+ *
+ * LibRaw's bitmaps are 8-bit here (previews always, processed images by output_bps = 8), but their colour
+ * count follows the file: grey previews, monochrome sensors.
+ */
+static bool raw_bitmap_ok(const libraw_processed_image_t *bmp)
+{
+	return (bmp->colors == 1 || bmp->colors == 3) && (size_t)bmp->data_size >= (size_t)bmp->width * bmp->height * (size_t)bmp->colors;
+}
+
+/** @brief Convert a bitmap accepted by raw_bitmap_ok() to RGBA8888 */
+static void raw_bitmap_to_rgba(uint8_t *dst, const libraw_processed_image_t *bmp)
+{
+	const size_t pixels = (size_t)bmp->width * bmp->height;
+	const size_t step = (size_t)bmp->colors;
+	const size_t g = bmp->colors == 3 ? 1 : 0;
+	const uint8_t *s = bmp->data;
+	for (size_t i = 0; i < pixels; i++, s += step) {
+		*dst++ = s[0];
+		*dst++ = s[g];
+		*dst++ = s[g * 2];
+		*dst++ = 0xFF;
+	}
+}
 
 /**
  * @brief Decode static RAW image (single frame)
@@ -272,26 +316,18 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 					tf.frames[0] = NULL;
 				}
 				img2_frames_free(&tf);
-			} else if (thumb->type == LIBRAW_IMAGE_BITMAP) {
-				// Convert RGB bitmap thumbnail
+			} else if (thumb->type == LIBRAW_IMAGE_BITMAP && raw_bitmap_ok(thumb)) {
+				// Convert the grey or RGB bitmap thumbnail
 				output = img2_image_alloc(thumb->width, thumb->height);
 				if (output) {
-					const uint8_t *s = thumb->data;
-					uint8_t *d = output->pixels;
-					for (int i = 0; i < thumb->width * thumb->height; i++) {
-						*d++ = *s++; // R
-						*d++ = *s++; // G
-						*d++ = *s++; // B
-						*d++ = 0xFF; // A
-					}
+					raw_bitmap_to_rgba(output->pixels, thumb);
 				}
 			}
 
 			if (output) {
 				// Add EXIF and XMP metadata using helper functions
 #ifdef IMG2_HAVE_EXIF_READER
-				output->exif = extract_raw_exif(raw);
-				output->xmp = extract_raw_xmp(raw);
+				raw_attach_metadata(output, raw);
 #endif
 				libraw_dcraw_clear_mem(thumb);
 				libraw_close(raw);
@@ -342,6 +378,11 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 	raw->params.use_auto_wb = 0; // Disable auto white balance
 	raw->params.user_qual = 3; // AHD demosaicing
 	raw->params.use_fuji_rotate = 1; // Rotate Fuji images correctly
+	// No rotation: the orientation is reported in the EXIF data (as for the embedded preview, and as every
+	// other decoder does), the caller applies it. dcraw_process() sets sizes.flip to user_flip: keep the
+	// file's value for the metadata.
+	const ushort file_flip = raw->sizes.flip;
+	raw->params.user_flip = 0;
 
 	// Process RAW data (demosaicing, color correction)
 	ret = libraw_dcraw_process(raw);
@@ -358,6 +399,15 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 		libraw_close(raw);
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
+	raw->sizes.flip = file_flip;
+
+	// 8-bit RGB, or grey for monochrome sensors
+	if (!raw_bitmap_ok(processed)) {
+		img2_log(IMG2_LOG_ERROR, "Error: Unexpected RAW output format (%d colours)", processed->colors);
+		libraw_dcraw_clear_mem(processed);
+		libraw_close(raw);
+		return img2_decode_fail(st, IMG2_E_CODEC);
+	}
 
 	// Create img2_image_t structure
 	img2_image_t *output = NULL;
@@ -369,24 +419,12 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 		return img2_decode_fail(st, alloc_st);
 	}
 
-	// Convert RGB to RGBA8888
-	// LibRAW returns RGB (3 bytes/pixel), we need RGBA8888 (4 bytes/pixel)
-	const uint8_t *src = processed->data;
-	uint8_t *dst = output->pixels;
-
-	for (int y = 0; y < (int)processed->height; y++) {
-		for (int x = 0; x < (int)processed->width; x++) {
-			*dst++ = *src++; // R
-			*dst++ = *src++; // G
-			*dst++ = *src++; // B
-			*dst++ = 0xFF; // A (fully opaque)
-		}
-	}
+	// Convert RGB (or grey) to RGBA8888
+	raw_bitmap_to_rgba(output->pixels, processed);
 
 	// Extract EXIF and XMP metadata using helper functions
 #ifdef IMG2_HAVE_EXIF_READER
-	output->exif = extract_raw_exif(raw);
-	output->xmp = extract_raw_xmp(raw);
+	raw_attach_metadata(output, raw);
 #endif
 
 	// Cleanup LibRAW resources
