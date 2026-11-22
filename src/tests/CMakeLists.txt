@@ -319,3 +319,8 @@ endif()
 # when the re-encoded image is larger; [P38/P39] control characters of EXIF / XMP text and paths escaped
 img2_add_test(test_sec_fix_cli SOURCES unit/test_sec_fix_cli.c LINK cli REQUIRES EXIF_READER)
 # --- sec-fix end ---
+
+# --- jpeg-log ---
+# libjpeg warnings ("Corrupt JPEG data: ...") routed through img2_log (core/log_jpeg.c): the host callback gets them,
+# nothing is written to fd 2 behind its back
+img2_add_test(test_jpeg_log SOURCES unit/test_jpeg_log.c)

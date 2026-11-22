@@ -20,7 +20,7 @@ add_library(img2::img2 ALIAS img2)
 # PIC (default ON): PIE executables and shared objects can link the static library
 set_target_properties(img2 PROPERTIES POSITION_INDEPENDENT_CODE ${IMG2_POSITION_INDEPENDENT_CODE})
 target_sources(img2 PRIVATE
-	core/image.c core/log.c core/status.c core/init.c core/api.c
+	core/image.c core/log.c core/log_jpeg.c core/status.c core/init.c core/api.c
 	decoders/decoder.c decoders/magic.c decoders/decoder_stb.c decoders/decoder_png.c decoders/decoder_jpeg.c
 	decoders/decoder_qoi.c decoders/decoder_ico.c decoders/decoder_pnm.c decoders/decoder_yuv.c decoders/decoder_nanosvg.c
 	encoders/encoder.c encoders/encoder_jpeg.c encoders/encoder_png.c
