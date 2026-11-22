@@ -161,6 +161,28 @@ static inline img2_status_t img2_decode_check_total_pixels(uint64_t frame_count,
 }
 
 /**
+ * @brief Internal [F17]: a duration of @p ticks at @p tps_num / @p tps_den ticks per second, in milliseconds
+ *
+ * @return floor(ticks * 1000 * tps_den / tps_num) saturated at UINT32_MAX; 0 if tps_num is 0
+ */
+static inline uint32_t img2_decode_ticks_to_ms(uint32_t ticks, uint32_t tps_num, uint32_t tps_den)
+{
+	if (tps_num == 0) {
+		return 0;
+	}
+	/* ticks * tps_den fits in 64 bits, the factor 1000 may not: split the quotient, q * 1000 + r * 1000 / tps_num
+	 * (r < tps_num < 2^32, so r * 1000 fits) */
+	uint64_t scaled = (uint64_t)ticks * tps_den;
+	uint64_t q = scaled / tps_num;
+	uint64_t r = scaled % tps_num;
+	if (q > UINT32_MAX / 1000u) {
+		return UINT32_MAX;
+	}
+	uint64_t ms = q * 1000u + r * 1000u / tps_num;
+	return ms > UINT32_MAX ? UINT32_MAX : (uint32_t)ms;
+}
+
+/**
  * @brief Free multi-frame decoder output
  *
  * Cleans up memory allocated by decoder functions:

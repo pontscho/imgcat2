@@ -4,6 +4,8 @@
  *
  * F27: font family names taken from a font's FILE NAME (the fallback when the name table gives none) kept C0
  *      controls / DEL (the name-table path replaced them); `imgcat2 --fonts` printed families raw.
+ * F17: the JPEG XL frame duration in ms, ticks * 1000 * tps_den / tps_num, wrapped in 64 bits before the
+ *      UINT32_MAX clamp (img2_decode_ticks_to_ms()).
  */
 
 #define _GNU_SOURCE
@@ -21,6 +23,7 @@
 #include <img2/img2.h>
 
 #include "../../imgcat2/cli.h"
+#include "../../libimg2/decoders/decoder.h"
 #include "../ctest.h"
 #include "../test_tmpdir.h"
 
@@ -136,4 +139,29 @@ CTEST(f27, font_list_escapes_family_names)
 	ASSERT_FALSE(has_c1);
 	ASSERT_TRUE(has_c0_family);
 	ASSERT_TRUE(has_c1_family);
+}
+
+/* ===== F17: tick durations in ms ===== */
+
+CTEST(f17, ticks_to_ms_saturates_instead_of_wrapping)
+{
+	ASSERT_EQUAL(0, (int)img2_decode_ticks_to_ms(5, 0, 1));          /* no tick rate */
+	ASSERT_EQUAL(100, (int)img2_decode_ticks_to_ms(100, 1000, 1));   /* 1 tick = 1 ms */
+	ASSERT_EQUAL(333, (int)img2_decode_ticks_to_ms(10, 30, 1));      /* floor(333.3) */
+	ASSERT_EQUAL(4004, (int)img2_decode_ticks_to_ms(120, 30000, 1001)); /* NTSC: floor(4004.0) */
+	ASSERT_EQUAL(1, (int)img2_decode_ticks_to_ms(1, 1000, 1));
+	/* largest values below the clamp, and the first one above it */
+	ASSERT_TRUE(img2_decode_ticks_to_ms(4294967u, 1000, 1) == 4294967u);
+	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX, 1000, 1) == UINT32_MAX);
+	ASSERT_TRUE(img2_decode_ticks_to_ms(4294967u, 1, 1) == 4294967000u);
+	ASSERT_TRUE(img2_decode_ticks_to_ms(4294968u, 1, 1) == UINT32_MAX);
+	ASSERT_TRUE(img2_decode_ticks_to_ms(2u * 4294967u + 1u, 2, 1) == UINT32_MAX); /* 4294967500: over by the remainder */
+	/* ticks * 1000 * tps_den >= 2^64 (wrapped to a small value before the clamp) */
+	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX, 1, UINT32_MAX) == UINT32_MAX);
+	ASSERT_TRUE(img2_decode_ticks_to_ms(4000000000u, 4000000000u, 4000000000u) == UINT32_MAX);
+	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX, 4096u, 1u << 30) == UINT32_MAX);
+	/* exact below the clamp with large rates (remainder part of the division) */
+	ASSERT_TRUE(img2_decode_ticks_to_ms(7u, 3000000000u, 4000000000u) == 9333u);
+	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX, UINT32_MAX, 1) == 1000u);
+	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX - 1u, UINT32_MAX, 1) == 999u);
 }
