@@ -82,10 +82,10 @@ static img2_exif_t *extract_raw_exif(libraw_data_t *raw)
 		}
 	}
 
-	// ISO speed (LibRaw's float; above 65535 the uint16_t conversion is undefined: saturate like EXIF's
-	// ISOSpeedRatings, whose SHORT holds 65535 for "65535 or more")
+	// ISO speed (LibRaw's float, e.g. 102400; NaN or <= 0 means none): rounded, and saturated at UINT32_MAX because
+	// the uint32_t conversion of a float at or above 2^32 is undefined
 	if (raw->other.iso_speed > 0) {
-		exif->iso_speed = raw->other.iso_speed >= 65535.0f ? 65535 : (uint16_t)raw->other.iso_speed;
+		exif->iso_speed = raw->other.iso_speed >= 4294967296.0f ? UINT32_MAX : (uint32_t)((double)raw->other.iso_speed + 0.5);
 		exif->has_iso = true;
 	}
 

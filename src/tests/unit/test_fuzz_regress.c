@@ -147,7 +147,10 @@ CTEST(fuzz_regress, avif_exif_offset_high_byte)
  * LibRaw's float iso_speed to uint16_t without a range check (UBSan float-cast-overflow; GCC builds stored
  * 102400 mod 65536 = 36864). Reduced: a 24x24 CFA DNG, Make SONY, ISOSpeedRatings 65535 and
  * RecommendedExposureIndex 102400 (LibRaw takes the latter for SONY), the 1152-byte zero raw strip appended.
+ * iso_speed is a uint32_t now: the real 102400 is kept; a RecommendedExposureIndex of 0xFFFFFFFF (a float of 2^32)
+ * saturates at UINT32_MAX instead of an undefined conversion.
  */
+#define K_RAW_ISO_REI_OFFSET 30 /* the RecommendedExposureIndex value (LONG, inline, little-endian) */
 static const uint8_t k_raw_iso_102400[] = {
 	0x49, 0x49, 0x2a, 0x00, 0x9e, 0x00, 0x00, 0x00, 0x02, 0x00, 0x27, 0x88, 0x03, 0x00, 0x01, 0x00,
 	0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0x32, 0x88, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x90,
@@ -177,7 +180,7 @@ static const uint8_t k_raw_iso_102400[] = {
 	0x28, 0xc6, 0x05, 0x00, 0x03, 0x00, 0x00, 0x00, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
-CTEST(fuzz_regress, raw_iso_above_uint16_saturates)
+CTEST(fuzz_regress, raw_iso_above_uint16_kept)
 {
 	img2_frames_t fr;
 	ASSERT_EQUAL(IMG2_OK, decode_copy(k_raw_iso_102400, sizeof(k_raw_iso_102400), 24 * 24 * 2, IMG2_MIME_UNKNOWN, &fr));
@@ -185,7 +188,24 @@ CTEST(fuzz_regress, raw_iso_above_uint16_saturates)
 	const img2_exif_t *e = fr.frames[0]->exif;
 	ASSERT_NOT_NULL(e);
 	ASSERT_TRUE(e->has_iso);
-	ASSERT_EQUAL(65535, e->iso_speed); /* EXIF ISOSpeedRatings saturates at 65535 */
+	ASSERT_EQUAL(102400, e->iso_speed);
+	img2_frames_free(&fr);
+}
+
+CTEST(fuzz_regress, raw_iso_above_uint32_saturates)
+{
+	uint8_t buf[sizeof(k_raw_iso_102400)];
+	memcpy(buf, k_raw_iso_102400, sizeof(buf));
+	ASSERT_EQUAL(0x00, buf[K_RAW_ISO_REI_OFFSET]); /* 102400 = 0x00019000 */
+	ASSERT_EQUAL(0x90, buf[K_RAW_ISO_REI_OFFSET + 1]);
+	memset(buf + K_RAW_ISO_REI_OFFSET, 0xff, 4);
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_OK, decode_copy(buf, sizeof(buf), 24 * 24 * 2, IMG2_MIME_UNKNOWN, &fr));
+	ASSERT_EQUAL(1, fr.count);
+	const img2_exif_t *e = fr.frames[0]->exif;
+	ASSERT_NOT_NULL(e);
+	ASSERT_TRUE(e->has_iso);
+	ASSERT_EQUAL(UINT32_MAX, e->iso_speed);
 	img2_frames_free(&fr);
 }
 #endif
