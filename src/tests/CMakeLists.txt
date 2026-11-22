@@ -171,4 +171,8 @@ endif()
 # --- coverage lane A begin ---
 # Coverage phase 2, lane A (core, ICO/QOI/PNM/YUV/stb decoders, XML/EXIF, font manager); fixtures built in-test
 img2_add_test(test_cov_a_ico SOURCES unit/test_cov_a_ico.c)
+img2_add_test(test_cov_a_xml SOURCES unit/test_cov_a_xml.c REQUIRES EXIF_READER)
+if(TARGET test_cov_a_xml)
+	target_link_libraries(test_cov_a_xml PRIVATE Threads::Threads)
+endif()
 # --- coverage lane A end ---

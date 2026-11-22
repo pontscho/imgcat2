@@ -517,9 +517,10 @@ static int add_attribute(xml_element_node_t *elem, const char *name, size_t name
 
 /* ========== DOM Tree Builder ========== */
 
-static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent);
+static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent, int depth);
 
-static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent)
+/* depth: nesting depth of parent (the element whose content this is) */
+static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent, int depth)
 {
 	while (1) {
 		token_type_t token = next_token(tok);
@@ -571,7 +572,7 @@ static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xm
 			}
 
 		} else if (token == TOKEN_ELEMENT_OPEN) {
-			if (parse_element(tok, doc, parent) != 0) {
+			if (parse_element(tok, doc, parent, depth + 1) != 0) {
 				return -1;
 			}
 
@@ -594,8 +595,13 @@ static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xm
 	}
 }
 
-static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent)
+/* depth: nesting depth of the element being parsed (root element: 1) */
+static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent, int depth)
 {
+	if (depth > IMG2_XML_MAX_DEPTH) {
+		return -1; /* recursion bound: a hostile document must not exhaust the stack */
+	}
+
 	/* Expect element name */
 	token_type_t token = next_token(tok);
 	if (token != TOKEN_NAME) {
@@ -653,7 +659,7 @@ static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xm
 	add_child_node(parent, elem);
 
 	/* Parse element content */
-	if (parse_content(tok, doc, elem) != 0) {
+	if (parse_content(tok, doc, elem, depth) != 0) {
 		return -1;
 	}
 
@@ -738,7 +744,7 @@ int img2_xml_document_parse(img2_xml_document_t *doc, const char *xml_data, size
 		img2_xml_node_t temp_root;
 		memset(&temp_root, 0, sizeof(img2_xml_node_t));
 
-		if (parse_element(&tok, doc, &temp_root) != 0) {
+		if (parse_element(&tok, doc, &temp_root, 1) != 0) {
 			return -1;
 		}
 
