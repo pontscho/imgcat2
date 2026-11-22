@@ -301,6 +301,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		set_property(TEST test_sec_fix_limits APPEND PROPERTY ENVIRONMENT "OMP_NUM_THREADS=2")
 	endif()
 endif()
-# CLI: [P11] EXIF orientation outside 1..8 in the "Applying EXIF orientation" line
+# CLI: [P11] EXIF orientation outside 1..8 in the "Applying EXIF orientation" line; [P20] iTerm2 size line
+# when the re-encoded image is larger
 img2_add_test(test_sec_fix_cli SOURCES unit/test_sec_fix_cli.c LINK cli REQUIRES EXIF_READER)
 # --- sec-fix end ---

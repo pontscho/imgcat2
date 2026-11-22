@@ -4,6 +4,8 @@
  *
  * P11: pipeline_decode() printed "Applying EXIF orientation: N (<description>)" (unless silent) with
  *      descriptions[N - 1] for any EXIF orientation > 1: 9 .. 65535 read past the 8-entry array.
+ * P20: iterm2_render()'s size line computed (original - encoded) in size_t: an encoded image larger than the
+ *      input wrapped to a "1.8e19% reduction".
  */
 
 #include <fcntl.h>
@@ -17,6 +19,7 @@
 
 #include "../../imgcat2/cli.h"
 #include "../../imgcat2/pipeline.h"
+#include "../../imgcat2/terminal/iterm2.h"
 #include "../ctest.h"
 
 /* ---- capture of a standard stream (fd 1 or 2) into a file of the test temp dir ---- */
@@ -147,4 +150,53 @@ CTEST(sec_fix_cli, exif_orientation_out_of_range)
 		free(err);
 		free(data);
 	}
+}
+
+/* ---- P20: iTerm2 size line when the re-encoded image is larger than the input ---- */
+
+/* iterm2_render() of a w x h noise image (JPEG) with original_size; returns its stderr (free()) */
+static char *iterm2_size_line(uint32_t w, uint32_t h, size_t original_size)
+{
+	img2_image_t *img = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(w, h, &img));
+	uint32_t seed = 12345;
+	for (size_t i = 0; i < (size_t)w * h * 4; i++) {
+		seed = seed * 1103515245u + 12345u;
+		img->pixels[i] = (uint8_t)(seed >> 16);
+	}
+	cli_options_t opts;
+	memset(&opts, 0, sizeof(opts));
+	opts.silent = false;
+	opts.iterm2_format = IMG2_FORMAT_JPEG;
+	opts.jpeg_quality = 90;
+	cap_t out;
+	cap_t err;
+	cap_begin(&out, STDOUT_FILENO, "iterm2_out");
+	cap_begin(&err, STDERR_FILENO, "iterm2_err");
+	int rc = iterm2_render(&img, 1, &opts, original_size);
+	size_t n = 0;
+	char *text = cap_end(&err, &n);
+	free(cap_end(&out, &n));
+	img2_image_destroy(img);
+	ASSERT_EQUAL(0, rc);
+	ASSERT_NOT_NULL(text);
+	return text;
+}
+
+CTEST(sec_fix_cli, iterm2_size_increase)
+{
+	/* 64 x 64 noise: the JPEG is several KB, the "original" 100 bytes */
+	char *err = iterm2_size_line(64, 64, 100);
+	if (strstr(err, "% increase)\n") == NULL || strstr(err, "reduction") != NULL) {
+		fprintf(stderr, "  stderr: %s\n", err);
+	}
+	ASSERT_NOT_NULL(strstr(err, "iTerm2: Encoded to JPEG: 0.0 MB → 0.0 MB ("));
+	ASSERT_NOT_NULL(strstr(err, "% increase)\n"));
+	ASSERT_NULL(strstr(err, "reduction"));
+	free(err);
+
+	/* smaller than the input: unchanged "N% reduction" line (100 MB input: 100.0%) */
+	err = iterm2_size_line(8, 8, (size_t)100 << 20);
+	ASSERT_NOT_NULL(strstr(err, "iTerm2: Encoded to JPEG: 100.0 MB → 0.0 MB (100.0% reduction)\n"));
+	free(err);
 }
