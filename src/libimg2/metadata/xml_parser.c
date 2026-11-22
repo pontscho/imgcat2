@@ -430,6 +430,9 @@ static img2_xml_node_t *create_element_node(arena_t *arena, const char *name, si
 	elem->name = arena_strdup(arena, name, name_len);
 	elem->attr_capacity = 4;
 	elem->attributes = arena_alloc(arena, sizeof(xml_attribute_t) * elem->attr_capacity);
+	if (!elem->name || !elem->attributes) {
+		return NULL; /* allocation failure: the name is compared and the array written later */
+	}
 
 	return (img2_xml_node_t *)elem;
 }
@@ -501,7 +504,11 @@ static int add_attribute(xml_element_node_t *elem, const char *name, size_t name
 		elem->attr_capacity = new_capacity;
 	}
 
-	elem->attributes[elem->attr_count].name = arena_strdup(arena, name, name_len);
+	char *attr_name = arena_strdup(arena, name, name_len);
+	if (!attr_name) {
+		return -1; /* allocation failure: attribute lookups strcmp() the name */
+	}
+	elem->attributes[elem->attr_count].name = attr_name;
 	elem->attributes[elem->attr_count].value = value; /* Already arena-allocated */
 	elem->attr_count++;
 

@@ -123,6 +123,7 @@ elseif(CMAKE_CXX_COMPILER_LOADED)
 endif()
 target_link_libraries(img2 PRIVATE Threads::Threads)
 img2_apply_project_settings(img2)
+img2_coverage_instrument(img2)   # IMG2_COVERAGE only (cmake/Img2Coverage.cmake)
 
 # [S6 item 11 / R13] -UNDEBUG object variant of img2's own sources for the no-terminate guard (img2_symbols):
 # same sources, include dirs and definitions as img2, assert() live. Lives here because source-file
@@ -175,6 +176,9 @@ add_dependencies(img2_header_check img2)
 # In-tree users of the fat archive (CLI, tests): the merged libimg2.a (cmake/Img2FatArchive.cmake) with the same
 # link interface as the installed package. add_subdirectory consumers keep the real img2 target (img2::img2).
 if(IMG2_FAT_ARCHIVE)
+	if(IMG2_COVERAGE)
+		list(APPEND IMG2_INTERFACE_LINK_OPTIONS -fprofile-instr-generate)   # in-tree only (clang profile runtime)
+	endif()
 	add_library(img2_bundled STATIC IMPORTED GLOBAL)
 	set_target_properties(img2_bundled PROPERTIES
 		IMPORTED_LOCATION "${IMG2_FAT_ARCHIVE_FILE}"

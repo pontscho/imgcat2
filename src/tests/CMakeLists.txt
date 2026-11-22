@@ -51,6 +51,18 @@ endif()
 img2_add_test(test_animation_jxl SOURCES unit/test_animation_jxl.c LINK lib REQUIRES JXL)
 img2_add_test(test_animation_webp SOURCES unit/test_animation_webp.c LINK lib REQUIRES WEBP)
 img2_add_test(test_animation_heif SOURCES unit/test_animation_heif.c LINK lib REQUIRES HEIF)
+# Coverage (docs/coverage.md): core edge cases, ICO/QOI/PNM/YUV edge cases
+img2_add_test(test_core_edges SOURCES unit/test_core_edges.c)
+img2_add_test(test_decoder_edges SOURCES unit/test_decoder_edges.c)
+# Allocation-failure injection through GNU ld --wrap (unit/alloc_fail.h): test executable only, Linux only
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_alloc_fail SOURCES unit/test_alloc_fail.c TIMEOUT 120)
+	if(TARGET test_alloc_fail)
+		target_link_options(test_alloc_fail PRIVATE
+			-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup)
+		target_compile_definitions(test_alloc_fail PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
+	endif()
+endif()
 
 # [L4] Public API test: links img2 only (the fat archive if built; no img2_testing, no internal include dirs);
 # includes only <img2/img2.h>

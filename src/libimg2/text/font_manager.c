@@ -354,6 +354,12 @@ static void scan_font_directory(const char *dir_path)
 
 		cache_entry->family = family;
 		cache_entry->path = strdup(full_path);
+		if (cache_entry->path == NULL) {
+			/* no path: load_font_file() would fopen(NULL) */
+			free(family);
+			free(cache_entry);
+			continue;
+		}
 		cache_entry->weight = weight;
 		cache_entry->style = style;
 		cache_entry->data = NULL;
@@ -365,6 +371,35 @@ static void scan_font_directory(const char *dir_path)
 
 	closedir(dir);
 	free(expanded);
+}
+
+/**
+ * @brief Prepend an embedded font variant to the cache (caller holds s_font_lock)
+ *
+ * Skipped on allocation failure: an entry without its "[embedded]" path would have its static data freed by
+ * the cleanup, and one without a family would crash the lookups.
+ */
+static void add_embedded_font(const img2_embedded_font_t *font, img2_font_weight_t weight, img2_font_style_t style)
+{
+	font_cache_entry_t *entry = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
+	if (entry == NULL) {
+		return;
+	}
+	entry->family = strdup("DejaVu Sans Mono");
+	entry->path = strdup("[embedded]");
+	if (entry->family == NULL || entry->path == NULL) {
+		free(entry->family);
+		free(entry->path);
+		free(entry);
+		return;
+	}
+	entry->weight = weight;
+	entry->style = style;
+	entry->data = (uint8_t *)font->data;
+	entry->data_size = font->size;
+	entry->handle = NULL;
+	entry->next = g_font_cache;
+	g_font_cache = entry;
 }
 
 /**
@@ -386,61 +421,10 @@ static bool img2_font_manager_init_locked(void)
 	}
 
 	/* Add embedded fallback fonts to cache (all 4 variants) */
-	/* Regular */
-	font_cache_entry_t *regular = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
-	if (regular != NULL) {
-		regular->family = strdup("DejaVu Sans Mono");
-		regular->path = strdup("[embedded]");
-		regular->weight = IMG2_FONT_WEIGHT_NORMAL;
-		regular->style = IMG2_FONT_STYLE_NORMAL;
-		regular->data = (uint8_t *)img2_embedded_dejavu_regular.data;
-		regular->data_size = img2_embedded_dejavu_regular.size;
-		regular->handle = NULL;
-		regular->next = g_font_cache;
-		g_font_cache = regular;
-	}
-
-	/* Bold */
-	font_cache_entry_t *bold = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
-	if (bold != NULL) {
-		bold->family = strdup("DejaVu Sans Mono");
-		bold->path = strdup("[embedded]");
-		bold->weight = IMG2_FONT_WEIGHT_BOLD;
-		bold->style = IMG2_FONT_STYLE_NORMAL;
-		bold->data = (uint8_t *)img2_embedded_dejavu_bold.data;
-		bold->data_size = img2_embedded_dejavu_bold.size;
-		bold->handle = NULL;
-		bold->next = g_font_cache;
-		g_font_cache = bold;
-	}
-
-	/* Italic */
-	font_cache_entry_t *italic = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
-	if (italic != NULL) {
-		italic->family = strdup("DejaVu Sans Mono");
-		italic->path = strdup("[embedded]");
-		italic->weight = IMG2_FONT_WEIGHT_NORMAL;
-		italic->style = IMG2_FONT_STYLE_ITALIC;
-		italic->data = (uint8_t *)img2_embedded_dejavu_italic.data;
-		italic->data_size = img2_embedded_dejavu_italic.size;
-		italic->handle = NULL;
-		italic->next = g_font_cache;
-		g_font_cache = italic;
-	}
-
-	/* Bold-Italic */
-	font_cache_entry_t *bold_italic = (font_cache_entry_t *)malloc(sizeof(font_cache_entry_t));
-	if (bold_italic != NULL) {
-		bold_italic->family = strdup("DejaVu Sans Mono");
-		bold_italic->path = strdup("[embedded]");
-		bold_italic->weight = IMG2_FONT_WEIGHT_BOLD;
-		bold_italic->style = IMG2_FONT_STYLE_ITALIC;
-		bold_italic->data = (uint8_t *)img2_embedded_dejavu_bold_italic.data;
-		bold_italic->data_size = img2_embedded_dejavu_bold_italic.size;
-		bold_italic->handle = NULL;
-		bold_italic->next = g_font_cache;
-		g_font_cache = bold_italic;
-	}
+	add_embedded_font(&img2_embedded_dejavu_regular, IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL);
+	add_embedded_font(&img2_embedded_dejavu_bold, IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_NORMAL);
+	add_embedded_font(&img2_embedded_dejavu_italic, IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_ITALIC);
+	add_embedded_font(&img2_embedded_dejavu_bold_italic, IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_ITALIC);
 
 	/* Keep first embedded font as default fallback */
 	g_fallback_font = (img2_font_t *)malloc(sizeof(img2_font_t));
