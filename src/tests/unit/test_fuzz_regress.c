@@ -5,6 +5,7 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -68,6 +69,40 @@ CTEST(fuzz_regress, svg_huge_height_is_limit)
 	static const char svg[] = "<svg xmlns='http://www.w3.org/2000/svg' width='4' height='1e30'></svg>";
 	img2_frames_t fr;
 	ASSERT_EQUAL(IMG2_E_LIMIT, decode_copy((const uint8_t *)svg, sizeof(svg) - 1, 0, IMG2_MIME_UNKNOWN, &fr));
+}
+
+/*
+ * Found while triaging the fuzzer's text-heavy SVG inputs (slow-unit-85b5c61e, timeout-00af8603): nanosvg.h's
+ * nsvg__decodeUTF8 advanced by the full sequence length of a lead byte even when the text ended inside the sequence,
+ * stepping over the NUL and rendering stale bytes left in the parser's text buffer by an earlier, longer <text>.
+ * A text ending in a cut-short sequence must render like '?' (the replacement nanosvg uses for invalid bytes).
+ */
+static img2_image_t *svg_render(const char *svg)
+{
+	img2_frames_t fr;
+	if (decode_copy((const uint8_t *)svg, strlen(svg), 0, IMG2_MIME_UNKNOWN, &fr) != IMG2_OK) {
+		return NULL;
+	}
+	img2_image_t *img = fr.frames[0];
+	fr.frames[0] = NULL;
+	img2_frames_free(&fr);
+	return img;
+}
+
+CTEST(fuzz_regress, svg_text_truncated_utf8_stays_in_string)
+{
+	static const char *const lead[] = { "\xc3", "\xe2\x82", "\xf0\x9f\x98" }; /* 2-, 3-, 4-byte sequences cut short */
+	for (size_t i = 0; i < sizeof(lead) / sizeof(lead[0]); i++) {
+		char cut[256];
+		snprintf(cut, sizeof(cut), "<svg width='160' height='40'><text x='2' y='14'>WWWWWWWWWW</text><text x='2' y='34'>%s</text></svg>", lead[i]);
+		img2_image_t *a = svg_render(cut);
+		img2_image_t *b = svg_render("<svg width='160' height='40'><text x='2' y='14'>WWWWWWWWWW</text><text x='2' y='34'>?</text></svg>");
+		ASSERT_NOT_NULL(a);
+		ASSERT_NOT_NULL(b);
+		ASSERT_EQUAL(0, memcmp(a->pixels, b->pixels, (size_t)a->stride * a->height));
+		img2_image_destroy(a);
+		img2_image_destroy(b);
+	}
 }
 
 #if defined(IMG2_HAVE_HEIF) && defined(IMG2_HAVE_EXIF_READER)

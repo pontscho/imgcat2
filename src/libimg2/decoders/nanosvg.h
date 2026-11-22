@@ -2836,6 +2836,17 @@ static int nsvg__decodeUTF8(const char** str)
 	const unsigned char* s = (const unsigned char*)*str;
 	int codepoint = 0;
 
+	/* [img2] A sequence cut short by the terminating NUL is one invalid character ('?'), consumed up to the NUL:
+	 * advancing by the full sequence length would step over the NUL and keep reading stale bytes of the text buffer
+	 * (found while triaging the fuzzer's SVG findings) */
+	int need = (*s & 0xE0) == 0xC0 ? 1 : ((*s & 0xF0) == 0xE0 ? 2 : ((*s & 0xF8) == 0xF0 ? 3 : 0));
+	for (int k = 1; k <= need; k++) {
+		if (s[k] == '\0') {
+			*str += k;
+			return '?';
+		}
+	}
+
 	if ((*s & 0x80) == 0) {
 		/* 1-byte: 0xxxxxxx */
 		codepoint = *s;
