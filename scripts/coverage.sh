@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Source-based coverage of libimg2 (clang -fprofile-instr-generate -fcoverage-mapping, llvm-cov).
 #
-#   scripts/coverage.sh [--no-build] [--no-test]
+#   scripts/coverage.sh [--no-build] [--no-test] [--no-check]
 #
 # Environment (all optional):
 #   BUILD_DIR   coverage build tree             (default: <repo>/build-cov)
@@ -22,8 +22,13 @@
 #   $OUT_DIR/show.txt         annotated sources (uncovered lines / regions / branches)
 #   $OUT_DIR/html/index.html  the same as HTML
 #   $OUT_DIR/summary.json     llvm-cov export -summary-only
-# for src/libimg2 only (vendor/, src/tests/, src/imgcat2/ and the build trees are ignored).
-# Exit status: non-zero if the build fails or any test fails (the reports are still written after test failures).
+#   $OUT_DIR/export.json      llvm-cov export (full JSON: functions, regions, branches)
+#   $OUT_DIR/lcov.info        llvm-cov export -format=lcov (per-line counts)
+# for src/libimg2 only (vendor/, src/tests/, src/imgcat2/ and the build trees are ignored), then run
+# scripts/coverage_check.py against docs/coverage-exclusions.txt (skipped with --no-check): it fails when
+# anything uncovered is not in the manifest, a manifest entry is covered (stale) or an anchor no longer matches.
+# Exit status: non-zero if the build fails, any test fails (the reports are still written after test failures)
+# or the exclusion check fails.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -44,11 +49,13 @@ LLVM_COV="${LLVM_COV:-$(pick llvm-cov llvm-cov-17 || true)}"
 
 do_build=1
 do_test=1
+do_check=1
 for a in "$@"; do
 	case "$a" in
 		--no-build) do_build=0 ;;
 		--no-test) do_test=0 ;;
-		*) echo "usage: $0 [--no-build] [--no-test]" >&2; exit 2 ;;
+		--no-check) do_check=0 ;;
+		*) echo "usage: $0 [--no-build] [--no-test] [--no-check]" >&2; exit 2 ;;
 	esac
 done
 
@@ -95,6 +102,15 @@ common=(-instr-profile "$OUT_DIR/merged.profdata" -ignore-filename-regex "$IGNOR
 "$LLVM_COV" show "${objs[@]}" "${common[@]}" -show-branches=count -show-line-counts-or-regions \
 	-format=html -output-dir="$OUT_DIR/html" "$ROOT/src/libimg2"
 "$LLVM_COV" export "${objs[@]}" "${common[@]}" -summary-only "$ROOT/src/libimg2" > "$OUT_DIR/summary.json"
+"$LLVM_COV" export "${objs[@]}" "${common[@]}" -format=text "$ROOT/src/libimg2" > "$OUT_DIR/export.json"
+"$LLVM_COV" export "${objs[@]}" "${common[@]}" -format=lcov "$ROOT/src/libimg2" > "$OUT_DIR/lcov.info"
 
-echo "coverage.sh: reports in $OUT_DIR (report.txt, show.txt, html/index.html, summary.json)"
-exit "$test_rc"
+echo "coverage.sh: reports in $OUT_DIR (report.txt, show.txt, html/index.html, summary.json, export.json, lcov.info)"
+
+check_rc=0
+if [ "$do_check" = 1 ]; then
+	python3 -I "$ROOT/scripts/coverage_check.py" --root "$ROOT" --json "$OUT_DIR/export.json" \
+		--lcov "$OUT_DIR/lcov.info" --manifest "$ROOT/docs/coverage-exclusions.txt" || check_rc=$?
+fi
+[ "$test_rc" = 0 ] || exit "$test_rc"
+exit "$check_rc"
