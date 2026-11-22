@@ -132,3 +132,116 @@ CTEST(xml_text, closing_markers_are_character_data)
 	img2_xml_document_destroy(s_doc);
 	s_doc = NULL;
 }
+
+/* ===== well-formed variants ===== */
+
+CTEST(xml_ok, names_text_and_attributes)
+{
+	ASSERT_EQUAL(0, parse("<?xml version='1.0'?><!-- a --><!-- b --><_r:x-y.z_ a='1' b=\"2\" :c = '3'>  12 <k/> 34  </_r:x-y.z_>"));
+	img2_xml_node_t *root = img2_xml_document_root_element(s_doc);
+	ASSERT_STR("_r:x-y.z_", img2_xml_element_name(root));
+	ASSERT_STR("12", root_text()); /* trailing whitespace of a text run trimmed */
+	ASSERT_STR("1", img2_xml_element_attribute(root, "a"));
+	ASSERT_STR("2", img2_xml_element_attribute(root, "b"));
+	ASSERT_STR("3", img2_xml_element_attribute(root, ":c"));
+	ASSERT_NULL(img2_xml_element_attribute(root, "missing"));
+	img2_xml_document_destroy(s_doc);
+	s_doc = NULL;
+}
+
+CTEST(xml_ok, dom_queries_and_vtable)
+{
+	ASSERT_EQUAL(0, parse("<r><!--note-->text<a>1</a>mid<b x='y'/><a>2</a></r>"));
+	img2_xml_node_t *root = img2_xml_document_root_element(s_doc);
+	img2_xml_node_t *comment = root->first_child;
+	ASSERT_EQUAL(IMG2_XML_NODE_COMMENT, comment->type);
+	img2_xml_node_t *text = comment->next_sibling;
+	ASSERT_EQUAL(IMG2_XML_NODE_TEXT, text->type);
+
+	/* per-type virtual functions, also called with a node of another type */
+	ASSERT_STR("r", root->get_value(root));
+	ASSERT_NULL(root->get_value(text));
+	ASSERT_STR("text", text->get_value(text));
+	ASSERT_NULL(text->get_value(root));
+	ASSERT_STR("note", comment->get_value(comment));
+	ASSERT_NULL(comment->get_value(root));
+	ASSERT_NULL(root->first_child_element(NULL, NULL));
+	ASSERT_NULL(root->first_child_element(root, "missing"));
+	img2_xml_node_t *b = root->first_child_element(root, "b");
+	ASSERT_NOT_NULL(b);
+	ASSERT_STR("y", b->get_attribute(b, "x"));
+	ASSERT_NULL(b->get_attribute(b, "z"));
+	ASSERT_NULL(b->get_attribute(NULL, "x"));
+	ASSERT_NULL(b->get_attribute(text, "x"));
+	ASSERT_NULL(b->get_attribute(b, NULL));
+
+	/* public queries */
+	img2_xml_node_t *a = img2_xml_element_first_child(root, "a");
+	ASSERT_STR("1", img2_xml_element_text(a));
+	ASSERT_TRUE(b == img2_xml_element_next_sibling(a, NULL));
+	img2_xml_node_t *a2 = img2_xml_element_next_sibling(a, "a");
+	ASSERT_STR("2", img2_xml_element_text(a2));
+	ASSERT_NULL(img2_xml_element_next_sibling(a2, NULL));
+	ASSERT_NULL(img2_xml_element_next_sibling(a, "missing"));
+	ASSERT_NULL(img2_xml_element_next_sibling(NULL, NULL));
+	ASSERT_NULL(img2_xml_element_text(b)); /* no text child */
+	ASSERT_STR("text", img2_xml_element_text(root));
+	ASSERT_NULL(img2_xml_element_first_child(NULL, NULL));
+	ASSERT_NULL(img2_xml_element_first_child(text, NULL));
+	ASSERT_NULL(img2_xml_element_attribute(NULL, "x"));
+	ASSERT_NULL(img2_xml_element_attribute(text, "x"));
+	ASSERT_NULL(img2_xml_element_attribute(b, NULL));
+	ASSERT_NULL(img2_xml_element_text(NULL));
+	ASSERT_NULL(img2_xml_element_text(text));
+	ASSERT_NULL(img2_xml_element_name(NULL));
+	ASSERT_NULL(img2_xml_element_name(text));
+	ASSERT_NULL(img2_xml_document_root_element(NULL));
+	img2_xml_document_destroy(s_doc);
+	s_doc = NULL;
+}
+
+/* ===== malformed documents ===== */
+
+CTEST(xml_bad, every_parse_error)
+{
+	static const char *const bad[] = {
+		"",                   /* no root element */
+		"text",               /* character data before the root */
+		"<?xml version='1.0'", /* unterminated declaration, then nothing */
+		"<!-- unterminated",
+		"<1a/>",              /* element name expected */
+		"<a",                 /* end of input inside the start tag */
+		"<a/",
+		"<a/b>",              /* '/' not followed by '>' */
+		"<a 1='x'>",          /* attribute name expected */
+		"<a b>",              /* '=' expected */
+		"<a b",               /* end of input after the attribute name */
+		"<a b=",              /* end of input after '=' */
+		"<a b= ",
+		"<a b=x>",            /* quote expected */
+		"<a b='x",            /* unterminated value */
+		"<a><!-- x",          /* unterminated comment in content */
+		"<a><?pi?></a>",      /* processing instruction in content */
+		"<a>12",              /* end of input in content */
+		"<a>abc",
+		"<a></1>",            /* closing tag name expected */
+		"<a></b>",            /* mismatched closing tag */
+		"<a></ab>",
+		"<ab></a>",
+		"<a></a",             /* end of input in the closing tag */
+		"<a></a x>",
+	};
+	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+		if (parse(bad[i]) != -1) {
+			CTEST_ERR("parsed: '%s'", bad[i]);
+		}
+	}
+	img2_xml_document_t *doc = img2_xml_document_create();
+	ASSERT_NOT_NULL(doc);
+	ASSERT_EQUAL(-1, img2_xml_document_parse(NULL, "<a/>", 4));
+	ASSERT_EQUAL(-1, img2_xml_document_parse(doc, NULL, 4));
+	img2_xml_document_destroy(doc);
+	img2_xml_document_destroy(NULL);
+	img2_xml_document_destroy(s_doc);
+	s_doc = NULL;
+}

@@ -109,6 +109,14 @@ CTEST(ico_select, entry_256x256_beats_smaller_entries)
 	ASSERT_EQUAL(256, decoded_width(big_first, 2));
 }
 
+CTEST(ico_args, empty_buffer)
+{
+	const uint8_t one = 0;
+	img2_frames_t out = { 0 };
+	ASSERT_EQUAL(IMG2_E_ARG, img2_decode_ico(&one, 0, NULL, &out));
+	ASSERT_NULL(out.frames);
+}
+
 /* decodes an ICO whose entry `broken` has an invalid DIB header: IMG2_OK only if another entry was chosen */
 static img2_status_t decode_with_broken(const ico_entry_spec_t *e, int n, int broken)
 {

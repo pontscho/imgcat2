@@ -8,9 +8,12 @@
  * at the end, so the next test rebuilds the cache from its own fixture tree.
  */
 
+#define _GNU_SOURCE
+
 #include <sys/stat.h>
 
 #include <errno.h>
+#include <ftw.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -152,9 +155,32 @@ static void write_in_home(const char *rel, const uint8_t *data, size_t len)
 	}
 }
 
-/* fresh $HOME with an empty ~/.fonts */
+static int rm_entry(const char *path, const struct stat *sb, int flag, struct FTW *ftw)
+{
+	(void)sb;
+	(void)flag;
+	(void)ftw;
+	remove(path);
+	return 0;
+}
+
+/* removes the current fixture tree (also at exit) */
+static void home_remove(void)
+{
+	if (s_home[0] != '\0') {
+		nftw(s_home, rm_entry, 16, FTW_DEPTH | FTW_PHYS);
+	}
+}
+
+/* fresh $HOME with an empty ~/.fonts (the previous fixture tree is removed) */
 static void home_reset(const char *tag)
 {
+	static int registered;
+	if (!registered) {
+		atexit(home_remove);
+		registered = 1;
+	}
+	home_remove();
 	snprintf(s_home, sizeof(s_home), "%s/cov_a_font_%ld_%s", test_tmpdir(), (long)getpid(), tag);
 	mkdir(s_home, 0755);
 	mkdir_in_home(".fonts");
@@ -224,4 +250,208 @@ CTEST(font_name, name_string_outside_the_file_is_ignored)
 	img2_shutdown();
 	ASSERT_NOT_NULL(fam);
 	ASSERT_STR("Outside", fam);
+}
+
+/* ===== user font directory scan ===== */
+
+static void symlink_in_home(const char *target, const char *rel)
+{
+	char p[1024];
+	path_in_home(p, sizeof(p), rel);
+	unlink(p);
+	if (symlink(target, p) != 0) {
+		fprintf(stderr, "symlink %s: %s\n", p, strerror(errno));
+	}
+}
+
+#define SYSFS_SHORT_READ "/sys/devices/system/cpu/online" /* st_size 4096, a few bytes readable */
+
+/* the fixture tree: every scan / name-table / file-load variant */
+static void build_scan_fixture(void)
+{
+	home_reset("scan");
+	mkdir_in_home(".local");
+	mkdir_in_home(".local/share");
+	mkdir_in_home(".local/share/fonts");
+	mkdir_in_home(".local/share/fonts/sub");
+	uint8_t ttf[TTF_MAX];
+	name_rec_t r;
+
+	r = family_rec("\0P\0l\0a\0i\0n", 10);
+	write_in_home(".fonts/Plain.ttf", ttf, build_ttf(ttf, &r, 1));
+	r = family_rec("\0U\0\xe9\x4e\x2d", 6); /* U+0055 U+00E9 U+4E2D: 1-, 2- and 3-byte UTF-8 */
+	write_in_home(".fonts/Uni-Bold.ttf", ttf, build_ttf(ttf, &r, 1));
+	r = family_rec("\0A\0\x01\0B\0\x7f", 8); /* C0 control and DEL are replaced */
+	write_in_home(".fonts/Ctl.ttf", ttf, build_ttf(ttf, &r, 1));
+	write_in_home(".fonts/NoName.ttf", ttf, build_ttf(ttf, NULL, 0));
+	r = family_rec("", 0);
+	write_in_home(".fonts/ZeroLen-Italic.ttf", ttf, build_ttf(ttf, &r, 1));
+	name_rec_t other[2] = { { 1, 0, 0, 1, "Mac", 3, -1 }, { 3, 1, 0x409, 4, "\0F\0u\0l\0l", 8, -1 } };
+	write_in_home(".fonts/OtherRecords.ttf", ttf, build_ttf(ttf, other, 2)); /* no MS family record */
+	r = family_rec("\0S\0o\0l\0o", 8);
+	write_in_home(".local/share/fonts/sub/Solo-Bold.ttf", ttf, build_ttf(ttf, &r, 1));
+	write_in_home(".fonts/Gone.ttf", ttf, build_ttf(ttf, NULL, 0));
+	static const uint8_t zeros[12];
+	write_in_home(".fonts/Garbage.ttf", zeros, sizeof(zeros)); /* stbtt_InitFont() fails: no tables */
+	write_in_home(".fonts/Empty.ttf", zeros, 0);
+	/* weight / style from the file name (empty files: the family comes from the name) */
+	write_in_home(".fonts/Wa-b.ttf", zeros, 0);
+	write_in_home(".fonts/Wb-b-x.ttf", zeros, 0);
+	write_in_home(".fonts/Sa-i.otf", zeros, 0);
+	write_in_home(".fonts/Sb-i-x.TTF", zeros, 0);
+	write_in_home(".fonts/Sc-Oblique.ttf", zeros, 0);
+	write_in_home(".fonts/NoDash.ttf", zeros, 0);
+	write_in_home(".fonts/x", zeros, 0);          /* name shorter than an extension */
+	write_in_home(".fonts/notes.txt", zeros, 0);  /* not a font */
+	symlink_in_home("does-not-exist.ttf", ".fonts/Dangling.ttf");
+	symlink_in_home(SYSFS_SHORT_READ, ".fonts/Sys.ttf");
+	char p[1024];
+	path_in_home(p, sizeof(p), ".fonts/Huge.ttf"); /* sparse, above the 50 MiB name-parse limit */
+	write_in_home(".fonts/Huge.ttf", zeros, 0);
+	if (truncate(p, 51L * 1024 * 1024) != 0) {
+		fprintf(stderr, "truncate %s: %s\n", p, strerror(errno));
+	}
+}
+
+typedef struct {
+	const char *suffix;
+	const char *family;
+	img2_font_weight_t weight;
+	img2_font_style_t style;
+} expect_t;
+
+CTEST(font_scan, families_weights_and_styles)
+{
+	build_scan_fixture();
+	const expect_t ex[] = {
+		{ "/.fonts/Plain.ttf", "Plain", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Uni-Bold.ttf", "U\xc3\xa9\xe4\xb8\xad", IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Ctl.ttf", "A?B?", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/NoName.ttf", "NoName", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/ZeroLen-Italic.ttf", "ZeroLen", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_ITALIC },
+		{ "/.fonts/OtherRecords.ttf", "OtherRecords", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/sub/Solo-Bold.ttf", "Solo", IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Garbage.ttf", "Garbage", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Empty.ttf", "Empty", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Wa-b.ttf", "Wa", IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Wb-b-x.ttf", "Wb-b", IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Sa-i.otf", "Sa", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_ITALIC },
+		{ "/.fonts/Sb-i-x.TTF", "Sb-i", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_ITALIC },
+		{ "/.fonts/Sc-Oblique.ttf", "Sc", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_ITALIC },
+		{ "/.fonts/NoDash.ttf", "NoDash", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Dangling.ttf", "Dangling", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Sys.ttf", "Sys", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+		{ "/.fonts/Huge.ttf", "Huge", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL },
+	};
+	const size_t n = sizeof(ex) / sizeof(ex[0]);
+	find_ctx_t got[sizeof(ex) / sizeof(ex[0])];
+	find_ctx_t c;
+	img2_init();
+	for (size_t i = 0; i < n; i++) {
+		family_of(ex[i].suffix, &got[i]);
+	}
+	int skipped_short = family_of("/.fonts/x", &c) == NULL && family_of("/notes.txt", &c) == NULL;
+	img2_shutdown();
+	for (size_t i = 0; i < n; i++) {
+		if (got[i].found != 1 || strcmp(got[i].family, ex[i].family) != 0 || got[i].weight != ex[i].weight || got[i].style != ex[i].style) {
+			CTEST_ERR("%s: found %d family '%s' weight %d style %d", ex[i].suffix, got[i].found, got[i].family, (int)got[i].weight, (int)got[i].style);
+		}
+	}
+	ASSERT_TRUE(skipped_short);
+}
+
+static int stop_at_first(const img2_font_info_t *info, void *user)
+{
+	(void)info;
+	(*(int *)user)++;
+	return 1;
+}
+
+CTEST(font_scan, lookups_load_failures_and_fallbacks)
+{
+	build_scan_fixture();
+	img2_init();
+	char gone[1024];
+	path_in_home(gone, sizeof(gone), ".fonts/Gone.ttf");
+	int visits = 0;
+	img2_font_foreach(stop_at_first, &visits); /* builds the cache; the visitor stops the walk */
+	unlink(gone);                                /* scanned, then removed: loading it fails */
+
+	img2_font_t *fallback = NULL;
+	img2_status_t st_fb = img2_font_load_fallback(&fallback);
+	img2_font_t *f[12] = { 0 };
+	img2_status_t st[12];
+	st[0] = img2_font_load("Plain", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[0]);
+	st[1] = img2_font_load("Plain", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[1]); /* interned */
+	st[2] = img2_font_load("Solo", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_ITALIC, &f[2]);  /* any variant */
+	st[3] = img2_font_load("Empty", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[3]); /* size 0 */
+	st[4] = img2_font_load("Gone", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[4]);  /* fopen fails */
+	st[5] = img2_font_load("Sys", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[5]);   /* short read */
+	st[6] = img2_font_load("Garbage", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[6]);
+	st[7] = img2_font_load("mono", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[7]);
+	st[8] = img2_font_load("Courier", IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_NORMAL, &f[8]);
+	st[9] = img2_font_load("sans-serif", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[9]);
+	st[10] = img2_font_load("sans", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[10]);
+	st[11] = img2_font_load("serif", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &f[11]);
+	img2_font_face_t *garbage_face = img2_font_face_open(f[6]);
+	size_t sz = 1;
+	const uint8_t *no_font = img2_font_get_data(NULL, &sz);
+	const uint8_t *no_size = img2_font_get_data(f[0], NULL);
+	const char *no_family = img2_font_get_family(NULL);
+	img2_font_t *unused = NULL;
+	img2_status_t st_null_family = img2_font_load(NULL, IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &unused);
+	img2_status_t st_null_out = img2_font_load("Plain", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, NULL);
+	char fam2[64]; /* copies: the handles' strings are freed by the final img2_shutdown() */
+	char fam6[64];
+	snprintf(fam2, sizeof(fam2), "%s", img2_font_get_family(f[2]));
+	snprintf(fam6, sizeof(fam6), "%s", img2_font_get_family(f[6]));
+	img2_font_t *plain = f[1];
+	int same = f[0] == f[1];
+	img2_shutdown();
+
+	ASSERT_EQUAL(1, visits);
+	ASSERT_EQUAL(IMG2_OK, st_fb);
+	for (int i = 0; i < 12; i++) {
+		ASSERT_EQUAL(IMG2_OK, st[i]);
+	}
+	ASSERT_TRUE(same);
+	ASSERT_NOT_NULL(plain);
+	ASSERT_STR("Solo", fam2);
+	ASSERT_STR("Garbage", fam6);
+	ASSERT_TRUE(fallback == f[3]); /* every failed file load falls back to the embedded font */
+	ASSERT_TRUE(fallback == f[4]);
+	if (access(SYSFS_SHORT_READ, R_OK) == 0) {
+		ASSERT_TRUE(fallback == f[5]);
+	}
+	ASSERT_NULL(garbage_face);
+	ASSERT_NULL(no_font);
+	ASSERT_NULL(no_size);
+	ASSERT_NULL(no_family);
+	ASSERT_EQUAL(IMG2_E_ARG, st_null_family);
+	ASSERT_EQUAL(IMG2_E_ARG, st_null_out);
+}
+
+CTEST(font_scan, home_unset_and_internal_entry_points)
+{
+	char *saved = getenv("HOME") != NULL ? strdup(getenv("HOME")) : NULL;
+	unsetenv("HOME"); /* "~/..." is then used verbatim (and does not exist) */
+	img2_init();
+	int visits = 0;
+	img2_font_foreach(stop_at_first, &visits);
+	bool built_again = img2_font_manager_init_lazy(); /* already built: false */
+	img2_font_cache_init_lazy();                       /* already built: nothing to do */
+	const int one = 1;
+	img2_font_manager_cleanup_final(&one); /* a reference is left: keeps the cache */
+	img2_font_t *still = img2_font_find_fallback();
+	img2_font_manager_cleanup_final(NULL); /* frees it; the next call rebuilds lazily */
+	img2_font_t *rebuilt = img2_font_find_fallback();
+	img2_shutdown();
+	if (saved != NULL) {
+		setenv("HOME", saved, 1);
+		free(saved);
+	}
+	ASSERT_EQUAL(1, visits);
+	ASSERT_FALSE(built_again);
+	ASSERT_NOT_NULL(still);
+	ASSERT_NOT_NULL(rebuilt);
 }

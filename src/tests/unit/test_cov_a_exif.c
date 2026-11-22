@@ -396,6 +396,7 @@ CTEST(exif_tags, oversized_and_odd_values)
 	memset(big, 'y', sizeof(big));
 	uint32_t s_big = tw_blob(&w, big, sizeof(big));
 	uint32_t s_short = tw_blob(&w, "Hi there", 8);
+	uint32_t s_blank = tw_blob(&w, "  \0  \0", 6); /* only spaces and NULs: trimmed to "" */
 	tw_ent_t ex[] = {
 		{ 0x9286, 7, 8, s_short },  /* user comment without an encoding prefix (count <= 8) */
 		{ 0x9286, 7, 600, s_big }, /* user comment too long: ignored, the first one stays */
@@ -428,6 +429,13 @@ CTEST(exif_tags, oversized_and_odd_values)
 	ASSERT_EQUAL(IMG2_OK, tw_parse(&w, &e));
 	ASSERT_STR("", e.make);
 	ASSERT_STR("", e.description);
+
+	tw_ent_t blank[] = { { 0x010F, T_ASCII, 6, s_blank }, { 0x0110, T_ASCII, 6, s_blank } };
+	tw_set_ifd0(&w, tw_ifd(&w, blank, 2));
+	strcpy(e.make, "x");
+	ASSERT_EQUAL(IMG2_OK, img2_exif_parse_tiff(&e, w.b, w.len));
+	ASSERT_STR("", e.make);
+	ASSERT_STR("", e.model);
 	ASSERT_STR("Hi there", e.user_comment);
 	ASSERT_EQUAL(0, e.image_width);
 	ASSERT_EQUAL(0, e.orientation);
