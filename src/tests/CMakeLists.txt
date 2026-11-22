@@ -319,3 +319,8 @@ endif()
 # when the re-encoded image is larger; [P38/P39] control characters of EXIF / XMP text and paths escaped
 img2_add_test(test_sec_fix_cli SOURCES unit/test_sec_fix_cli.c LINK cli REQUIRES EXIF_READER)
 # --- sec-fix end ---
+
+# --- svg-text-perf ---
+# nanosvgrast.h inserted each new active edge by a linear scan: SVG <text> rendering was quadratic in the text
+# length (fuzzing S17). Ratio-based timing (16x the text < 40x the time) and pixels pinned to the pre-fix render
+img2_add_test(test_svg_text_perf SOURCES unit/test_svg_text_perf.c TIMEOUT 120)
