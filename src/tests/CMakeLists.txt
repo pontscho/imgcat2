@@ -176,4 +176,5 @@ if(TARGET test_cov_a_xml)
 	target_link_libraries(test_cov_a_xml PRIVATE Threads::Threads)
 endif()
 img2_add_test(test_cov_a_font SOURCES unit/test_cov_a_font.c)
+img2_add_test(test_cov_a_exif SOURCES unit/test_cov_a_exif.c REQUIRES EXIF_READER)
 # --- coverage lane A end ---
