@@ -611,21 +611,21 @@ decoders/decoder_raw.c:32 branch-true 6 = if (!str || str[0] == '\0') {
 reason: the timestamp comes from LibRaw's mktime() of a parsed date: localtime_r() cannot fail
 decoders/decoder_raw.c:79 branch-false 7 = if (localtime_r(&raw->other.timestamp, &tm_info)) {
 reason: LibRaw allocates xmpdata with its length
-decoders/decoder_raw.c:186 branch-true 29 = if (!raw->idata.xmpdata || raw->idata.xmplen == 0) {
+decoders/decoder_raw.c:187 branch-true 29 = if (!raw->idata.xmpdata || raw->idata.xmplen == 0) {
 reason: static helper argument check: the only caller passes a local frame counter
-decoders/decoder_raw.c:266 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_raw.c:267 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
 reason: make_mem_thumb() returns NULL for previews without data
-decoders/decoder_raw.c:302 branch-false 16 = if (thumb && thumb->data_size > 0) {
+decoders/decoder_raw.c:303 branch-false 16 = if (thumb && thumb->data_size > 0) {
 reason: img2_decode_jpeg() never returns IMG2_OK without a frame
-decoders/decoder_raw.c:314 branch-false 82 = if (img2_decode_jpeg(thumb->data, thumb->data_size, NULL, &tf) == IMG2_OK && tf.count > 0) {
+decoders/decoder_raw.c:315 branch-false 82 = if (img2_decode_jpeg(thumb->data, thumb->data_size, NULL, &tf) == IMG2_OK && tf.count > 0) {
 reason: output_bps is 8 and LibRaw converts to RGB (or keeps 1 colour for monochrome sensors)
-decoders/decoder_raw.c:405 region 33 = if (!raw_bitmap_ok(processed)) {
-decoders/decoder_raw.c:405 branch-true 6 = if (!raw_bitmap_ok(processed)) {
-decoders/decoder_raw.c:406 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected RAW output format (%d colours)", processed->colors);
-decoders/decoder_raw.c:407 line = libraw_dcraw_clear_mem(processed);
-decoders/decoder_raw.c:408 line = libraw_close(raw);
-decoders/decoder_raw.c:409 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_raw.c:410 line = }
+decoders/decoder_raw.c:406 region 33 = if (!raw_bitmap_ok(processed)) {
+decoders/decoder_raw.c:406 branch-true 6 = if (!raw_bitmap_ok(processed)) {
+decoders/decoder_raw.c:407 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected RAW output format (%d colours)", processed->colors);
+decoders/decoder_raw.c:408 line = libraw_dcraw_clear_mem(processed);
+decoders/decoder_raw.c:409 line = libraw_close(raw);
+decoders/decoder_raw.c:410 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_raw.c:411 line = }
 
 # ===== decoders/decoder_nanosvg.c =====
 reason: a rule is appended only while style_pos + rule_len < 4095, so style_pos never reaches 4095

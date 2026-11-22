@@ -290,3 +290,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	endif()
 endif()
 # --- core-fix end ---
+
+# --- fuzz regressions begin ---
+# Reproducers of the libFuzzer findings (docs/fuzzing.md, src/tests/fuzz), embedded in the test; per-format cases are
+# compiled in by the IMG2_HAVE_* macros of img2_testing
+img2_add_test(test_fuzz_regress SOURCES unit/test_fuzz_regress.c TIMEOUT 30)
+# --- fuzz regressions end ---

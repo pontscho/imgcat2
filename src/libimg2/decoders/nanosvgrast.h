@@ -80,6 +80,7 @@ NSVGRAST_DEF void nsvgDeleteRasterizer(NSVGrasterizer*);
 
 #ifdef NANOSVGRAST_IMPLEMENTATION
 
+#include <limits.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -861,6 +862,24 @@ static int nsvg__cmpEdge(const void *p, const void *q)
 }
 
 
+/* [img2] Saturating float -> int for the active edges' fixed-point x / dx: huge coordinates or a nearly horizontal
+ * edge (tiny y1 - y0) put them outside int (undefined behaviour, found by fuzzing). Identical to the plain cast for
+ * every value that fits; NaN maps to 0. */
+static int nsvg__ftoisat(float v)
+{
+	if (v != v) return 0;
+	if (v >= 2147483648.0f) return INT_MAX;
+	if (v < -2147483648.0f) return INT_MIN;
+	return (int)v;
+}
+
+/* [img2] Saturating int add (an active edge's x advances by dx every subsample scanline) */
+static int nsvg__addisat(int a, int b)
+{
+	long long s = (long long)a + (long long)b;
+	return s > INT_MAX ? INT_MAX : (s < INT_MIN ? INT_MIN : (int)s);
+}
+
 static NSVGactiveEdge* nsvg__addActive(NSVGrasterizer* r, NSVGedge* e, float startPoint)
 {
 	 NSVGactiveEdge* z;
@@ -879,10 +898,10 @@ static NSVGactiveEdge* nsvg__addActive(NSVGrasterizer* r, NSVGedge* e, float sta
 //	STBTT_assert(e->y0 <= start_point);
 	// round dx down to avoid going too far
 	if (dxdy < 0)
-		z->dx = (int)(-nsvg__roundf(NSVG__FIX * -dxdy));
+		z->dx = -nsvg__ftoisat(nsvg__roundf(NSVG__FIX * -dxdy));
 	else
-		z->dx = (int)nsvg__roundf(NSVG__FIX * dxdy);
-	z->x = (int)nsvg__roundf(NSVG__FIX * (e->x0 + dxdy * (startPoint - e->y0)));
+		z->dx = nsvg__ftoisat(nsvg__roundf(NSVG__FIX * dxdy));
+	z->x = nsvg__ftoisat(nsvg__roundf(NSVG__FIX * (e->x0 + dxdy * (startPoint - e->y0))));
 //	z->x -= off_x * FIX;
 	z->ey = e->y1;
 	z->next = 0;
@@ -1151,7 +1170,7 @@ static void nsvg__rasterizeSortedEdges(NSVGrasterizer *r, float tx, float ty, fl
 //					NSVG__assert(z->valid);
 					nsvg__freeActive(r, z);
 				} else {
-					z->x += z->dx; // advance to position for current scanline
+					z->x = nsvg__addisat(z->x, z->dx); // advance to position for current scanline ([img2] saturating)
 					step = &((*step)->next); // advance through list
 				}
 			}

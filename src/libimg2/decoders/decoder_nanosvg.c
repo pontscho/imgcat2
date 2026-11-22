@@ -269,31 +269,33 @@ static img2_image_t **decode_svg_nanosvg_frames(const uint8_t *data, size_t len,
 		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
-	// Determine dimensions
-	uint32_t width, height;
+	// Determine dimensions: rounded, validated as floats first (the float -> uint32_t conversion is undefined for a
+	// value out of its range, e.g. width='1e30'); the messages print the rounded values exactly as %u did
+	float fw = 512.0f;
+	float fh = 512.0f;
 	if (svg_image->width > 0.0f && svg_image->height > 0.0f) {
 		// Use SVG's explicit dimensions
-		width = (uint32_t)roundf(fminf(svg_image->width, (float)IMG2_MAX_DIMENSION + 1.0f)); /* > max: E_LIMIT below; */
-		height = (uint32_t)roundf(fminf(svg_image->height, (float)IMG2_MAX_DIMENSION + 1.0f)); /* never >= 2^32 / inf */
+		fw = roundf(svg_image->width);
+		fh = roundf(svg_image->height);
 	} else {
 		// No dimensions specified, use default 512x512
-		width = 512;
-		height = 512;
 		img2_log(IMG2_LOG_WARN, "Warning: SVG has no explicit dimensions, using default 512x512");
 	}
 
 	// Validate dimensions
-	if (width == 0 || height == 0) {
-		img2_log(IMG2_LOG_ERROR, "Error: Invalid SVG dimensions: %ux%u", width, height);
+	if (fw == 0.0f || fh == 0.0f) {
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid SVG dimensions: %.0fx%.0f", (double)fw, (double)fh);
 		nsvgDelete(svg_image);
 		return img2_decode_fail(st, IMG2_E_FORMAT);
 	}
 
-	if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION) {
-		img2_log(IMG2_LOG_ERROR, "Error: SVG dimensions exceed maximum (%u): %ux%u", IMG2_MAX_DIMENSION, width, height);
+	if (fw > (float)IMG2_MAX_DIMENSION || fh > (float)IMG2_MAX_DIMENSION) {
+		img2_log(IMG2_LOG_ERROR, "Error: SVG dimensions exceed maximum (%u): %.0fx%.0f", IMG2_MAX_DIMENSION, (double)fw, (double)fh);
 		nsvgDelete(svg_image);
 		return img2_decode_fail(st, IMG2_E_LIMIT);
 	}
+	uint32_t width = (uint32_t)fw;
+	uint32_t height = (uint32_t)fh;
 
 	// Check pixel count limit
 	uint64_t pixel_count = (uint64_t)width * (uint64_t)height;
