@@ -1,34 +1,51 @@
 # libimg2 unit-test coverage
 
-Goal: every reachable line and branch outcome of libimg2's own sources (`src/libimg2/`) exercised by the unit
-and integration tests, measured with clang source-based coverage (`llvm-cov`). Code that cannot be reached
-is listed with a reason in [Reviewed exclusions](#reviewed-exclusions); everything else that is uncovered is a
-gap and appears in the [Gap inventory](#gap-inventory).
+Goal: every reachable line, region, function and branch outcome of libimg2's own sources (`src/libimg2/`)
+exercised by the unit and integration tests, measured with clang source-based coverage (`llvm-cov`). Code that
+cannot be reached is listed, item by item and with a reason, in the machine-checked manifest
+[`docs/coverage-exclusions.txt`](coverage-exclusions.txt); `scripts/coverage.sh` fails when anything uncovered is
+not in it, when an entry is covered (stale), or when an entry's source anchor no longer matches.
 
-Status: phase 1 (infrastructure, baseline, inventory, first gap-closing round). Not at 100% yet.
+Status (phase 3): **100% after exclusions on all four metrics**, enforced by `scripts/coverage_check.py`.
 
 ## Running
 
 ```sh
-scripts/coverage.sh                  # configure + build build-cov/, run the tests, write the reports
-scripts/coverage.sh --no-build       # re-run the tests and the reports only
-scripts/coverage.sh --no-build --no-test   # reports from the existing profiles
+scripts/coverage.sh                  # configure + build build-cov/, run the tests, write the reports, run the check
+scripts/coverage.sh --no-build       # re-run the tests, the reports and the check
+scripts/coverage.sh --no-build --no-test   # reports + check from the existing profiles
+scripts/coverage.sh --no-check       # everything except the exclusion check
 ```
+
+Exit status: non-zero when the build fails, a test fails (the reports are still written) or the exclusion check
+fails.
 
 Environment overrides: `BUILD_DIR` (default `build-cov/`), `OUT_DIR` (default `$BUILD_DIR/coverage`), `JOBS`
 (16), `CTEST_JOBS` (8), `CC`/`CXX` (clang/clang++), `LLVM_PROFDATA`/`LLVM_COV` (first of `llvm-profdata`,
 `llvm-profdata-17` / `llvm-cov`, `llvm-cov-17`), `TMPDIR` (default `$BUILD_DIR/tmp`).
 
 Outputs in `$OUT_DIR`: `report.txt` (per file: regions, functions, lines, branches), `show.txt` (annotated
-sources with branch counts), `html/index.html`, `summary.json` (`llvm-cov export -summary-only`), `merged.profdata`,
-`profraw/` (one `%p-%m.profraw` per test process).
+sources with branch counts), `html/index.html`, `summary.json` (`llvm-cov export -summary-only`), `export.json`
+(full `llvm-cov export`: functions with their regions and branches), `lcov.info` (`llvm-cov export
+-format=lcov`, per-line counts), `merged.profdata`, `profraw/` (one `%p-%m.profraw` per test process).
+
+The check alone (stdlib-only Python):
+
+```sh
+python3 -I scripts/coverage_check.py --root . --json build-cov/coverage/export.json \
+    --lcov build-cov/coverage/lcov.info --manifest docs/coverage-exclusions.txt [--per-file]
+python3 -I scripts/coverage_check.py ... --emit-uncovered   # every uncovered item in manifest syntax
+```
 
 ### How it works
 
 * CMake option `IMG2_COVERAGE` (default OFF, `cmake/Img2Coverage.cmake`). It requires Clang and fails the
   configure step with a clear message otherwise. When ON, `img2_coverage_instrument(img2)` adds
-  `-fprofile-instr-generate -fcoverage-mapping` to img2's own sources only: the vendored codecs and the
-  imgcat2 CLI sources are compiled as usual.
+  `-fprofile-instr-generate -fcoverage-mapping -fprofile-update=atomic` to img2's own sources only: the vendored
+  codecs and the imgcat2 CLI sources are compiled as usual. `-fprofile-update=atomic` (phase 3): `test_threads`
+  decodes on several threads at once; with plain counter increments updates were lost and outcomes that clang
+  derives by subtraction flipped between runs (seen on `decoder_png.c` `png_read_func`), which would make the
+  exclusion check flaky.
 * The profile runtime is linked through img2's in-tree link interface: `$<BUILD_INTERFACE:-fprofile-instr-generate>`
   on the `img2` target and `-fprofile-instr-generate` appended to `IMG2_INTERFACE_LINK_OPTIONS` of the imported
   `img2_bundled` (fat archive) target in `src/libimg2/CMakeLists.txt`. Every test executable and the CLI
@@ -37,7 +54,8 @@ sources with branch counts), `html/index.html`, `summary.json` (`llvm-cov export
 * Hardening flags (`-fstack-protector-strong`, `_FORTIFY_SOURCE`) stay on; none conflicts with the instrumentation.
 * `scripts/coverage.sh` configures `build-cov/` with clang, `IMG2_COVERAGE=ON` and `IMG2_WERROR=OFF`, builds,
   runs `ctest -LE 'guard|consumer'` with `LLVM_PROFILE_FILE=<out>/profraw/%p-%m.profraw`, merges with
-  `llvm-profdata merge -sparse` and reports over every executable in `build-cov/src/tests/` plus `build-cov/imgcat2`.
+  `llvm-profdata merge -sparse`, reports over every executable in `build-cov/src/tests/` plus `build-cov/imgcat2`,
+  and runs the exclusion check.
 
 Deviations from a plain build, coverage configuration only:
 
@@ -48,204 +66,273 @@ Deviations from a plain build, coverage configuration only:
 
 ### What is measured
 
-All of `src/libimg2/` except (`-ignore-filename-regex` in `scripts/coverage.sh`):
+All of `src/libimg2/` except (`-ignore-filename-regex` in `scripts/coverage.sh`, `--ignore` in the checker):
 
 * `vendor/`, `src/tests/`, `src/imgcat2/`, build trees, the generated `embedded_fonts.c` (data only);
 * `src/libimg2/decoders/nanosvg.h` and `nanosvgrast.h`: third-party nanosvg sources copied into the library
-  tree (they differ from `vendor/nanosvg`); they are vendored code, not libimg2 logic. Baseline with them
-  included: regions 63.99%, lines 55.39%, branches 50.27%.
+  tree (they differ from `vendor/nanosvg`); they are vendored code, not libimg2 logic.
+
+`decoders/decoder_resvg.c` is not built in the measured configuration (all optional codecs except resvg).
 
 ## Numbers
 
-Totals (Clang 17.0.6, Linux x86-64, all optional codecs built except resvg):
+Clang 17.0.6, Linux x86-64. Raw = `llvm-cov report` (`report.txt`); "checker" = the union semantics below.
 
 | | Regions | Functions | Lines | Branches |
 |---|---|---|---|---|
-| Baseline (838c631) | 74.84% (1457 of 5791 missed) | 89.08% (31 of 284) | 63.84% (2820 of 7799) | 59.26% (1734 of 4256) |
-| Phase 1 (this branch) | 83.20% (975 of 5803 missed) | 96.84% (9 of 285) | 75.88% (1878 of 7787) | 70.53% (1256 of 4262) |
+| Baseline (838c631), raw | 74.84% (1457 of 5791 missed) | 89.08% (31 of 284) | 63.84% (2820 of 7799) | 59.26% (1734 of 4256) |
+| Phase 1, raw | 83.20% (975 of 5803 missed) | 96.84% (9 of 285) | 75.88% (1878 of 7787) | 70.53% (1256 of 4262) |
+| Phase 2 (lanes A/B/C merged, e990050), raw | 96.51% (208 of 5967) | 99.33% (2 of 298) | 92.81% (579 of 8052) | 91.31% (382 of 4398) |
+| **Phase 3, raw** | **96.56% (207 of 6012)** | **99.34% (2 of 301)** | **92.90% (577 of 8122)** | **91.50% (376 of 4422)** |
+| Phase 3, checker (union) | 96.56% (207 of 6012) | 99.34% (2 of 301) | 93.00% (574 of 8200) | 91.50% (376 of 4422) |
+| **Phase 3, after exclusions** | **100%** (207 excluded) | **100%** (2) | **100%** (574) | **100%** (376) |
 
-Per file, baseline -> current (the raw `llvm-cov report` of both runs is kept outside the tree):
+Raw and checker numbers differ only for lines: `llvm-cov report` sums per-function line statistics and, for a
+`static inline` helper compiled into several translation units (`decoders/decoder.h`), counts the best single
+instance (decoder.h: 3 of 35 lines missed); the checker uses llvm-cov's per-file line statistics (lcov export),
+in which a line is covered when any instance ran it (decoder.h: 0 missed; lines 117-119 run in the HEIF/AVIF
+instances only). Regions, functions and branches are identical in both.
 
-| File | Lines base | Lines now | Branches base | Branches now | Regions base | Regions now | Functions base | Functions now |
-|---|---|---|---|---|---|---|---|---|
-| core/api.c | 91.67% | 100.00% | 75.00% | 100.00% | 94.03% | 100.00% | 100.00% | 100.00% |
-| core/image.c | 82.84% | 93.69% | 79.13% | 93.31% | 88.86% | 96.66% | 100.00% | 100.00% |
-| core/init.c | 100.00% | 100.00% | 87.50% | 87.50% | 100.00% | 100.00% | 100.00% | 100.00% |
-| core/log.c | 94.44% | 100.00% | 54.55% | 100.00% | 80.00% | 100.00% | 100.00% | 100.00% |
-| core/status.c | 100.00% | 100.00% | 100.00% | 100.00% | 100.00% | 100.00% | 100.00% | 100.00% |
-| decoders/decoder.c | 86.67% | 88.89% | 78.05% | 90.24% | 92.74% | 95.16% | 100.00% | 100.00% |
-| decoders/decoder.h | 77.14% | 82.86% | 50.00% | 71.43% | 78.57% | 92.86% | 100.00% | 100.00% |
-| decoders/decoder_avif.c (off-limits) | 41.53% | 41.53% | 34.18% | 34.18% | 54.69% | 54.69% | 100.00% | 100.00% |
-| decoders/decoder_gif.c | 67.93% | 78.15% | 63.31% | 71.37% | 76.65% | 82.69% | 100.00% | 100.00% |
-| decoders/decoder_heif.c (off-limits) | 51.41% | 51.41% | 43.37% | 43.37% | 67.35% | 67.35% | 100.00% | 100.00% |
-| decoders/decoder_ico.c | 0.00% | 98.71% | 0.00% | 96.32% | 0.00% | 99.47% | 0.00% | 100.00% |
-| decoders/decoder_jpeg.c | 67.15% | 82.35% | 58.33% | 83.33% | 73.53% | 89.71% | 100.00% | 100.00% |
-| decoders/decoder_jxl.c | 49.57% | 54.89% | 49.21% | 53.17% | 70.09% | 73.50% | 100.00% | 100.00% |
-| decoders/decoder_nanosvg.c | 21.40% | 21.40% | 16.67% | 16.67% | 30.77% | 30.77% | 100.00% | 100.00% |
-| decoders/decoder_png.c | 61.73% | 78.91% | 54.32% | 65.83% | 72.79% | 80.88% | 85.71% | 100.00% |
-| decoders/decoder_pnm.c | 87.81% | 97.78% | 79.62% | 97.31% | 94.48% | 99.08% | 100.00% | 100.00% |
-| decoders/decoder_qoi.c | 0.00% | 100.00% | 0.00% | 92.86% | 0.00% | 100.00% | 0.00% | 100.00% |
-| decoders/decoder_raw.c | 54.58% | 54.58% | 50.82% | 50.82% | 65.77% | 65.77% | 100.00% | 100.00% |
-| decoders/decoder_stb.c | 70.21% | 91.49% | 66.67% | 83.33% | 84.62% | 96.15% | 100.00% | 100.00% |
-| decoders/decoder_tiff.c | 34.16% | 34.16% | 30.39% | 30.39% | 40.00% | 40.00% | 57.14% | 57.14% |
-| decoders/decoder_webp.c | 58.04% | 74.90% | 51.69% | 63.56% | 71.95% | 81.71% | 100.00% | 100.00% |
-| decoders/decoder_yuv.c | 95.91% | 98.91% | 80.39% | 84.64% | 97.91% | 98.84% | 100.00% | 100.00% |
-| decoders/magic.c | 69.23% | 100.00% | 73.28% | 94.66% | 81.75% | 100.00% | 80.00% | 100.00% |
-| encoders/encoder.c | 81.67% | 86.67% | 72.22% | 75.00% | 85.25% | 86.89% | 100.00% | 100.00% |
-| encoders/encoder_heif.c | 53.24% | 53.24% | 54.00% | 54.00% | 71.64% | 71.64% | 100.00% | 100.00% |
-| encoders/encoder_jpeg.c | 64.77% | 87.50% | 73.08% | 84.62% | 77.78% | 91.67% | 50.00% | 100.00% |
-| encoders/encoder_jxl.c | 59.85% | 78.03% | 66.67% | 80.95% | 78.46% | 87.69% | 100.00% | 100.00% |
-| encoders/encoder_png.c | 59.35% | 87.80% | 61.90% | 80.95% | 69.12% | 88.24% | 40.00% | 80.00% |
-| encoders/encoder_webp.c | 69.44% | 88.89% | 72.22% | 83.33% | 82.61% | 91.30% | 100.00% | 100.00% |
-| metadata/exif_reader.c | 79.16% | 79.16% | 61.21% | 61.21% | 81.26% | 81.26% | 100.00% | 100.00% |
-| metadata/xml_parser.c | 74.62% | 79.59% | 64.52% | 69.29% | 81.96% | 85.97% | 93.55% | 93.55% |
-| text/font_manager.c | 79.49% | 87.65% | 67.21% | 78.28% | 84.35% | 91.12% | 97.37% | 100.00% |
+Per file, phase 3 raw (`report.txt`); every miss is a manifest entry:
+
+| File | Lines | Missed | Branches | Missed | Regions missed | Functions missed |
+|---|---|---|---|---|---|---|
+| core/api.c | 100.00% | 0 | 100.00% | 0 | 0 | 0 |
+| core/image.c | 93.69% | 32 | 94.88% | 13 | 12 | 0 |
+| core/init.c | 100.00% | 0 | 93.75% | 1 | 0 | 0 |
+| core/log.c | 100.00% | 0 | 100.00% | 0 | 0 | 0 |
+| core/status.c | 100.00% | 0 | 100.00% | 0 | 0 | 0 |
+| decoders/decoder.c | 88.89% | 15 | 90.24% | 8 | 6 | 0 |
+| decoders/decoder.h | 91.43% | 3 (0 union) | 85.71% | 2 | 0 | 0 |
+| decoders/decoder_avif.c | 86.01% | 48 | 87.63% | 24 | 12 | 0 |
+| decoders/decoder_gif.c | 94.51% | 23 | 92.21% | 19 | 16 | 0 |
+| decoders/decoder_heif.c | 86.99% | 74 | 88.68% | 36 | 20 | 0 |
+| decoders/decoder_ico.c | 98.71% | 4 | 97.79% | 3 | 1 | 0 |
+| decoders/decoder_jpeg.c | 84.51% | 22 | 85.42% | 7 | 6 | 0 |
+| decoders/decoder_jxl.c | 71.81% | 139 | 72.80% | 68 | 44 | 0 |
+| decoders/decoder_nanosvg.c | 100.00% | 0 | 98.11% | 2 | 0 | 0 |
+| decoders/decoder_png.c | 93.54% | 39 | 83.93% | 45 | 19 | 0 |
+| decoders/decoder_pnm.c | 97.78% | 8 | 97.31% | 7 | 3 | 0 |
+| decoders/decoder_qoi.c | 100.00% | 0 | 92.86% | 1 | 0 | 0 |
+| decoders/decoder_raw.c | 97.03% | 8 | 91.79% | 11 | 2 | 0 |
+| decoders/decoder_stb.c | 91.49% | 4 | 83.33% | 3 | 1 | 0 |
+| decoders/decoder_tiff.c | 90.44% | 28 | 83.02% | 18 | 11 | 1 (tiff_write_proc) |
+| decoders/decoder_webp.c | 90.59% | 24 | 82.20% | 21 | 8 | 0 |
+| decoders/decoder_yuv.c | 98.91% | 4 | 94.77% | 16 | 5 | 0 |
+| decoders/magic.c | 100.00% | 0 | 95.04% | 13 | 0 | 0 |
+| encoders/encoder.c | 86.67% | 8 | 75.00% | 9 | 8 | 0 |
+| encoders/encoder_heif.c | 75.54% | 34 | 72.00% | 14 | 10 | 0 |
+| encoders/encoder_jpeg.c | 93.28% | 8 | 92.86% | 2 | 2 | 0 |
+| encoders/encoder_jxl.c | 87.88% | 16 | 90.48% | 4 | 4 | 0 |
+| encoders/encoder_png.c | 89.52% | 13 | 85.00% | 6 | 7 | 1 (png_memory_flush_func) |
+| encoders/encoder_webp.c | 100.00% | 0 | 94.44% | 1 | 0 | 0 |
+| metadata/exif_reader.c | 99.48% | 3 | 99.54% | 2 | 1 | 0 |
+| metadata/xml_parser.c | 97.50% | 13 | 95.12% | 12 | 6 | 0 |
+| text/font_manager.c | 98.85% | 7 | 97.08% | 8 | 3 | 0 |
+
+The low raw numbers of the HEIF/AVIF/JXL decoders and the HEIF encoder are API checks of libheif/libjxl calls that
+cannot fail with the arguments passed (allocation through `new`, events that are never emitted, the same checks
+repeated on data an earlier pass already accepted): see their manifest reasons.
+
+## Exclusion check
+
+`scripts/coverage_check.py` (stdlib only, `python3 -I`) reads `export.json` (regions, branches, functions of every
+instrumented function) and `lcov.info` (per-line counts) for `src/libimg2` and compares every uncovered item with
+the manifest. It prints the raw / excluded / after-exclusion numbers and fails (exit 1) on:
+
+* **UNEXPLAINED**: an uncovered line, branch outcome, code region or function without a manifest entry;
+* **STALE**: a manifest entry whose item is covered now (or no longer exists);
+* **ANCHOR**: an entry whose anchor text differs from the current source line (code moved: re-verify the entry);
+* **MANIFEST**: syntax errors, unknown kinds, duplicates, entries without a reason, reasons without entries.
+
+Each failure is listed precisely (file:line, kind, detail, manifest line). Items:
+
+| Kind | Item | Detail |
+|---|---|---|
+| `line` | a line with an lcov count of 0 (llvm-cov's per-file line statistics) | none |
+| `region` | a code region with count 0 | start column |
+| `branch-true` / `branch-false` | a branch condition whose true / false outcome was never taken | start column |
+| `function` | a function that never ran | function name |
+
+Rules:
+
+* **Instances are merged** (union): a `static inline` helper compiled into several translation units, and the
+  same function in several test executables, is one item; it is covered when any instance covered it.
+* **Macro expansions** are located at the expansion site in the function's own file: line = site line, detail =
+  `<site column>><line>:<column>` inside the macro (prefixed by the macro's file when it is another file), so two
+  expansions of one macro are distinct items.
+* **Folded branches** (clang folded the condition to a constant: both outcome counters are the constant zero
+  although the condition's code ran) are not items, as in `llvm-cov report`. With this rule the checker's region,
+  function and branch totals equal `llvm-cov report` exactly.
+* Several regions with the same span inside one function (a macro argument expanded twice) are told apart by
+  their occurrence index.
+
+### Manifest format
+
+```
+reason: <one-line reason>                      # applies to the entries up to the next "reason:" line
+<file>:<line> <kind>[ <detail>] = <anchor>      # file below src/libimg2/, anchor = source line, trimmed
+```
+
+Example:
+
+```
+reason: heif_context_alloc() uses new (throws, never returns NULL)
+decoders/decoder_heif.c:97 region 19 = if (ctx == NULL) {
+decoders/decoder_heif.c:97 branch-true 6 = if (ctx == NULL) {
+decoders/decoder_heif.c:98 line = return IMG2_HEIF_LAYOUT_SINGLE;
+```
+
+Workflow after a code change: run `scripts/coverage.sh`; for an ANCHOR or STALE failure re-check the item and move
+or delete its entry; for UNEXPLAINED items write a test, or (only for genuinely unreachable code) add entries,
+e.g. from `--emit-uncovered`, under a reason. Exclusion policy: only code that no input can reach (defensive checks
+the code structure makes impossible, 64-bit-only overflow guards, configuration-specific paths, codec API calls
+that cannot fail with the arguments given) may be excluded; "hard to trigger" is not unreachable. Entries whose
+reason starts with `RESOURCE-BOUND` are reachable in principle but need more memory than a unit test can use.
+
+Manifest size (phase 3): 1159 entries under 220 reasons: 574 lines, 207 regions, 287 true and 89 false branch
+outcomes, 2 functions. Largest files: decoder_jxl.c 251, decoder_heif.c 130, decoder_png.c 103,
+decoder_avif.c 84, decoder_gif.c 58, decoder_tiff.c 58, encoder_heif.c 58, core/image.c 57.
 
 ## Allocation failures
 
-libimg2 has no allocator wrapper: 28 source files call `malloc`/`calloc`/`realloc`/`strdup` directly (133 call
-sites), and the vendored codecs allocate on their own. Options considered:
+libimg2 has no allocator wrapper: the library calls `malloc`/`calloc`/`realloc`/`strdup` directly, and the
+vendored codecs allocate on their own. Faults are injected by link-time interposition in the test executable
+(GNU ld `--wrap`, Linux only); nothing is compiled into the library and there is no public API change.
 
-1. **Link-time interposition in the test executable (chosen).** `src/tests/unit/alloc_fail.h` defines
-   `__wrap_malloc/calloc/realloc/strdup`; `test_alloc_fail` is linked with
-   `-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup` (GNU ld, registered on Linux only). Every call
-   from the test's own objects and from the statically linked img2 archive (libimg2 and the C vendors) goes
-   through the wrappers; calls inside shared libraries (libc internals, libstdc++'s `operator new`) do not.
-   `af_for_each_failure()` runs an operation once per allocation it makes, failing exactly that allocation.
-   Nothing is compiled into the library, no public API change.
-2. An `img2_malloc()`-style internal wrapper with a test hook: touches every allocation site (a large diff in
-   files other builders are changing) and still misses the vendors' allocations. Not done.
-3. A public allocator API (`img2_set_allocator()`): a public API change, out of scope.
-4. `LD_PRELOAD` malloc shims: the tests link img2 statically, so this would also need a dynamic libc-level
-   hook and loses the per-call-site control. Not needed given option 1.
+* `src/tests/unit/alloc_fail.h` defines `__wrap_malloc/calloc/realloc/strdup`; the test is linked with
+  `-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup`. Every call from the test's own objects and from
+  the statically linked img2 archive (libimg2 and the C vendors) goes through the wrappers; calls inside shared
+  libraries (libc internals, libstdc++'s `operator new`) do not. `af_for_each_failure()` runs an operation once
+  per allocation it makes, failing exactly that allocation; `af_count_allocs()` + `af_fail_range()` fail a range.
+  Users: `test_alloc_fail` (phase 1), `test_cov_a_alloc`, `test_cov_b_alloc`, `test_cov_c_alloc`.
+* Variants with their own wrappers: `test_cov_a_nostrdup` (`--wrap=strdup`, every strdup fails: empty font
+  cache), `test_cov_p3_leak` (`--wrap=...,--wrap=free`: a live-block counter, so a leaked block is a non-zero
+  difference without heap introspection), `test_cov_p3_font` (`--wrap=malloc,free`: font buffers of armed sizes
+  end at a `PROT_NONE` guard page, so any read past the file data faults deterministically without a sanitizer).
+* **Profiler warm-up caveat** (lane A): in the coverage build the profile runtime allocates value-profiling nodes
+  through the wrapped `calloc` on the first call of an indirect call site. That shifts allocation indices between
+  the first and later runs of an operation, so `af_count_allocs()` + `af_fail_range()` users run the operation
+  once before counting (`test_cov_a_alloc` font operations). `af_for_each_failure()` is unaffected (it stops when
+  a run completes without the injected failure).
+* Leak checks of the lane tests use glibc `mallinfo2()` heap totals around repeated runs after a warm-up that
+  saturates tcache (`cb_heap_in_use()`, `test_cov_c_alloc`); they pass vacuously on other C libraries.
+* `test_cov_c_alloc` probes the kvazaar (HEIF encoder) allocation failures in forked children (most of them crash
+  inside kvazaar) and requires at least one clean encoder error; the children `exit()` so their profile is written.
+* `mallopt(M_PERTURB)` makes fresh memory non-zero, which turned the uninitialised-XMP free in the HEIF/AVIF stills
+  into a deterministic crash (lane C red test).
 
-Not exercised under allocation failure, because the vendored code crashes (vendor bugs, see below): JPEG with
-quantsmooth deblocking (the tests use `jpeg_deblock = 0`), TIFF decoding, HEIF encoding. The HEIF/AVIF decoders
-are off-limits in phase 1. RAW decoding was not attempted (LibRaw allocates through `operator new`).
+### setjmp counting caveat
 
-## Gap inventory
+clang derives the counts of regions after `if (setjmp(...))` by subtraction (else = entry - then). Every `longjmp`
+back adds to "then" without a new entry, so every later derived count in that function is too low by the number
+of longjmps over the whole run and shows 0 once the error runs outnumber the success runs, although the code ran.
+`decoder_png.c` (APNG, still, metadata readers) and `decoder_jpeg.c` are affected; `test_cov_b_jpeg` /
+`test_cov_b_png` decode their success fixtures a few hundred times (2x2 / 8x8 images) so the derived counts stay
+positive. Adding many libpng/libjpeg error or allocation-failure runs can zero them again: the checker then
+reports success-path lines as UNEXPLAINED; the fix is more successful runs (or a restructured test), not an
+exclusion. Phase 3 verified that no success-path line reads 0.
 
-Current gaps (lines / branch outcomes not covered and not in the exclusion list), grouped by cause.
-Line numbers refer to this revision.
+## Bugs found and fixed
 
-### Missing test input
+Every fix has a test that failed (or crashed / was flagged by ASAN) on the unfixed code first.
 
-* `decoders/decoder_tiff.c`: the whole multi-page path (`decode_tiff_multipage`, 381-503) needs a TIFF with
-  more than one directory (can be written in-test with the vendored libtiff); `tiff_size`/`tiff_seek` SEEK_END
-  and clamp (103, 107, 136-138), the libtiff error/warning handlers (158-201, malformed TIFF), `>200` pages
-  (406-408), EXIF parse failure (343-344).
-* `decoders/decoder_raw.c`: orientation 3/6/other (114-117), lens make (130), description (148), GPS block
-  (158-169), XMP failure (192-199), embedded-thumbnail fallback (277-308), unpack/process/make_mem_image
-  failures (316-359), and the full `libraw_dcraw_process` path (336-407) is not reached by the current fixtures.
-* `decoders/decoder_gif.c`: interlaced frames (311-316), `DISPOSE_BACKGROUND` / `DISPOSE_PREVIOUS` (532-541,
-  576-594), frames without a color map (509-511), transparent index outside the palette (79-83), GIF without
-  images (446-448), record-walk errors (233-262, 293-357), frame cap (455-465, 555-556).
-* `decoders/decoder_png.c`, `decoders/decoder_webp.c`, `decoders/decoder_jxl.c`: animation/metadata variants
-  (WebP XMP chunk 147-170, EXIF parse failure 91-108, animation-info failure 335-345, WebP LIMIT 392; PNG/JXL
-  multi-frame and colour variants); see `show.txt`.
-* `decoders/decoder_nanosvg.c` (21% lines): SVG decoding is barely tested (text elements, font lookup, sizing).
-* `metadata/exif_reader.c`, `metadata/xml_parser.c`: malformed EXIF IFDs, XMP variants, malformed XML
-  (unterminated tags, mismatched close tags, attribute syntax errors).
-* `text/font_manager.c`: `~` expansion with/without `$HOME`, user font directories, TTF name-table parsing and
-  UTF-16 conversion, filename weight/style heuristics. Partly host-dependent (the system font directories are
-  scanned); a `$HOME/.fonts` fixture built in-test would cover most of it.
-* Encoders: quality clamps below 0 / above 100 on the native scale (`encoder_webp.c` 52/55, `encoder_jxl.c`
-  52/55, `encoder_heif.c` 114/117), reachable through `img2_encoder_dispatch()`.
-* Trivial argument checks still open: `img2_fit_size(..., NULL)` (image.c B140), NULL pixels in
-  `img2_image_destroy` (B88) and in the internal scale entry points (B193, B246), `img2_decode_ico(buf, 0, ...)`
-  (decoder_ico.c B503), a non-best ICO entry after the best one (B91).
+Phase 1:
 
-### Error paths needing malformed data or a failing codec
+1. `decoders/decoder_ico.c`: `image_offset + bytes_in_res` computed in 32 bits wrapped around the bounds check
+   (heap over-read).
+2. `decoders/decoder_ico.c`: `palette_size * 4` in 32 bits wrapped for a huge `clr_used` (heap over-read).
+3. `decoders/decoder_jpeg.c`: uninitialised XMP struct passed to `img2_xmp_clear()` when only the EXIF allocation
+   failed.
+4. `text/font_manager.c`: failed `strdup()`s left entries that freed static data, compared NULL names or opened
+   NULL paths; entries are now skipped on allocation failure.
+5. `metadata/xml_parser.c`: failed arena allocations stored as NULL and dereferenced later.
 
-* `decoders/decoder_jpeg.c`: `jpeg_read_header`/`jpeg_start_decompress` failures (119-136), unexpected
-  channel count (145), scanline read failure (177), `finish_decompress` warnings (202, 205).
-* Encoders: libjpeg/libpng/libjxl/libheif API failures (`encoder_jxl.c` 99-124, `encoder_heif.c` 123-191,
-  `encoder_jpeg.c` 161, `encoder_png.c` 44/63) and "encoder produced no output" (`encoder_jpeg.c` 179,
-  `encoder_png.c` 243, `encoder_jxl.c` 198, `encoder_heif.c` 228). Most need a codec that fails on valid input;
-  candidates for the allocation-failure harness once the vendor crashes are avoided.
+Phase 2, lane A (core, ICO/PNM/YUV, XML/EXIF, fonts):
 
-### Allocation failure
+6. `decoder_ico.c` `find_best_ico_entry()`: `(area << 16) | bit_count` wrapped for 256x256 entries, which never won.
+7. `xml_parser.c`: unbounded recursion on deeply nested XML (stack overflow); `IMG2_XML_MAX_DEPTH` = 256.
+8. `font_manager.c` `convert_utf16be_to_utf8()`: read one byte past an odd-length name.
+9. `font_manager.c`: name-record offset/length used without a bounds check (read up to 64 KiB past the file).
+10. `xml_parser.c`: `>` and other closing markers in character data failed the whole XMP packet.
+11. `exif_reader.c`: ExifIFD/GPS pointers followed recursively from every IFD (stack overflow on cycles) and 32-bit
+    offset arithmetic that wrapped near 4 GiB.
 
-Covered by `test_alloc_fail` for core, PNM/QOI/BMP/ICO/YUV, PNG/JPEG/WebP/JXL/GIF decoding, PNG/JPEG/WebP/JXL
-encoding, XML/EXIF/XMP and the font cache. Still open: TIFF and HEIF-encoder allocation paths (vendor crashes,
-see above), RAW, the HEIF/AVIF decoders (off-limits), `realloc` growth paths of the HEIF/JXL encoders' output
-buffers (`encoder_heif.c` 62-69, `encoder_jxl.c` 170).
+Phase 2, lane B (GIF, PNG, WebP, JPEG, TIFF, RAW, SVG):
 
-### Off-limits in phase 1
+12. `decoder_gif.c`: an extension without data sub-blocks swallowed the next record (valid GIFs failed).
+13. `decoder_gif.c`: `GifErrorString(0)` (NULL) printed with `%s`.
+14. `decoder_png.c`: libpng errors inside the APNG frame loop leaked every frame and buffer.
+15. `decoder_png.c`: XMP in iTXt chunks was never read.
+16. `decoder_png.c`: the hidden APNG default image was returned as frame 0.
+17. `decoder_jpeg.c`: libjpeg errors after the image allocation leaked the image and row buffer.
+18. `decoder_tiff.c`: heap overflow when `width * height` wrapped 32 bits.
+19. `decoder_nanosvg.c`: 1-byte heap overflow in the CSS class inliner.
+20. `decoder_nanosvg.c`: `</style>` before `<style>` made the CSS length negative.
+21. `decoder_raw.c`: grey / short bitmap previews over-read (3 bytes per pixel assumed).
+22. `decoder_raw.c`: monochrome full-processing output over-read.
+23. `decoder_raw.c`: double rotation in the full processing path.
+24. `decoder_raw.c`: the JPEG preview's metadata leaked.
 
-`decoders/decoder_heif.c` (172 lines, 111 branch outcomes missed) and `decoders/decoder_avif.c` (207 lines,
-129 branch outcomes missed) are being changed on `feature/split`; measured only.
+Phase 2, lane C (HEIF/AVIF/JXL, encoders):
 
-## Reviewed exclusions
+25. `encoder_png.c`: output buffer and row pointers leaked on every libpng error after output started (indeterminate
+    automatic after longjmp).
+26. `encoder_jpeg.c`: the `jpeg_mem_dest()` buffer and the row buffer leaked on every error (own destination
+    manager now).
+27. `decoder_jxl.c`: an unusable Exif box ended the metadata extraction before the XMP box was read.
+28. `decoder_heif.c` / `decoder_avif.c`: uninitialised XMP struct freed when only the EXIF allocation failed.
 
-Code that no input can reach. Each entry: location, why. These stay in the report (llvm-cov has no exclusion
-markers); they are the expected residue of a "100%" run.
+Phase 3:
 
-| Location | Reason |
-|---|---|
-| core/image.c:38-40 | `byte_count / 4 != pixel_count`: pixel_count <= IMG2_MAX_PIXELS, cannot overflow a 64-bit size_t (32-bit only). |
-| core/image.c:162-165, 171-174 | `new_height > max_h` / `new_width > max_w` after `fit_round_clamp(v, max)`, which already clamps to max. |
-| core/image.c:178-181 | `new_width == 0 \|\| new_height == 0`: `fit_round_clamp()` returns at least 1. |
-| core/image.c:225-227 | invalid filter in `scale_impl()`: `img2_scale*()` validate the filter first, the internal entry points pass IMG2_FILTER_DEFAULT. |
-| core/image.c:296-298 | `stride > SIZE_MAX / height`: stride is uint32_t and height <= 65536 (64-bit size_t). |
-| core/image.c:464-467, 504-507, 546-549, 586-589, 628-631 | `transform_*()` with NULL source: `img2_image_orient()` rejects NULL pixels first. |
-| core/image.c:739 | orientation `default:` after the 1..8 range check. |
-| core/init.c:52 (B52 false outcomes) | `img2_font_manager_init_lazy()` returning false needs another thread to build the cache between `font_lock_initialized()`'s check and the call (race only); `s_font_implicit_ref` set while `s_refs == 0` is impossible (the implicit reference is counted in `s_refs`). |
-| decoders/decoder.c:241-268 | dispatcher output validation (count, NULL frame, zero/oversized dimensions, NULL pixels): every registered decoder returns an error or frames from `img2_image_alloc()`. Defensive. |
-| decoders/decoder.h:83 (B83 true) | `img2_decode_fail(NULL, ...)`: every caller passes a status pointer. |
-| decoders/decoder_ico.c:439-442 | bit depth `default:`: `parse_bmp_header()` admits only 1/4/8/24/32. |
-| decoders/decoder_ico.c:477 (B477 `fr.count < 1`) | `img2_decode_png()` never returns IMG2_OK without a frame. |
-| decoders/decoder_ico.c:503, decoder_qoi.c:45, decoder_stb.c:45, decoder_pnm.c:479 (`frame_count == NULL`) | the static helpers are only called with a local counter. |
-| decoders/decoder_stb.c:62-66 | stb_image never returns pixels with width or height <= 0. |
-| decoders/decoder_pnm.c:129-131, 523-526, 536-539 | size_t overflow of width*height (<= 2^32), *channels (<= 4), *bps (<= 2): impossible with 64-bit size_t (32-bit only). |
-| decoders/decoder_yuv.c:106 (B106 `a == 0`) | strides are never 0 (minimal stride >= 1 is substituted). |
-| decoders/decoder_yuv.c:128 (B128:27) | the name table is lower case; only the user string can be upper case. |
-| decoders/decoder_yuv.c:174 (B174:19), 523, 526 (params/frame_count NULL) | internal callers always pass them. |
-| decoders/decoder_yuv.c:276 (B276:8/56 false) | `stride * (h - 1)` cannot overflow when `stride * h` did not. |
-| decoders/decoder_yuv.c:318 (B318 `s == NULL`) | `parse_field()` is only called with split fields. |
-| decoders/decoder_yuv.c:573-577 | format `default:` after `yuv_compute_layout()` accepted the format. |
-| decoders/magic.c:194, 199, 218, 226, 232, 267, 286, 304, 309, 329, 351, 359 (false outcomes of `len >= N`, N <= 8) | `img2_detect_mime()` returns early for `len < 8`. |
-| decoders/magic.c:154 (B154 `len < 12`) | `is_heif_j2k_ftyp()` is only called inside `if (len >= 12)`. |
-| encoders/encoder.c:84 (missing-encoder names JPEG..JXL) | configuration-specific: all encoders are built in the measured configuration. |
-| encoders/encoder.c:127-135 | encoder returned OK without output: every encoder checks this itself. Defensive. |
+29. `metadata/exif_reader.c` `img2_xmp_parse_xml()`: a later `dc:subject` (same packet, or a second XMP item of a
+    HEIF/AVIF still parsed into the same struct) overwrote `xmp->keywords` without freeing it (leak).
+    Red: `test_cov_p3_leak` `xmp_keywords:*` -> "expected 0, got 1" live blocks.
+30. `decoders/decoder_jxl.c` `jxl_find_box()`: scanned every byte for "Exif"/"xml ", so matching bytes inside the
+    codestream, another box or after a bare codestream became bogus EXIF/XMP. Now a box walker (32-bit size,
+    64-bit largesize, size 0 = to the end, stops at the first malformed header and after 4096 boxes; bare
+    codestreams have no boxes; `brob` boxes are not decompressed). Red: `test_cov_p3_jxl`
+    `bare_codestream_has_no_boxes`, `box_lookalikes_inside_another_box_are_ignored` -> "expected 0, got 1".
+    Golden unchanged.
+31. `text/font_manager.c`: stb_truetype does no range checking; a truncated / malformed font in a scanned font
+    directory made `stbtt_InitFont()` read past the file buffer. `sfnt_is_valid()` now checks the sfnt version,
+    the table directory and every table (64-bit offset + length) and the cmap/head/maxp minimum lengths before
+    both `stbtt_InitFont()` calls. Red: `test_cov_p3_font` (guard-page buffers): 6 fixtures SIGSEGV in
+    `stbtt__find_table` / `stbtt_InitFont_internal`, 3 invalid fonts (table past the end, 32-bit wrapping offset,
+    WOFF / collection signature) were accepted.
 
-Size: 25 entries.
+## Known limitations
 
-## Bugs found
+* Vendored code that crashes after an allocation failure (not ours to patch; these paths are not
+  failure-injected): nanosvg `nsvg__addPoint` (realloc without a NULL check), LibRaw's memory manager (memsets a
+  failed malloc in its constructor), jpeg-quantsmooth `upsample_row` (unchecked allocation), libtiff
+  `TIFFRGBAImageBegin` (NULL ExtraSamples array after `TIFFFetchNormalTag` ran out of memory), kvazaar (most of
+  its own allocation failures, e.g. `kvz_config_init(NULL)`).
+* libheif 1.23.7: `heif_track_encode_end_of_sequence()` does not clear the track's active encoder, so releasing
+  the encoder before `heif_context_write()` is a use-after-free (encoder side only; tests avoid it).
+* Multi-page TIFF has no total-pixel cap (200 pages of up to `IMG2_MAX_PIXELS` each); the public contract lists
+  the 2^30 total only for GIF/APNG/WebP/JXL/HEIF/AVIF.
+* RAW decoding always decodes JPEG previews with quantsmooth deblocking (ignores `jpeg_deblock`).
+* stb_truetype still trusts offsets inside tables (cmap subtables, loca/glyf, hmtx, kern, CFF) at glyph lookup
+  time; only the sfnt header, table directory and the tables `stbtt_InitFont()` reads are validated.
+* JXL: Brotli-compressed (`brob`) Exif/XMP boxes are not decompressed (no metadata from them).
+* `metadata/xml_parser.c` does not decode entities (`&amp;` etc. stay literal in XMP strings).
+* Excluded but reachable in principle (`RESOURCE-BOUND`): the running total-pixel check of HEIF/AVIF sequences
+  (needs > 2^30 decoded pixels, >= 4 GiB of frames in memory). Not proven unreachable: `decoder_raw.c:319` false
+  outcome (non-JPEG, non-bitmap previews exist only in Canon CR3 HEIF-capture files; no fixture can be built
+  in-test).
 
-Fixed (contained, covered by the new tests):
-
-1. `decoders/decoder_ico.c`: `image_offset + bytes_in_res` was computed in 32 bits; an entry size near 4 GiB
-   wrapped around the bounds check (heap over-read). Now size_t.
-2. `decoders/decoder_ico.c`: `palette_size * 4` was computed in 32 bits; a huge `clr_used` wrapped to a small
-   palette size and indexed far past the buffer (heap over-read). Now size_t (`ico.huge_palette_count_is_rejected`).
-3. `decoders/decoder_jpeg.c`: when the EXIF struct allocation failed but the XMP one succeeded, the
-   uninitialised XMP struct was passed to `img2_xmp_clear()` (free of garbage pointers).
-4. `text/font_manager.c`: a failed `strdup("[embedded]")` left an embedded entry without its marker path, so the
-   cleanup freed the static font data; a failed family `strdup` left NULL names for `strcasecmp()`; a failed
-   path `strdup` for a scanned font led to `fopen(NULL)`. Entries are now skipped on allocation failure
-   (`add_embedded_font()` replaces four copies of the block).
-5. `metadata/xml_parser.c`: a failed arena allocation of an element name, attribute array or attribute name
-   was stored as NULL and dereferenced later (`strcmp`, array write). Now a parse error.
-
-Not fixed (reported):
-
-* `decoders/decoder_ico.c` `find_best_ico_entry()`: the score `(area << 16) | bit_count` overflows uint32 for
-  256x256 entries (65536 << 16 == 2^32), so a 256x256 image is never preferred over smaller ones. Behaviour
-  change for real .ico files; left for review.
-* `metadata/xml_parser.c`: `parse_element()` recurses once per nesting level without a depth limit (stack
-  exhaustion on deeply nested XMP from a file).
-* `text/font_manager.c` `convert_utf16be_to_utf8()`: reads `utf16be[i + 1]` past the name-table string when
-  its byte length is odd.
-* Vendored code that crashes after an allocation failure (not ours to patch): jpeg-quantsmooth
-  (`quantsmooth.h` `upsample_row`, unchecked allocation), libtiff (`TIFFRGBAImageBegin` reads a NULL
-  ExtraSamples array after `TIFFFetchNormalTag` ran out of memory), libheif's kvazaar plugin
-  (`kvz_config_init(NULL)` after a failed `kvz_config_alloc()`).
-
-## Tests added in phase 1
+## Tests added
 
 | Test | Covers |
 |---|---|
-| `test_core_edges` | image/scale/validate/orient argument and limit paths, `img2_encode` / `img2_apply_orientation` / dispatcher edges, registries, log sanitising and `vsnprintf` failure, MIME detection of every signature, stb dimension limit. |
-| `test_decoder_edges` | ICO/CUR (every DIB depth, AND mask, palette bounds, malformed directories and headers, PNG payloads), QOI, PNM/PAM header variants and errors, YUV spec parsing and layout overflows. |
-| `test_alloc_fail` | allocation-failure injection (see above), Linux only. |
+| `test_core_edges` | image/scale/validate/orient argument and limit paths, dispatcher edges, registries, log sanitising, MIME detection, stb dimension limit (phase 1) |
+| `test_decoder_edges` | ICO/CUR, QOI, PNM/PAM, YUV edge cases (phase 1) |
+| `test_alloc_fail` | allocation-failure injection (phase 1) |
+| `test_cov_a_*` | lane A: ICO entry choice, XML (depth, character data, threads), EXIF/XMP (hostile IFDs, every tag), fonts (user font dirs, name tables), YUV, core, allocation failures, strdup failure |
+| `test_cov_b_*` | lane B: GIF composition/disposal/errors, APNG and PNG metadata, WebP metadata/animation, JPEG errors (+ many clean decodes), multi-page/BigTIFF, SVG sizing/CSS, in-test DNGs, allocation failures |
+| `test_cov_c_*` | lane C: HEIF/AVIF stills, lists and sequences built in-test with the 'unci' codec, JXL limits/timing/container boxes, encoder clamps and failures, allocation failures and leak checks |
+| `test_cov_p3_leak` | phase 3: XMP keyword replacement without leaks (live-block counter) |
+| `test_cov_p3_jxl` | phase 3: JXL container box walk (lookalikes, bare codestream, largesize, size 0, malformed headers, box cap, brob) |
+| `test_cov_p3_font` | phase 3: sfnt validation (guard-page font buffers; truncated directory, tables past the end, short cmap/head/maxp, 32-bit wrap, versions) |
+| `test_cov_p3_gaps` | phase 3: GIF with a 0x0 logical screen and two frames (decoder.h total check with a zero-area canvas) |
