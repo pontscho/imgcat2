@@ -618,8 +618,8 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **
 	if (jxl_find_box(data, len, "Exif", &exif_data, &exif_size) == 0) {
 		// Exif box often has a 4-byte offset prefix before TIFF data
 		// Check if data starts with TIFF magic, if not skip 4 bytes
-		const uint8_t *tiff_data = exif_data;
-		size_t tiff_size = exif_size;
+		const uint8_t *tiff_data = NULL;
+		size_t tiff_size = 0;
 
 		// Check for TIFF magic at offset 0
 		if (exif_size >= 4 && (exif_data[0] == 'I' || exif_data[0] == 'M')) {
@@ -630,13 +630,11 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **
 			// TIFF header is at offset 4, skip the 4-byte prefix
 			tiff_data = exif_data + 4;
 			tiff_size = exif_size - 4;
-		} else {
-			// Invalid EXIF data
-			return;
 		}
+		// else: invalid EXIF data (no EXIF; the XMP box is still read below)
 
 		// Parse EXIF data
-		img2_exif_t *exif = malloc(sizeof(img2_exif_t));
+		img2_exif_t *exif = tiff_data != NULL ? malloc(sizeof(img2_exif_t)) : NULL;
 		if (exif != NULL) {
 			img2_exif_init(exif);
 			// Call img2_exif_parse_tiff with raw TIFF data
