@@ -36,6 +36,10 @@
 #define TAG_EXPOSURE_TIME      0x829A
 #define TAG_F_NUMBER           0x829D
 #define TAG_ISO_SPEED          0x8827
+#define TAG_SENSITIVITY_TYPE   0x8830 /* EXIF 2.3: which of the three LONG tags below hold the ISO */
+#define TAG_SOS                0x8831 /* StandardOutputSensitivity */
+#define TAG_REI                0x8832 /* RecommendedExposureIndex */
+#define TAG_ISO_SPEED_LONG     0x8833 /* ISOSpeed */
 #define TAG_DATETIME_ORIGINAL  0x9003
 #define TAG_DATETIME_DIGITIZED 0x9004
 #define TAG_SHUTTER_SPEED      0x9201
@@ -201,7 +205,74 @@ typedef struct {
 	byte_order_t byte_order;
 	bool exif_ifd_done; /* IFD0's ExifIFD pointer followed (at most once) */
 	bool gps_ifd_done; /* IFD0's GPS IFD pointer followed (at most once) */
+	/* ISO sources, combined by resolve_iso() after the walk */
+	bool iso_short_seen; /* ISOSpeedRatings (SHORT) read */
+	uint16_t iso_short; /* its value; 65535 means "65535 or more, see the LONG tags" */
+	uint16_t sensitivity_type; /* SensitivityType; 0 (Unknown) when absent */
+	uint32_t sos, rei, iso_long; /* StandardOutputSensitivity, RecommendedExposureIndex, ISOSpeed; 0 = absent */
 } tiff_context_t;
+
+/* the LONG ISO tags SensitivityType permits (EXIF 2.3 table) */
+#define ISO_SOS  1u
+#define ISO_REI  2u
+#define ISO_LONG 4u
+
+static const uint8_t k_sensitivity_tags[8] = {
+	ISO_LONG | ISO_REI | ISO_SOS, /* 0: Unknown (or absent): any of them */
+	ISO_SOS,                      /* 1: SOS */
+	ISO_REI,                      /* 2: REI */
+	ISO_LONG,                     /* 3: ISO speed */
+	ISO_SOS | ISO_REI,            /* 4: SOS and REI */
+	ISO_SOS | ISO_LONG,           /* 5: SOS and ISO speed */
+	ISO_REI | ISO_LONG,           /* 6: REI and ISO speed */
+	ISO_LONG | ISO_REI | ISO_SOS, /* 7: all three */
+};
+
+/**
+ * @brief Record a LONG ISO tag (a value of 0 is ignored: it never overrides)
+ */
+static void store_iso_long(tiff_context_t *ctx, uint16_t tag, uint32_t value)
+{
+	if (value == 0) {
+		return;
+	}
+	if (tag == TAG_SOS) {
+		ctx->sos = value;
+	} else if (tag == TAG_REI) {
+		ctx->rei = value;
+	} else {
+		ctx->iso_long = value;
+	}
+}
+
+/**
+ * @brief Combine the ISO tags (EXIF 2.3)
+ *
+ * ISOSpeedRatings is a SHORT: when it is absent or 65535 ("see the other tags"), the LONG tag SensitivityType
+ * selects is used, ISOSpeed first, then RecommendedExposureIndex, then StandardOutputSensitivity. Without a valid
+ * SensitivityType (absent, 0 = Unknown, or above 7) the first present of the three in that order is taken.
+ */
+static void resolve_iso(const tiff_context_t *ctx, img2_exif_t *exif)
+{
+	if (ctx->iso_short_seen && ctx->iso_short != 65535) {
+		return;
+	}
+	unsigned allowed = k_sensitivity_tags[ctx->sensitivity_type <= 7 ? ctx->sensitivity_type : 0];
+	uint32_t value = 0;
+	if (allowed & ISO_LONG) {
+		value = ctx->iso_long;
+	}
+	if (value == 0 && (allowed & ISO_REI)) {
+		value = ctx->rei;
+	}
+	if (value == 0 && (allowed & ISO_SOS)) {
+		value = ctx->sos;
+	}
+	if (value != 0) {
+		exif->iso_speed = value;
+		exif->has_iso = true;
+	}
+}
 
 /**
  * @brief Parse IFD entry and populate EXIF info
@@ -285,6 +356,22 @@ static void parse_ifd_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag
 				if (type == TYPE_SHORT) {
 					exif->iso_speed = read_u16(data_ptr, order);
 					exif->has_iso = true;
+					ctx->iso_short_seen = true;
+					ctx->iso_short = read_u16(data_ptr, order);
+				}
+				break;
+
+			case TAG_SENSITIVITY_TYPE:
+				if (type == TYPE_SHORT && count >= 1) {
+					ctx->sensitivity_type = read_u16(data_ptr, order);
+				}
+				break;
+
+			case TAG_SOS:
+			case TAG_REI:
+			case TAG_ISO_SPEED_LONG:
+				if (type == TYPE_LONG && count == 1) {
+					store_iso_long(ctx, tag, read_u32(data_ptr, order));
 				}
 				break;
 
@@ -452,6 +539,15 @@ static void parse_ifd_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag
 		case TAG_FOCAL_LENGTH_35MM:
 			if (type == TYPE_SHORT) {
 				exif->focal_length_35mm = read_u16(data_ptr, order);
+			}
+			break;
+
+		case TAG_SOS:
+		case TAG_REI:
+		case TAG_ISO_SPEED_LONG:
+			/* count > 1 (a single LONG is inline): the first value, inside the bounds checked above */
+			if (type == TYPE_LONG) {
+				store_iso_long(ctx, tag, read_u32(data_ptr, order));
 			}
 			break;
 
@@ -682,9 +778,14 @@ img2_status_t img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, 
 	ctx.byte_order = byte_order;
 	ctx.exif_ifd_done = false;
 	ctx.gps_ifd_done = false;
+	ctx.iso_short_seen = false;
+	ctx.iso_short = 0;
+	ctx.sensitivity_type = 0;
+	ctx.sos = ctx.rei = ctx.iso_long = 0;
 
 	/* Call parse_ifd() for IFD0 */
 	parse_ifd(&ctx, exif, ifd0_offset, false, true);
+	resolve_iso(&ctx, exif);
 
 	return IMG2_OK;
 }

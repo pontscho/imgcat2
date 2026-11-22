@@ -3,6 +3,7 @@
  * @brief Image metadata output formatting implementation
  */
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -79,7 +80,7 @@ void output_exif_text(const struct img2_exif *exif)
 			printf("  Aperture: f/%.1f\n", exif->f_number);
 		}
 		if (exif->has_iso) {
-			printf("  ISO: %u\n", exif->iso_speed);
+			printf("  ISO: %" PRIu32 "\n", exif->iso_speed);
 		}
 		if (exif->exposure_bias != 0.0) {
 			printf("  Exposure Compensation: %+.1f EV\n", exif->exposure_bias);
@@ -327,7 +328,7 @@ void output_exif_json(const struct img2_exif *exif, bool first)
 			if (!first_exp) {
 				printf(",");
 			}
-			printf("\"iso\":%u", exif->iso_speed);
+			printf("\"iso\":%" PRIu32, exif->iso_speed);
 			first_exp = false;
 		}
 		if (exif->exposure_bias != 0.0) {

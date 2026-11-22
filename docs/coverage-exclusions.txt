@@ -1304,13 +1304,13 @@ metadata/xml_parser.c:537 branch-false 8 = if (text_len > 0) {
 
 # ===== metadata/exif_reader.c =====
 reason: both callers (img2_exif_parse_jpeg, img2_xmp_parse_jpeg) return IMG2_E_ARG for NULL data first
-metadata/exif_reader.c:126 branch-true 6 = if (!jpeg_data || len < 4) {
+metadata/exif_reader.c:130 branch-true 6 = if (!jpeg_data || len < 4) {
 reason: a successful img2_xml_document_parse() always attaches the root element
-metadata/exif_reader.c:733 region 13 = if (!root) {
-metadata/exif_reader.c:733 branch-true 6 = if (!root) {
-metadata/exif_reader.c:734 line = img2_xml_document_destroy(doc);
-metadata/exif_reader.c:735 line = return IMG2_E_FORMAT;
-metadata/exif_reader.c:736 line = }
+metadata/exif_reader.c:834 region 13 = if (!root) {
+metadata/exif_reader.c:834 branch-true 6 = if (!root) {
+metadata/exif_reader.c:835 line = img2_xml_document_destroy(doc);
+metadata/exif_reader.c:836 line = return IMG2_E_FORMAT;
+metadata/exif_reader.c:837 line = }
 
 # ===== text/font_manager.c =====
 reason: extract_family_name() is only called with d_name, which never contains '/'

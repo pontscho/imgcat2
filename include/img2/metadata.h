@@ -31,7 +31,7 @@ struct img2_exif {
 	/* Exposure settings */
 	double exposure_time; /**< Exposure time in seconds */
 	double f_number; /**< F-number (aperture) */
-	uint16_t iso_speed; /**< ISO speed rating */
+	uint32_t iso_speed; /**< ISO speed (ISOSpeedRatings, or the EXIF 2.3 LONG sensitivity tags above 65535) */
 	double shutter_speed; /**< Shutter speed value (APEX) */
 	double aperture_value; /**< Aperture value (APEX) */
 	double brightness_value; /**< Brightness value (APEX) */
