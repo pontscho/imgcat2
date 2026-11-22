@@ -246,6 +246,106 @@ CTEST(anim_timing, gif_is_animated_record_walk)
 	ASSERT_FALSE(img2_is_animated(buf, len - 16));
 }
 
+/*
+ * Synthetic timed GIF: 4 x 3 screen, 2-colour global table, frame_count 1x1 frames, each preceded by a
+ * graphics control extension (21 F9 04 00 <delay_cs le> 00 00). A NETSCAPE2.0 block with loop count
+ * `loop` is written right before frame `netscape_before` (-1 = none). Frames with index >= bad_from
+ * (-1 = none) get undefined LZW codes (decoding them fails). Returns the length (0 if cap is too small).
+ */
+#define GIF_TIMED_FRAME_BYTES 23u
+static size_t build_gif_timed(uint8_t *buf, size_t cap, int frame_count, uint16_t delay_cs, int netscape_before, uint16_t loop, int bad_from)
+{
+	static const uint8_t frame[] = { 0x2C, 0, 0, 0, 0, 1, 0, 1, 0, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00 };
+	size_t n = build_gif(buf, cap, 4, 3, 0);
+	if (n == 0 || cap < n + 19 + GIF_TIMED_FRAME_BYTES * (size_t)frame_count) {
+		return 0;
+	}
+	n--; /* drop the trailer */
+	for (int i = 0; i < frame_count; i++) {
+		if (i == netscape_before) {
+			static const uint8_t app[] = { 0x21, 0xFF, 0x0B, 'N', 'E', 'T', 'S', 'C', 'A', 'P', 'E', '2', '.', '0', 0x03, 0x01 };
+			memcpy(buf + n, app, sizeof(app));
+			n += sizeof(app);
+			buf[n++] = (uint8_t)(loop & 0xFF);
+			buf[n++] = (uint8_t)(loop >> 8);
+			buf[n++] = 0x00;
+		}
+		const uint8_t gce[] = { 0x21, 0xF9, 0x04, 0x00, (uint8_t)(delay_cs & 0xFF), (uint8_t)(delay_cs >> 8), 0x00, 0x00 };
+		memcpy(buf + n, gce, sizeof(gce));
+		n += sizeof(gce);
+		memcpy(buf + n, frame, sizeof(frame));
+		if (bad_from >= 0 && i >= bad_from) {
+			buf[n + 12] = 0xFF;
+			buf[n + 13] = 0xFF;
+		}
+		n += sizeof(frame);
+	}
+	buf[n++] = 0x3B;
+	return n;
+}
+
+CTEST(anim_timing, gif_frame_cap_keeps_200_frames)
+{
+	if (!img2_can_decode(IMG2_MIME_GIF)) {
+		return; /* skipped: GIF decoder not built */
+	}
+	/* [F16] 260 frames of 70 ms -> exactly 200 frames; the NETSCAPE2.0 block sits before frame 250,
+	 * past the cap, and still sets the loop count (the record walk covers the whole file) */
+	size_t cap = 20 + 19 + GIF_TIMED_FRAME_BYTES * 260;
+	uint8_t *buf = malloc(cap);
+	ASSERT_NOT_NULL(buf);
+	size_t len = build_gif_timed(buf, cap, 260, 7, 250, 3, -1);
+	ASSERT_TRUE(len > 0);
+	check_timing(buf, len, 200, 70u, 3);
+
+	/* same without NETSCAPE2.0 -> plays once */
+	len = build_gif_timed(buf, cap, 260, 7, -1, 0, -1);
+	ASSERT_TRUE(len > 0);
+	check_timing(buf, len, 200, 70u, 1);
+	free(buf);
+}
+
+CTEST(anim_timing, gif_decode_stops_at_frame_cap)
+{
+	if (!img2_can_decode(IMG2_MIME_GIF)) {
+		return; /* skipped: GIF decoder not built */
+	}
+	size_t cap = 20 + 19 + GIF_TIMED_FRAME_BYTES * 260;
+	uint8_t *buf = malloc(cap);
+	ASSERT_NOT_NULL(buf);
+	img2_frames_t fr;
+
+	/* [F16] frames 201..260 hold undefined LZW codes: they are never decoded, so the decode succeeds */
+	size_t len = build_gif_timed(buf, cap, 260, 5, 0, 0, 200);
+	ASSERT_TRUE(len > 0);
+	check_timing(buf, len, 200, 50u, 0);
+
+	/* the same defect before the cap still fails the decode (no partial result) */
+	len = build_gif_timed(buf, cap, 260, 5, 0, 0, 150);
+	ASSERT_TRUE(len > 0);
+	ASSERT_EQUAL(IMG2_E_CODEC, img2_decode(buf, len, NULL, &fr));
+	ASSERT_NULL(fr.frames);
+	ASSERT_EQUAL(0, fr.count);
+
+	/* truncated in the middle of the 202nd frame's raster: never read -> 200 frames */
+	len = build_gif_timed(buf, cap, 260, 5, 0, 0, -1);
+	ASSERT_TRUE(len > 0);
+	/* 19 bytes header + colour table, 19 bytes NETSCAPE2.0 (before frame 0), then 23 bytes per frame */
+	size_t frame202 = 19 + 19 + GIF_TIMED_FRAME_BYTES * 201; /* start of the 202nd frame's GCE */
+	ASSERT_EQUAL(0x21, buf[frame202]);
+	ASSERT_EQUAL(0x2C, buf[frame202 + 8]);
+	check_timing(buf, frame202 + 8 + 12, 200, 50u, 0);
+
+	/* garbage (not a record introducer) after 201 frames -> 200 frames */
+	memset(buf + frame202, 0xAB, len - frame202);
+	check_timing(buf, len, 200, 50u, 0);
+
+	/* truncated before the cap (inside the 6th frame) still fails */
+	ASSERT_EQUAL(IMG2_E_CODEC, img2_decode(buf, 19 + 19 + GIF_TIMED_FRAME_BYTES * 5 + 8 + 12, NULL, &fr));
+	ASSERT_NULL(fr.frames);
+	free(buf);
+}
+
 CTEST(anim_timing, max_frames_keeps_loop_count)
 {
 	if (!img2_can_decode(IMG2_MIME_GIF)) {

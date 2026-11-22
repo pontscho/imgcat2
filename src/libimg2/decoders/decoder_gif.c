@@ -7,6 +7,7 @@
  */
 
 /* clang-format off */
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -139,47 +140,26 @@ static void frame_composition(img2_image_t *accumulator, const GifByteType *rast
 }
 
 /**
- * @brief Find the NETSCAPE2.0 loop count in one extension block list
+ * @brief Track the NETSCAPE2.0 loop count over the extension blocks of a record walk
  *
- * @param blocks Extension blocks (giflib DGifSlurp output)
- * @param count Number of blocks
- * @param loop_out Output: 16-bit loop count (0 = forever)
- * @return true if a NETSCAPE2.0 looping sub-block was found
+ * Same rule as scanning DGifSlurp's per-image extension block lists in file order: a block
+ * (Function APPLICATION_EXT_FUNC_CODE, >= 11 bytes, "NETSCAPE2.0") directly followed, in the same
+ * list, by a block with Function CONTINUE_EXT_FUNC_CODE, >= 3 bytes and Bytes[0] == 1; the first
+ * match in file order wins. A list ends at each image descriptor (the caller resets *prev_app).
+ *
+ * @param function Block function (extension code for the first block, CONTINUE_EXT_FUNC_CODE after)
+ * @param ext giflib extension buffer (ext[0] = byte count, data from ext[1])
+ * @param prev_app In/out: the previous block of the current list was a NETSCAPE2.0 application block
+ * @param loop_out In/out: -1 until found, then the 16-bit loop count (0 = forever)
  */
-static bool gif_find_netscape_loop(const ExtensionBlock *blocks, int count, int *loop_out)
+static void gif_track_netscape_loop(int function, const GifByteType *ext, bool *prev_app, int *loop_out)
 {
-	if (blocks == NULL) {
-		return false;
+	int count = ext[0];
+	const GifByteType *bytes = &ext[1];
+	if (*prev_app && *loop_out < 0 && function == CONTINUE_EXT_FUNC_CODE && count >= 3 && bytes[0] == 1) {
+		*loop_out = (int)bytes[1] | ((int)bytes[2] << 8);
 	}
-	for (int i = 0; i + 1 < count; i++) {
-		const ExtensionBlock *app = &blocks[i];
-		if (app->Function != APPLICATION_EXT_FUNC_CODE || app->ByteCount < 11 || app->Bytes == NULL || memcmp(app->Bytes, "NETSCAPE2.0", 11) != 0) {
-			continue;
-		}
-		const ExtensionBlock *sub = &blocks[i + 1];
-		if (sub->Function == CONTINUE_EXT_FUNC_CODE && sub->ByteCount >= 3 && sub->Bytes != NULL && sub->Bytes[0] == 1) {
-			*loop_out = (int)sub->Bytes[1] | ((int)sub->Bytes[2] << 8);
-			return true;
-		}
-	}
-	return false;
-}
-
-/**
- * @brief GIF loop count: NETSCAPE2.0 count (0 = forever), 1 without the extension
- */
-static int gif_loop_count(const GifFileType *gif)
-{
-	int loop = 0;
-	for (int i = 0; i < gif->ImageCount; i++) {
-		if (gif_find_netscape_loop(gif->SavedImages[i].ExtensionBlocks, gif->SavedImages[i].ExtensionBlockCount, &loop)) {
-			return loop;
-		}
-	}
-	if (gif_find_netscape_loop(gif->ExtensionBlocks, gif->ExtensionBlockCount, &loop)) {
-		return loop;
-	}
-	return 1;
+	*prev_app = function == APPLICATION_EXT_FUNC_CODE && count >= 11 && memcmp(bytes, "NETSCAPE2.0", 11) == 0;
 }
 
 /**
@@ -194,12 +174,13 @@ static int gif_loop_count(const GifFileType *gif)
  * @param stop_after Stop as soon as this many image descriptors were seen (0 = walk to the trailer)
  * @param screen_width Output: logical screen width (may be NULL)
  * @param screen_height Output: logical screen height (may be NULL)
- * @param image_count Output: number of image descriptors seen
+ * @param image_count Output: number of image descriptors seen (also valid after a walk error)
+ * @param loop_out Output: NETSCAPE2.0 loop count of the records walked, -1 if none (may be NULL)
  * @param error_code Output: giflib error code on failure
  * @return 0 on success (also when stopped early), -1 if DGifOpen failed, -2 on a giflib error while
  *         walking (a walk to the trailer without any image is an error: D_GIF_ERR_NO_IMAG_DSCR, as in DGifSlurp)
  */
-static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uint32_t *screen_width, uint32_t *screen_height, int *image_count, int *error_code)
+static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uint32_t *screen_width, uint32_t *screen_height, int *image_count, int *loop_out, int *error_code)
 {
 	gif_mem_reader reader;
 	reader.data = data;
@@ -207,6 +188,9 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 	reader.offset = 0;
 
 	*image_count = 0;
+	if (loop_out != NULL) {
+		*loop_out = -1;
+	}
 	GifFileType *gif = DGifOpen(&reader, gif_read_func, error_code);
 	if (gif == NULL) {
 		return -1;
@@ -219,6 +203,7 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 	}
 
 	bool ok = true;
+	bool prev_app = false;
 	GifRecordType record_type = UNDEFINED_RECORD_TYPE;
 	do {
 		if (DGifGetRecordType(gif, &record_type) == GIF_ERROR) {
@@ -234,6 +219,7 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 				break;
 			}
 			(*image_count)++;
+			prev_app = false; /* the extension block list of this image ends here */
 			if (stop_after > 0 && *image_count >= stop_after) {
 				break;
 			}
@@ -255,7 +241,12 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 				ok = false;
 				break;
 			}
+			int function = ext_code;
 			while (ext != NULL) {
+				if (loop_out != NULL) {
+					gif_track_netscape_loop(function, ext, &prev_app, loop_out);
+				}
+				function = CONTINUE_EXT_FUNC_CODE;
 				if (DGifGetExtensionNext(gif, &ext) == GIF_ERROR) {
 					ok = false;
 					break;
@@ -274,6 +265,98 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 	int close_error;
 	DGifCloseFile(gif, &close_error);
 	return ok ? 0 : -2;
+}
+
+/**
+ * @brief DGifSlurp that stops after max_images complete images [F16]
+ *
+ * Same record loop as giflib's DGifSlurp (giflib 6.1): image descriptors get their raster
+ * LZW-decoded into SavedImages[i].RasterBits (four passes for interlaced images), extension
+ * blocks are collected with GifAddExtensionBlock and handed to the following image, so
+ * DGifSavedExtensionToGCB works unchanged. Once max_images images are stored it returns
+ * without reading any further record, so images beyond the cap are never decoded (or read).
+ * On error the partially filled image stays in SavedImages; DGifCloseFile frees it.
+ *
+ * @param gif Opened giflib handle
+ * @param max_images Stop after this many images (> 0)
+ * @return GIF_OK or GIF_ERROR (gif->Error set where giflib sets it)
+ */
+static int gif_slurp_capped(GifFileType *gif, int max_images)
+{
+	GifRecordType record_type;
+
+	gif->ExtensionBlocks = NULL;
+	gif->ExtensionBlockCount = 0;
+
+	do {
+		if (DGifGetRecordType(gif, &record_type) == GIF_ERROR) {
+			return GIF_ERROR;
+		}
+
+		if (record_type == IMAGE_DESC_RECORD_TYPE) {
+			if (DGifGetImageDesc(gif) == GIF_ERROR) {
+				return GIF_ERROR;
+			}
+			SavedImage *sp = &gif->SavedImages[gif->ImageCount - 1];
+			int width = sp->ImageDesc.Width;
+			int height = sp->ImageDesc.Height;
+			if (width <= 0 || height <= 0 || width > (INT_MAX / height)) {
+				return GIF_ERROR;
+			}
+			sp->RasterBits = (GifByteType *)malloc((size_t)width * (size_t)height * sizeof(GifPixelType));
+			if (sp->RasterBits == NULL) {
+				return GIF_ERROR;
+			}
+			if (sp->ImageDesc.Interlace) {
+				const int interlaced_offset[] = { 0, 4, 2, 1 };
+				const int interlaced_jumps[] = { 8, 8, 4, 2 };
+				for (int pass = 0; pass < 4; pass++) {
+					for (int row = interlaced_offset[pass]; row < height; row += interlaced_jumps[pass]) {
+						if (DGifGetLine(gif, sp->RasterBits + (size_t)row * (size_t)width, width) == GIF_ERROR) {
+							return GIF_ERROR;
+						}
+					}
+				}
+			} else if (DGifGetLine(gif, sp->RasterBits, width * height) == GIF_ERROR) {
+				return GIF_ERROR;
+			}
+			if (gif->ExtensionBlocks != NULL) {
+				sp->ExtensionBlocks = gif->ExtensionBlocks;
+				sp->ExtensionBlockCount = gif->ExtensionBlockCount;
+				gif->ExtensionBlocks = NULL;
+				gif->ExtensionBlockCount = 0;
+			}
+			if (gif->ImageCount >= max_images) {
+				return GIF_OK; /* frame cap reached: the rest of the file is not read */
+			}
+		} else if (record_type == EXTENSION_RECORD_TYPE) {
+			int ext_function;
+			GifByteType *ext_data = NULL;
+			if (DGifGetExtension(gif, &ext_function, &ext_data) == GIF_ERROR) {
+				return GIF_ERROR;
+			}
+			if (ext_data != NULL && GifAddExtensionBlock(&gif->ExtensionBlockCount, &gif->ExtensionBlocks, ext_function, ext_data[0], &ext_data[1]) == GIF_ERROR) {
+				return GIF_ERROR;
+			}
+			for (;;) {
+				if (DGifGetExtensionNext(gif, &ext_data) == GIF_ERROR) {
+					return GIF_ERROR;
+				}
+				if (ext_data == NULL) {
+					break;
+				}
+				if (GifAddExtensionBlock(&gif->ExtensionBlockCount, &gif->ExtensionBlocks, CONTINUE_EXT_FUNC_CODE, ext_data[0], &ext_data[1]) == GIF_ERROR) {
+					return GIF_ERROR;
+				}
+			}
+		}
+	} while (record_type != TERMINATE_RECORD_TYPE);
+
+	if (gif->ImageCount == 0) {
+		gif->Error = D_GIF_ERR_NO_IMAG_DSCR;
+		return GIF_ERROR;
+	}
+	return GIF_OK;
 }
 
 /**
@@ -305,21 +388,25 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 	*frame_count = 0;
 	*loop_count = 0;
 
-	// [F16] count and validate before DGifSlurp LZW-decodes every raster
+	// [F16] count and validate before any raster is LZW-decoded
 	int error_code;
+	int total_images = 0; /* image descriptors in the file (walk) */
+	int walk_loop = -1;   /* NETSCAPE2.0 loop count over the whole walk, -1 = none */
 	{
 		uint32_t screen_width = 0;
 		uint32_t screen_height = 0;
-		int walk_frames = 0;
-		int walk = gif_walk_records(data, len, 0, &screen_width, &screen_height, &walk_frames, &error_code);
+		int walk = gif_walk_records(data, len, 0, &screen_width, &screen_height, &total_images, &walk_loop, &error_code);
 		if (walk == -1) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to open GIF: %s", GifErrorString(error_code));
 			return img2_decode_fail(st, IMG2_E_CODEC);
 		}
-		if (walk != 0) {
+		/* A defect after the first MAX_GIF_FRAMES + 1 image descriptors is beyond the frame cap:
+		 * the capped decode below never reads that far, so it is not an error */
+		if (walk != 0 && total_images <= MAX_GIF_FRAMES) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to read GIF structure: %s", GifErrorString(error_code));
 			return img2_decode_fail(st, IMG2_E_CODEC);
 		}
+		int walk_frames = total_images;
 		if (walk_frames > MAX_GIF_FRAMES) {
 			walk_frames = MAX_GIF_FRAMES; // capped below with a warning, as before
 		}
@@ -346,8 +433,8 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
-	// Read GIF structure
-	if (DGifSlurp(gif) != GIF_OK) {
+	// Read GIF structure, decoding at most MAX_GIF_FRAMES images [F16]
+	if (gif_slurp_capped(gif, MAX_GIF_FRAMES) != GIF_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to read GIF structure: %s", GifErrorString(gif->Error));
 		DGifCloseFile(gif, &error_code);
 		return img2_decode_fail(st, IMG2_E_CODEC);
@@ -361,9 +448,11 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
+	if (total_images > MAX_GIF_FRAMES) {
+		img2_log(IMG2_LOG_WARN, "Warning: GIF has %d frames, limiting to %d", total_images, MAX_GIF_FRAMES);
+	}
 	if (num_frames > MAX_GIF_FRAMES) {
-		img2_log(IMG2_LOG_WARN, "Warning: GIF has %d frames, limiting to %d", num_frames, MAX_GIF_FRAMES);
-		num_frames = MAX_GIF_FRAMES;
+		num_frames = MAX_GIF_FRAMES; /* not reached: gif_slurp_capped stops at the cap */
 	}
 
 	// Get canvas dimensions (screen width/height)
@@ -516,7 +605,8 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 		img2_image_destroy(previous);
 	}
 	if (num_frames > 1) {
-		*loop_count = gif_loop_count(gif);
+		/* NETSCAPE2.0 from the whole file (also past the frame cap), as with DGifSlurp; 1 without it */
+		*loop_count = (walk_loop >= 0) ? walk_loop : 1;
 	}
 	DGifCloseFile(gif, &error_code);
 
@@ -564,7 +654,7 @@ bool img2_gif_is_animated(const uint8_t *data, size_t size)
 	/* Record walk only: raster data is skipped, not LZW-decoded; stop at the 2nd image descriptor */
 	int error_code = 0;
 	int image_count = 0;
-	if (gif_walk_records(data, size, 2, NULL, NULL, &image_count, &error_code) != 0) {
+	if (gif_walk_records(data, size, 2, NULL, NULL, &image_count, NULL, &error_code) != 0) {
 		return false;
 	}
 

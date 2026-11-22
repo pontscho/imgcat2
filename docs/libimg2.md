@@ -367,8 +367,9 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   their 200-frame cap. Other multi-frame decoders (TIFF pages, HEIF/AVIF image lists, JXL) have no total cap.
 - **[F16]** GIF: before giflib decodes anything, the records are walked without LZW-decoding the rasters to
   count the frames and check the logical screen (`IMG2_E_LIMIT`) and the total above; `img2_is_animated`
-  on a GIF only walks the records up to the second image descriptor. Beyond 200 frames the GIF decode still
-  decodes every raster before the cap trims the result.
+  on a GIF only walks the records up to the second image descriptor. The GIF decode then reads the records
+  one by one and stops after the 200th image: later rasters are never LZW-decoded, and a defect after the
+  201st image descriptor (corrupt or truncated data past the cap) no longer fails the decode.
 - **[SM2]** Every entry point that takes a caller-built `img2_image_t`/`img2_frames_t` (`img2_scale`,
   `img2_scale_fit`, `img2_encode`, `img2_apply_orientation`) validates it first: non-NULL pixels, non-zero
   dimensions within the limits, `stride == width * 4` (1.0 accepts packed rows only), frame count >= 1 and
