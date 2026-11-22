@@ -1,6 +1,6 @@
 # imgcat2 command line tool: imgcat2_cli (everything but main.c; also linked by the CLI tests) + imgcat2
 
-set(_cli_src cli.c pipeline.c metadata.c base64.c ansi/ansi.c ansi/escape.c terminal/file.c)
+set(_cli_src cli.c pipeline.c metadata.c safe_text.c base64.c ansi/ansi.c ansi/escape.c terminal/file.c)
 if(WIN32)
 	list(APPEND _cli_src terminal/terminal_windows.c)
 else()

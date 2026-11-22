@@ -302,6 +302,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	endif()
 endif()
 # CLI: [P11] EXIF orientation outside 1..8 in the "Applying EXIF orientation" line; [P20] iTerm2 size line
-# when the re-encoded image is larger
+# when the re-encoded image is larger; [P38/P39] control characters of EXIF / XMP text and paths escaped
 img2_add_test(test_sec_fix_cli SOURCES unit/test_sec_fix_cli.c LINK cli REQUIRES EXIF_READER)
 # --- sec-fix end ---

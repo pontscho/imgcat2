@@ -23,6 +23,7 @@
 #include "terminal/terminal.h"
 #include "cli.h"
 #include "pipeline.h"
+#include "safe_text.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -83,17 +84,19 @@ static bool validate_path_safe(const char *path, char *canonical_out)
 		return false;
 	}
 
+	char safe[CLI_SAFE_PATH_SIZE]; /* [P39] the path with control characters escaped, for messages */
 #ifdef _WIN32
 	// Windows: GetFullPathName
 	DWORD result = GetFullPathName(path, PATH_MAX, canonical_out, NULL);
 	if (result == 0 || result >= PATH_MAX) {
-		fprintf(stderr, "Error: Failed to resolve path: %s\n", path);
+		fprintf(stderr, "Error: Failed to resolve path: %s\n", cli_safe_str(path, safe, sizeof(safe)));
 		return false;
 	}
 #else
 	// Unix: realpath
 	if (realpath(path, canonical_out) == NULL) {
-		fprintf(stderr, "Error: Failed to resolve path '%s': %s\n", path, strerror(errno));
+		const int err = errno;
+		fprintf(stderr, "Error: Failed to resolve path '%s': %s\n", cli_safe_str(path, safe, sizeof(safe)), strerror(err));
 		return false;
 	}
 #endif
@@ -145,33 +148,36 @@ bool read_file_secure(const char *path, uint8_t **out_data, size_t *out_size)
 	}
 
 	// Get file size with stat
+	char safe[CLI_SAFE_PATH_SIZE]; /* [P39] the path with control characters escaped, for messages */
 	struct stat st;
 	if (stat(canonical_path, &st) != 0) {
-		fprintf(stderr, "Error: Cannot stat file '%s': %s\n", canonical_path, strerror(errno));
+		const int err = errno;
+		fprintf(stderr, "Error: Cannot stat file '%s': %s\n", cli_safe_str(canonical_path, safe, sizeof(safe)), strerror(err));
 		return false;
 	}
 
 	// Check if regular file
 	if (!S_ISREG(st.st_mode)) {
-		fprintf(stderr, "Error: Not a regular file: %s\n", canonical_path);
+		fprintf(stderr, "Error: Not a regular file: %s\n", cli_safe_str(canonical_path, safe, sizeof(safe)));
 		return false;
 	}
 
 	// Validate file size
 	if (st.st_size <= 0) {
-		fprintf(stderr, "Error: File is empty: %s\n", canonical_path);
+		fprintf(stderr, "Error: File is empty: %s\n", cli_safe_str(canonical_path, safe, sizeof(safe)));
 		return false;
 	}
 
 	if ((size_t)st.st_size > IMG2_MAX_FILE_SIZE) {
-		fprintf(stderr, "Error: File too large (%lld bytes, max %lu bytes): %s\n", (long long)st.st_size, (unsigned long)IMG2_MAX_FILE_SIZE, canonical_path);
+		fprintf(stderr, "Error: File too large (%lld bytes, max %lu bytes): %s\n", (long long)st.st_size, (unsigned long)IMG2_MAX_FILE_SIZE, cli_safe_str(canonical_path, safe, sizeof(safe)));
 		return false;
 	}
 
 	// Open file for binary reading
 	FILE *fp = fopen(canonical_path, "rb");
 	if (fp == NULL) {
-		fprintf(stderr, "Error: Cannot open file '%s': %s\n", canonical_path, strerror(errno));
+		const int err = errno;
+		fprintf(stderr, "Error: Cannot open file '%s': %s\n", cli_safe_str(canonical_path, safe, sizeof(safe)), strerror(err));
 		return false;
 	}
 
@@ -189,7 +195,7 @@ bool read_file_secure(const char *path, uint8_t **out_data, size_t *out_size)
 	fclose(fp);
 
 	if (bytes_read != file_size) {
-		fprintf(stderr, "Error: Read %lu bytes, expected %lu from file: %s\n", (unsigned long)bytes_read, (unsigned long)file_size, canonical_path);
+		fprintf(stderr, "Error: Read %lu bytes, expected %lu from file: %s\n", (unsigned long)bytes_read, (unsigned long)file_size, cli_safe_str(canonical_path, safe, sizeof(safe)));
 		free(buffer);
 		return false;
 	}
