@@ -42,11 +42,11 @@ typedef struct img2_image {
 /**
  * @brief Decoded frame set (count >= 1 on success)
  *
- * Timing convention (filled by img2_decode for GIF, APNG, WebP and JPEG XL):
- * loop_count 0 = loop forever or unknown, N > 0 = play N times (a GIF without a
- * NETSCAPE2.0 extension reports 1); delay_ms 0 = unknown or not animated.
- * Single-frame images report delay_ms = 0 and loop_count = 0. HEIF/AVIF
- * sequences report 0 for both.
+ * Timing convention (filled by img2_decode for GIF, APNG, WebP, JPEG XL and
+ * HEIF/AVIF sequence tracks): loop_count 0 = loop forever or unknown, N > 0 =
+ * play N times (a GIF without a NETSCAPE2.0 extension reports 1); delay_ms 0 =
+ * unknown or not animated. Single-frame images report delay_ms = 0 and
+ * loop_count = 0. HEIF/AVIF top-level image lists report 0 for both.
  */
 typedef struct img2_frames {
 	img2_image_t **frames;    /**< Array of count frames, owned by the set */

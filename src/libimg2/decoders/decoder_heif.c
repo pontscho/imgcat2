@@ -7,8 +7,10 @@
  */
 
 /* clang-format off */
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,47 +27,302 @@
 /** Maximum number of HEIF frames to decode (prevents DoS) */
 #define MAX_HEIF_FRAMES 200
 
+/* The sequence (track) API with heif_track_get_number_of_repetitions and
+ * heif_decoding_options.ignore_sequence_editlist: the vendored libheif 1.23 has it; an older host libheif
+ * (IMG2_USE_SYSTEM_HEIF) decodes top-level images only, as before. */
+#if LIBHEIF_HAVE_VERSION(1, 23, 0)
+#define IMG2_HEIF_HAVE_SEQUENCES 1
+#include <libheif/heif_sequences.h>
+#else
+#define IMG2_HEIF_HAVE_SEQUENCES 0
+#endif
+
+#if IMG2_HEIF_HAVE_SEQUENCES
 /**
- * @brief Check if HEIF is an image sequence (has multiple images)
+ * @brief Count the samples of the first visual sequence track, up to 2, without decoding them
  *
- * Quickly checks if a HEIF file contains multiple top-level images without
- * fully decoding the image data. Useful for determining whether
- * to use static or animated decoder.
+ * Raw sample reads follow the edit list (the public raw API cannot ignore it), so with a repeating edit
+ * list a one-sample track would yield its sample twice: in that case two byte-identical samples count as 1.
  *
- * @param data Raw HEIF file data
- * @param len Size of data in bytes
- * @return true if HEIF has multiple images, false otherwise or on error
- *
- * @note Returns false if data is invalid or not a HEIF
- * @note Does not validate that images are decodable, only checks count
+ * @return 0 (no sequence / visual track), 1 or 2
  */
-bool img2_heif_is_animated(const uint8_t *data, size_t len)
+static int heif_count_track_samples(struct heif_context *ctx)
 {
+	if (!heif_context_has_sequence(ctx)) {
+		return 0;
+	}
+	heif_track *track = heif_context_get_track(ctx, 0);
+	if (track == NULL) {
+		return 0;
+	}
+	uint32_t repetitions = heif_track_get_number_of_repetitions(track);
+	bool repeated = repetitions != 0 && repetitions != 1;
+
+	heif_raw_sequence_sample *samples[2] = { NULL, NULL };
+	int count = 0;
+	while (count < 2) {
+		struct heif_error err = heif_track_get_next_raw_sequence_sample(track, &samples[count]);
+		if (err.code != heif_error_Ok || samples[count] == NULL) {
+			samples[count] = NULL;
+			break;
+		}
+		count++;
+	}
+	if (count == 2 && repeated) {
+		size_t size0 = 0;
+		size_t size1 = 0;
+		const uint8_t *d0 = heif_raw_sequence_sample_get_data(samples[0], &size0);
+		const uint8_t *d1 = heif_raw_sequence_sample_get_data(samples[1], &size1);
+		if (d0 != NULL && d1 != NULL && size0 == size1 && memcmp(d0, d1, size0) == 0) {
+			count = 1;
+		}
+	}
+	heif_raw_sequence_sample_release(samples[0]);
+	heif_raw_sequence_sample_release(samples[1]);
+	heif_track_release(track);
+	return count;
+}
+#endif
+
+img2_heif_layout_t img2_heif_layout(const uint8_t *data, size_t len, int *frames_hint)
+{
+	if (frames_hint != NULL) {
+		*frames_hint = 1;
+	}
 	if (data == NULL || len == 0) {
-		return false;
+		return IMG2_HEIF_LAYOUT_SINGLE;
 	}
 
-	// Create HEIF context
 	struct heif_context *ctx = heif_context_alloc();
 	if (ctx == NULL) {
-		return false;
+		return IMG2_HEIF_LAYOUT_SINGLE;
 	}
-
-	// Read from memory
 	struct heif_error err = heif_context_read_from_memory_without_copy(ctx, data, len, NULL);
 	if (err.code != heif_error_Ok) {
 		heif_context_free(ctx);
-		return false;
+		return IMG2_HEIF_LAYOUT_SINGLE;
 	}
 
-	// Get number of top-level images
+	img2_heif_layout_t layout = IMG2_HEIF_LAYOUT_SINGLE;
 	int num_images = heif_context_get_number_of_top_level_images(ctx);
+	if (num_images > 1) {
+		// Top-level image list: unchanged behaviour, even if the file also carries a track
+		layout = IMG2_HEIF_LAYOUT_LIST;
+		if (frames_hint != NULL) {
+			*frames_hint = num_images;
+		}
+	}
+#if IMG2_HEIF_HAVE_SEQUENCES
+	else {
+		// No top-level image: any visual track sample makes it a sequence. With a primary image (e.g. the
+		// still that animated AVIF files carry for compatibility) only an actual animation (>= 2 samples).
+		int samples = heif_count_track_samples(ctx);
+		if (samples >= (num_images <= 0 ? 1 : 2)) {
+			layout = IMG2_HEIF_LAYOUT_SEQUENCE;
+			if (frames_hint != NULL) {
+				*frames_hint = samples;
+			}
+		}
+	}
+#endif
 
-	// Cleanup
 	heif_context_free(ctx);
+	return layout;
+}
 
-	// Image sequence if more than 1 image
-	return num_images > 1;
+bool img2_heif_is_animated(const uint8_t *data, size_t len)
+{
+	int frames = 1;
+	img2_heif_layout_t layout = img2_heif_layout(data, len, &frames);
+	return layout != IMG2_HEIF_LAYOUT_SINGLE && frames > 1;
+}
+
+#if IMG2_HEIF_HAVE_SEQUENCES
+/** @brief Sample duration in track ticks -> ms, rounded to nearest; 0 if unknown (no duration or timescale) */
+static uint32_t heif_ticks_to_ms(uint32_t ticks, uint32_t timescale)
+{
+	if (ticks == 0 || timescale == 0) {
+		return 0;
+	}
+	uint64_t ms = ((uint64_t)ticks * 1000u + timescale / 2u) / timescale;
+	return ms > UINT32_MAX ? UINT32_MAX : (uint32_t)ms;
+}
+
+/**
+ * @brief heif_track_get_number_of_repetitions -> img2 loop_count
+ *
+ * libheif: 1 = no edit list (plays once), N = plays N times, UINT32_MAX = indefinite, 0 = an edit list
+ * libheif does not interpret as a loop count (it advises a single playback; this is also what a file
+ * whose track timescale differs from the movie timescale reports, see docs/libimg2.md).
+ */
+static int heif_loop_count(uint32_t repetitions)
+{
+	if (repetitions == heif_sequence_track_number_of_repetitions_infinite) {
+		return 0;
+	}
+	if (repetitions == 0) {
+		return 1;
+	}
+	return repetitions > (uint32_t)INT_MAX ? INT_MAX : (int)repetitions;
+}
+#endif
+
+img2_image_t **img2_heif_decode_sequence(const uint8_t *data, size_t len, const char *fmt, int *frame_count, int *loop_count, img2_status_t *st)
+{
+	if (data == NULL || len == 0 || fmt == NULL || frame_count == NULL || loop_count == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_heif_sequence");
+		return img2_decode_fail(st, IMG2_E_ARG);
+	}
+	*frame_count = 0;
+	*loop_count = 0;
+
+#if !IMG2_HEIF_HAVE_SEQUENCES
+	img2_log(IMG2_LOG_ERROR, "Error: %s image sequences need libheif >= 1.23", fmt);
+	return img2_decode_fail(st, IMG2_E_UNSUPPORTED);
+#else
+	struct heif_context *ctx = heif_context_alloc();
+	if (ctx == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context for %s", fmt);
+		return img2_decode_fail(st, IMG2_E_NOMEM);
+	}
+
+	struct heif_error err = heif_context_read_from_memory_without_copy(ctx, data, len, NULL);
+	if (err.code != heif_error_Ok) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to read %s data: %s", fmt, err.message);
+		heif_context_free(ctx);
+		return img2_decode_fail(st, IMG2_E_CODEC);
+	}
+
+	heif_track *track = heif_context_get_track(ctx, 0);
+	if (track == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: %s image sequence has no visual track", fmt);
+		heif_context_free(ctx);
+		return img2_decode_fail(st, IMG2_E_CODEC);
+	}
+
+	img2_image_t **frames = NULL;
+	heif_decoding_options *dopts = NULL;
+	int count = 0;
+	uint64_t total_pixels = 0;
+	uint16_t track_w = 0;
+	uint16_t track_h = 0;
+	size_t byte_count = 0;
+	uint32_t timescale = heif_track_get_timescale(track); // durations are in TRACK ticks, not the movie timescale
+	uint32_t repetitions = heif_track_get_number_of_repetitions(track);
+
+	// Reject an oversized track resolution before libheif decodes (and allocates) the first sample
+	err = heif_track_get_image_resolution(track, &track_w, &track_h);
+	if (err.code == heif_error_Ok && track_w > 0 && track_h > 0 && !img2_image_calc_size(track_w, track_h, &byte_count)) {
+		img2_log(IMG2_LOG_ERROR, "Error: %s image sequence resolution %ux%u exceeds the limits", fmt, (unsigned)track_w, (unsigned)track_h);
+		*st = IMG2_E_LIMIT;
+		goto cleanup_error;
+	}
+
+	// Play the media timeline once: repetition is reported as loop_count, not as repeated frames
+	dopts = heif_decoding_options_alloc();
+	if (dopts == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF decoding options");
+		*st = IMG2_E_NOMEM;
+		goto cleanup_error;
+	}
+	dopts->ignore_sequence_editlist = 1;
+
+	frames = (img2_image_t **)calloc(MAX_HEIF_FRAMES, sizeof(img2_image_t *));
+	if (frames == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
+		*st = IMG2_E_NOMEM;
+		goto cleanup_error;
+	}
+
+	for (;;) {
+		struct heif_image *img = NULL;
+		err = heif_track_decode_next_image(track, &img, heif_colorspace_RGB, heif_chroma_interleaved_RGBA, dopts);
+		if (err.code == heif_error_End_of_sequence) {
+			break;
+		}
+		if (err.code != heif_error_Ok || img == NULL) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to decode %s sequence frame %d: %s", fmt, count, err.message);
+			if (img != NULL) {
+				heif_image_release(img);
+			}
+			*st = IMG2_E_CODEC;
+			goto cleanup_error;
+		}
+		if (count == MAX_HEIF_FRAMES) {
+			// A 201st frame exists: keep the first 200 (the rest is not decoded)
+			heif_image_release(img);
+			img2_log(IMG2_LOG_WARN, "Warning: %s sequence has more than %d frames, limiting to %d", fmt, MAX_HEIF_FRAMES, MAX_HEIF_FRAMES);
+			break;
+		}
+
+		int width = heif_image_get_width(img, heif_channel_interleaved);
+		int height = heif_image_get_height(img, heif_channel_interleaved);
+		int stride = 0;
+		const uint8_t *plane = heif_image_get_plane_readonly(img, heif_channel_interleaved, &stride);
+		if (plane == NULL || width <= 0 || height <= 0) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to get %s sequence plane %d", fmt, count);
+			heif_image_release(img);
+			*st = IMG2_E_CODEC;
+			goto cleanup_error;
+		}
+
+		// [F14] running pixel total, then the per-frame LIMIT/NOMEM allocation gate
+		if (img2_decode_add_frame_pixels(&total_pixels, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
+			heif_image_release(img);
+			*st = IMG2_E_LIMIT;
+			goto cleanup_error;
+		}
+		img2_status_t alloc_st = img2_decode_image_alloc((uint32_t)width, (uint32_t)height, &frames[count]);
+		if (alloc_st != IMG2_OK) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %d", count);
+			heif_image_release(img);
+			*st = alloc_st;
+			goto cleanup_error;
+		}
+
+		size_t row_bytes = (size_t)width * 4u;
+		for (int y = 0; y < height; y++) {
+			memcpy(frames[count]->pixels + (size_t)y * row_bytes, plane + (size_t)y * (size_t)stride, row_bytes);
+		}
+		frames[count]->delay_ms = heif_ticks_to_ms(heif_image_get_duration(img), timescale);
+		heif_image_release(img);
+		count++;
+	}
+
+	if (count == 0) {
+		img2_log(IMG2_LOG_ERROR, "Error: %s image sequence has no frames", fmt);
+		*st = IMG2_E_CODEC;
+		goto cleanup_error;
+	}
+
+	if (count == 1) {
+		frames[0]->delay_ms = 0; // single frame: not animated
+	} else {
+		*loop_count = heif_loop_count(repetitions);
+	}
+
+	heif_decoding_options_free(dopts);
+	heif_track_release(track);
+	heif_context_free(ctx);
+	*frame_count = count;
+	return frames;
+
+cleanup_error:
+	if (frames != NULL) {
+		for (int i = 0; i < MAX_HEIF_FRAMES; i++) {
+			if (frames[i] != NULL) {
+				img2_image_destroy(frames[i]);
+			}
+		}
+		free(frames);
+	}
+	if (dopts != NULL) {
+		heif_decoding_options_free(dopts);
+	}
+	heif_track_release(track);
+	heif_context_free(ctx);
+	return NULL; /* *st set at the goto */
+#endif
 }
 
 /**
@@ -355,9 +612,8 @@ static img2_status_t heif_check_total_pixels(struct heif_context *ctx, const hei
  * @note Unlike GIF/WebP, HEIF sequences have no timing info - uniform frame rate
  * @note Output format is RGBA8888
  *
- * TODO: delay_ms / loop_count stay 0 (unknown). The frames come from the top-level
- * image list, not from the libheif sequence (track) API, which is where per-sample
- * durations would come from; see docs/libimg2.md "Known limitations".
+ * Top-level image lists carry no timing: delay_ms / loop_count stay 0. Sequence tracks
+ * (with timing) are decoded by img2_heif_decode_sequence().
  */
 static img2_image_t **decode_heif_animated(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
@@ -538,22 +794,27 @@ cleanup_error:
  * @note For image sequences, frame_count = N (max MAX_HEIF_FRAMES)
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_heif_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
+static img2_image_t **decode_heif_frames(const uint8_t *data, size_t len, int *frame_count, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_heif");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
 	*frame_count = 0;
+	*loop_count = 0;
 
-	// Check if image sequence
-	if (img2_heif_is_animated(data, len)) {
+	// Image list, sequence track or single image
+	switch (img2_heif_layout(data, len, NULL)) {
+	case IMG2_HEIF_LAYOUT_LIST:
 		return decode_heif_animated(data, len, frame_count, st);
+	case IMG2_HEIF_LAYOUT_SEQUENCE:
+		return img2_heif_decode_sequence(data, len, "HEIF", frame_count, loop_count, st);
+	case IMG2_HEIF_LAYOUT_SINGLE:
+	default:
+		return decode_heif_static(data, len, frame_count, st);
 	}
-
-	return decode_heif_static(data, len, frame_count, st);
 }
 
 img2_status_t img2_decode_heif(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
@@ -564,6 +825,11 @@ img2_status_t img2_decode_heif(const uint8_t *data, size_t len, const img2_decod
 	}
 	img2_status_t st = IMG2_E_INTERNAL;
 	int count = 0;
-	img2_image_t **frames = decode_heif_frames(data, len, &count, &st);
-	return img2_frames_adopt(out, frames, count, st);
+	int loop_count = 0;
+	img2_image_t **frames = decode_heif_frames(data, len, &count, &loop_count, &st);
+	st = img2_frames_adopt(out, frames, count, st);
+	if (st == IMG2_OK) {
+		out->loop_count = loop_count;
+	}
+	return st;
 }

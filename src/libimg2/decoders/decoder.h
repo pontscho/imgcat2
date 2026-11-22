@@ -194,20 +194,45 @@ bool img2_png_is_animated(const uint8_t *data, size_t size);
 #endif
 
 /**
- * @brief Check if HEIF is an image sequence (has multiple images)
+ * @brief Check if HEIF/AVIF is animated (image list or image sequence track with more than one frame)
  *
- * Quickly checks if a HEIF file contains multiple top-level images without
- * fully decoding the image data. Useful for determining whether
- * to use static or animated decoder.
+ * True for more than one top-level image, or (with at most one top-level image) for a visual sequence
+ * track with at least two samples (counted without decoding). Used as the probe of both HEIF and AVIF.
  *
- * @param data Raw HEIF file data
+ * @param data Raw HEIF/AVIF file data
  * @param len Size of data in bytes
- * @return true if HEIF has multiple images, false otherwise or on error
+ * @return true if animated, false otherwise or on error
  *
- * @note Returns false if data is invalid or not a HEIF
- * @note Does not validate that images are decodable, only checks count
+ * @note Does not validate that images are decodable
  */
 bool img2_heif_is_animated(const uint8_t *data, size_t len);
+
+/** @brief Internal (decoder_heif.c, shared with decoder_avif.c): how a HEIF/AVIF file is decoded */
+typedef enum {
+	IMG2_HEIF_LAYOUT_SINGLE = 0, /**< primary image (also: unreadable file; the still decoder reports the error) */
+	IMG2_HEIF_LAYOUT_LIST,       /**< more than one top-level image: one frame per image, no timing */
+	IMG2_HEIF_LAYOUT_SEQUENCE    /**< visual sequence track (no top-level image, or one plus >= 2 track samples) */
+} img2_heif_layout_t;
+
+/**
+ * @brief Internal: classify a HEIF/AVIF file (see img2_heif_layout_t)
+ *
+ * @param frames_hint Optional output: top-level image count (LIST), track samples counted up to 2 (SEQUENCE), 1 (SINGLE)
+ */
+img2_heif_layout_t img2_heif_layout(const uint8_t *data, size_t len, int *frames_hint);
+
+/**
+ * @brief Internal: decode the first visual sequence track of a HEIF/AVIF file (libheif track API)
+ *
+ * Frames are decoded once (edit-list repetition ignored) until end of sequence or the 200-frame cap
+ * (WARN, not an error). delay_ms = sample duration in the track timescale, rounded to ms; loop_count from
+ * the track's repetition count (see docs/libimg2.md "Animation timing"). Single-frame result: delay 0, loop 0.
+ *
+ * @param fmt Format name for log lines ("HEIF" / "AVIF")
+ * @param loop_count Output: 0 = forever / unknown, N = play N times
+ * @return Frames array (count in *frame_count), or NULL with *st set
+ */
+img2_image_t **img2_heif_decode_sequence(const uint8_t *data, size_t len, const char *fmt, int *frame_count, int *loop_count, img2_status_t *st);
 
 /**
  * @brief Check if WebP is animated (has multiple frames)

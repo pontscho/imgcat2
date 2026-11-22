@@ -25,48 +25,8 @@
 /** Maximum number of AVIF frames to decode (prevents DoS) */
 #define MAX_AVIF_FRAMES 200
 
-/**
- * @brief Check if AVIF is an image sequence (has multiple images)
- *
- * Quickly checks if an AVIF file contains multiple top-level images without
- * fully decoding the image data. Useful for determining whether
- * to use static or animated decoder.
- *
- * @param data Raw AVIF file data
- * @param len Size of data in bytes
- * @return true if AVIF has multiple images, false otherwise or on error
- *
- * @note Returns false if data is invalid or not an AVIF
- * @note Does not validate that images are decodable, only checks count
- */
-static bool img2_avif_is_animated(const uint8_t *data, size_t len)
-{
-	if (data == NULL || len == 0) {
-		return false;
-	}
-
-	// Create HEIF context (libheif handles AVIF too)
-	struct heif_context *ctx = heif_context_alloc();
-	if (ctx == NULL) {
-		return false;
-	}
-
-	// Read from memory
-	struct heif_error err = heif_context_read_from_memory_without_copy(ctx, data, len, NULL);
-	if (err.code != heif_error_Ok) {
-		heif_context_free(ctx);
-		return false;
-	}
-
-	// Get number of top-level images
-	int num_images = heif_context_get_number_of_top_level_images(ctx);
-
-	// Cleanup
-	heif_context_free(ctx);
-
-	// Image sequence if more than 1 image
-	return num_images > 1;
-}
+/* The "is animated" probe and the list / sequence / single classification are shared with HEIF
+ * (img2_heif_is_animated, img2_heif_layout in decoder_heif.c). */
 
 /**
  * @brief Decode static AVIF image (single frame)
@@ -355,9 +315,8 @@ static img2_status_t avif_check_total_pixels(struct heif_context *ctx, const hei
  * @note AVIF sequences may have timing info in metadata
  * @note Output format is RGBA8888
  *
- * TODO: delay_ms / loop_count stay 0 (unknown). The frames come from the top-level
- * image list, not from the libheif sequence (track) API, which is where per-sample
- * durations would come from; see docs/libimg2.md "Known limitations".
+ * Top-level image lists carry no timing: delay_ms / loop_count stay 0. Sequence tracks
+ * (animated AVIF, with timing) are decoded by img2_heif_decode_sequence().
  */
 static img2_image_t **decode_avif_animated(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
 {
@@ -538,22 +497,27 @@ cleanup_error:
  * @note For image sequences, frame_count = N (max MAX_AVIF_FRAMES)
  * @note Output format is RGBA8888
  */
-static img2_image_t **decode_avif_frames(const uint8_t *data, size_t len, int *frame_count, img2_status_t *st)
+static img2_image_t **decode_avif_frames(const uint8_t *data, size_t len, int *frame_count, int *loop_count, img2_status_t *st)
 {
-	if (data == NULL || len == 0 || frame_count == NULL) {
+	if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_avif");
 		return img2_decode_fail(st, IMG2_E_ARG);
 	}
 
 	// Initialize output
 	*frame_count = 0;
+	*loop_count = 0;
 
-	// Check if image sequence
-	if (img2_avif_is_animated(data, len)) {
+	// Image list, sequence track (animated AVIF) or single image
+	switch (img2_heif_layout(data, len, NULL)) {
+	case IMG2_HEIF_LAYOUT_LIST:
 		return decode_avif_animated(data, len, frame_count, st);
+	case IMG2_HEIF_LAYOUT_SEQUENCE:
+		return img2_heif_decode_sequence(data, len, "AVIF", frame_count, loop_count, st);
+	case IMG2_HEIF_LAYOUT_SINGLE:
+	default:
+		return decode_avif_static(data, len, frame_count, st);
 	}
-
-	return decode_avif_static(data, len, frame_count, st);
 }
 
 img2_status_t img2_decode_avif(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
@@ -564,6 +528,11 @@ img2_status_t img2_decode_avif(const uint8_t *data, size_t len, const img2_decod
 	}
 	img2_status_t st = IMG2_E_INTERNAL;
 	int count = 0;
-	img2_image_t **frames = decode_avif_frames(data, len, &count, &st);
-	return img2_frames_adopt(out, frames, count, st);
+	int loop_count = 0;
+	img2_image_t **frames = decode_avif_frames(data, len, &count, &loop_count, &st);
+	st = img2_frames_adopt(out, frames, count, st);
+	if (st == IMG2_OK) {
+		out->loop_count = loop_count;
+	}
+	return st;
 }

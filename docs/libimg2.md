@@ -228,7 +228,8 @@ A value outside the enum returns `IMG2_E_ARG`; a resampler failure returns `IMG2
 | APNG | `fcTL` `delay_num/delay_den` in ms, rounded (`delay_den == 0` means 1/100 s) | `acTL` `num_plays` (0 = forever) |
 | WebP | difference of consecutive `WebPAnimDecoderGetNext` timestamps (first frame: its timestamp) | `WebPAnimInfo.loop_count` (0 = forever) |
 | JPEG XL | frame `duration * 1000 * tps_denominator / tps_numerator` (64-bit) | `num_loops` (0 = forever) |
-| HEIF / AVIF | always 0 (see [Known limitations](#known-limitations--cli-deltas)) | always 0 |
+| HEIF / AVIF sequence track | sample duration in the **track** timescale (`heif_track_get_timescale`), rounded to ms; 0 if unknown | `heif_track_get_number_of_repetitions`: N = play N times, indefinite = 0, uninterpreted edit list (libheif reports 0) = 1 (see [Known limitations](#known-limitations--cli-deltas)) |
+| HEIF / AVIF top-level image list | always 0 | always 0 |
 
 `img2_frames_t.loop_count` survives `max_frames` trimming. The imgcat2 CLI does not use the timing (it
 animates with `--fps`), so its output is unchanged.
@@ -365,10 +366,15 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   frames (each frame is a full canvas, 4 GiB of RGBA at the cap): checked up front from the frame count and
   again while allocating frame by frame; exceeding it frees everything and returns `IMG2_E_LIMIT`. HEIF/AVIF
   image lists (frames may differ in size) sum the image handles' sizes before decoding anything and keep a
-  running total while decoding. TIFF pages have no total cap.
-- **Frame cap**: GIF, APNG, WebP, JPEG XL and HEIF/AVIF image lists keep the first 200 frames of a longer
-  animation and log a WARN line (`... limiting to 200`); the rest is not decoded. JPEG XL stops its frame-header
-  walk at the 201st frame (imgcat2 1.0 and libimg2 before S13b failed such files with `IMG2_E_CODEC`).
+  running total while decoding. HEIF/AVIF sequence tracks (sample count unknown up front) check the track
+  resolution against `IMG2_MAX_PIXELS`/`IMG2_MAX_DIMENSION` before the first sample and keep the running total
+  per decoded frame. TIFF pages have no total cap.
+- **Frame cap**: GIF, APNG, WebP, JPEG XL, HEIF/AVIF image lists and HEIF/AVIF sequence tracks keep the first
+  200 frames of a longer animation and log a WARN line (`... limiting to 200`); the rest is not decoded (a
+  sequence decodes one sample past the cap to detect it). JPEG XL stops its frame-header walk at the 201st
+  frame (imgcat2 1.0 and libimg2 before S13b failed such files with `IMG2_E_CODEC`). Sequence tracks are decoded
+  with libheif's `ignore_sequence_editlist`, so a repeating/indefinite edit list is reported as `loop_count`
+  and never unrolled into repeated frames.
 - Frame and canvas allocations of the animated decoders (and of the JPEG XL/HEIF/AVIF still paths) report
   `IMG2_E_LIMIT` when the size fails the `IMG2_MAX_DIMENSION`/`IMG2_MAX_PIXELS` gate and `IMG2_E_NOMEM` only for
   a real allocation failure. JPEG XL checks the canvas against both limits from the basic info, before any frame
@@ -377,7 +383,9 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   count the frames and check the logical screen (`IMG2_E_LIMIT`) and the total above; `img2_is_animated`
   on a GIF only walks the records up to the second image descriptor. The GIF decode then reads the records
   one by one and stops after the 200th image: later rasters are never LZW-decoded, and a defect after the
-  201st image descriptor (corrupt or truncated data past the cap) no longer fails the decode.
+  201st image descriptor (corrupt or truncated data past the cap) no longer fails the decode. HEIF/AVIF:
+  `img2_is_animated` counts top-level images and, with at most one, reads at most two raw samples of the first
+  visual sequence track (no decoding).
 - **[SM2]** Every entry point that takes a caller-built `img2_image_t`/`img2_frames_t` (`img2_scale`,
   `img2_scale_fit`, `img2_encode`, `img2_apply_orientation`) validates it first: non-NULL pixels, non-zero
   dimensions within the limits, `stride == width * 4` (1.0 accepts packed rows only), frame count >= 1 and
@@ -458,12 +466,24 @@ TIFF, HEIF and AVIF frames arrive already oriented by their codecs; their EXIF o
   names but always used the default filter, so their output changes); `box` and `mitchell` are new; `lanczos`
   (default) output is unchanged. See [Scaling filters](#scaling-filters).
 - Only frame 0 is encoded (no animated output).
-- HEIF/AVIF image sequences report no timing (`delay_ms = 0`, `loop_count = 0`): the decoders read the
-  top-level image list, not the libheif sequence (track) API that carries per-sample durations (TODO in
-  `decoder_heif.c`/`decoder_avif.c`). A file holding only a sequence track (no primary item) fails with
-  `IMG2_E_CODEC`. Tests: `test_animation_timing` (GIF/APNG/WebP fixtures, synthetic GIF and APNG),
-  `test_animation_jxl`, `test_animation_webp` and `test_animation_heif` (fixtures encoded in-test with the
-  vendored libjxl, libwebp and libheif encoders).
+- HEIF/AVIF: a file with more than one top-level image decodes as an image list (one frame per image, no
+  timing: `delay_ms = 0`, `loop_count = 0`), even if it also carries a track. Otherwise the first visual
+  sequence track (`ftyp avis`/`hevc`, libheif track API) is decoded when the file has no top-level image, or
+  when it has one (e.g. the compatibility still of an animated AVIF) and the track has at least two samples;
+  a still with a one-sample track stays a still. Only the first visual track is read; other tracks are ignored. Needs libheif >= 1.23 (the vendored copy);
+  an older host libheif (`IMG2_USE_SYSTEM_HEIF`) keeps the old behaviour (a sequence-only file fails with
+  `IMG2_E_CODEC`).
+- HEIF/AVIF `loop_count`: libheif only interprets the edit list as a repetition count when the track
+  timescale equals the movie (`mvhd`) timescale; otherwise `heif_track_get_number_of_repetitions` returns 0
+  and img2 reports `loop_count = 1` (play once, as libheif advises), even if the writer asked for N
+  repetitions. libheif's writer uses a 90000 Hz track timescale by default, so such files only round-trip
+  the repetition count if the writer sets the track timescale (`heif_track_options_set_timescale`) to the
+  sequence timescale. Indefinite repetition (`heif_context_set_number_of_sequence_repetitions(ctx, 0)`)
+  with matching timescales reads back as `loop_count = 0`. `img2_is_animated` reads raw samples through
+  the edit list, so with a repeating edit list two byte-identical first samples count as one frame.
+- Tests: `test_animation_timing` (GIF/APNG/WebP fixtures, synthetic GIF and APNG), `test_animation_jxl`,
+  `test_animation_webp` and `test_animation_heif` (image lists and sequence tracks; fixtures encoded in-test
+  with the vendored libjxl, libwebp and libheif encoders).
 - The macOS fat archive path (`libtool -static`) is written but untested.
 - Host-library packages: with any `IMG2_USE_SYSTEM_*` (or resvg) the installed package links those host
   libraries (configure warns), and with a static link they must come after the fat archive, which cannot
