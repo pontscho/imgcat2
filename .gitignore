@@ -2,4 +2,5 @@
 .cache
 origin
 build
+build-cov
 tmp

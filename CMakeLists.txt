@@ -18,6 +18,7 @@ set(CMAKE_C_EXTENSIONS ON)  # GNU extensions for gnu11
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")   # never add cmake/vendored-find here
 
 include(Img2Options)
+include(Img2Coverage)         # IMG2_COVERAGE (clang source-based coverage of libimg2, default OFF)
 include(Img2Platform)
 include(Img2Tooling)
 
