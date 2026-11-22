@@ -305,8 +305,10 @@ static img2_xmp_t *extract_png_xmp(const uint8_t *data, size_t len)
 		/* Search for XMP chunk with keyword "XML:com.adobe.xmp" */
 		for (int i = 0; i < num_text; i++) {
 			if (text_ptr[i].key != NULL && strcmp(text_ptr[i].key, "XML:com.adobe.xmp") == 0) {
-				/* Found XMP data */
-				if (text_ptr[i].text != NULL && text_ptr[i].text_length > 0) {
+				/* Found XMP data. libpng reports an iTXt chunk's length in itxt_length (text_length is 0
+				 * there); the text is NUL-terminated for tEXt, zTXt and iTXt alike. */
+				size_t xml_len = text_ptr[i].text != NULL ? strlen(text_ptr[i].text) : 0;
+				if (xml_len > 0) {
 					/* Allocate and initialize img2_xmp_t */
 					img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 					if (xmp == NULL) {
@@ -317,7 +319,7 @@ static img2_xmp_t *extract_png_xmp(const uint8_t *data, size_t len)
 					img2_xmp_init(xmp);
 
 					/* Parse XMP data (raw XML string) */
-					if (img2_xmp_parse_xml(xmp, text_ptr[i].text, text_ptr[i].text_length) != 0) {
+					if (img2_xmp_parse_xml(xmp, text_ptr[i].text, xml_len) != 0) {
 						/* Parse failed */
 						img2_xmp_clear(xmp);
 						free(xmp);
@@ -476,6 +478,25 @@ static void apng_composite_frame(img2_image_t *accumulator, uint8_t *frame_pixel
 }
 
 /**
+ * @brief Free the work state of decode_png_animated() (every argument may be NULL)
+ *
+ * @param frames Output frames array (count entries, NULL entries allowed)
+ */
+static void apng_free_state(img2_image_t **frames, png_uint_32 count, img2_image_t *accumulator, img2_image_t *previous, png_bytep *row_pointers, uint8_t *frame_buffer)
+{
+	free(frame_buffer);
+	free(row_pointers);
+	img2_image_destroy(accumulator);
+	img2_image_destroy(previous);
+	if (frames != NULL) {
+		for (png_uint_32 i = 0; i < count; i++) {
+			img2_image_destroy(frames[i]);
+		}
+		free(frames);
+	}
+}
+
+/**
  * @brief Decode animated PNG (APNG) image using libpng
  *
  * Decodes APNG files with full support for:
@@ -525,9 +546,18 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
-	/* Set up error handling */
+	/* Work state assigned after setjmp and freed on the longjmp path: must be volatile */
+	img2_image_t **volatile frames = NULL;
+	volatile png_uint_32 frames_len = 0;
+	img2_image_t *volatile accumulator = NULL;
+	img2_image_t *volatile previous = NULL;
+	png_bytep *volatile row_pointers = NULL;
+	uint8_t *volatile frame_buffer = NULL;
+
+	/* Set up error handling (libpng errors in any frame land here with the frames decoded so far) */
 	if (setjmp(png_jmpbuf(png_ptr))) {
 		img2_log(IMG2_LOG_ERROR, "Error: PNG decoding error");
+		apng_free_state(frames, frames_len, accumulator, previous, row_pointers, frame_buffer);
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
@@ -546,6 +576,12 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
+
+	/* No fcTL before IDAT: the default image is not part of the animation (APNG spec: ignored by APNG
+	 * decoders). libpng counts it in num_frames (>= 2 here, img2_png_is_animated) and returns it as the
+	 * first frame: it is read and dropped below. */
+	const png_uint_32 hidden_default = png_get_valid(png_ptr, info_ptr, PNG_INFO_fcTL) == 0 ? 1u : 0u;
+	num_frames -= hidden_default;
 
 	/* Apply frame limit (DoS protection) */
 	if (num_frames > MAX_PNG_FRAMES) {
@@ -590,8 +626,8 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	}
 
 	/* Allocate frames array */
-	img2_image_t **frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
-	if (frames == NULL) {
+	img2_image_t **new_frames = (img2_image_t **)malloc(sizeof(img2_image_t *) * num_frames);
+	if (new_frames == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frames array");
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return img2_decode_fail(st, IMG2_E_NOMEM);
@@ -599,42 +635,43 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 
 	/* Initialize frames to NULL for cleanup */
 	for (uint32_t i = 0; i < num_frames; i++) {
-		frames[i] = NULL;
+		new_frames[i] = NULL;
 	}
+	frames = new_frames;
+	frames_len = num_frames;
 
 	/* Create accumulator canvas for frame composition */
-	img2_image_t *accumulator = NULL;
-	img2_status_t alloc_st = img2_decode_image_alloc(canvas_width, canvas_height, &accumulator);
+	img2_image_t *new_accumulator = NULL;
+	img2_status_t alloc_st = img2_decode_image_alloc(canvas_width, canvas_height, &new_accumulator);
 	if (alloc_st != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
-		free(frames);
-		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return img2_decode_fail(st, alloc_st);
+		*st = alloc_st;
+		goto cleanup_error;
 	}
-
-	/* Previous frame backup for DISPOSE_PREVIOUS */
-	img2_image_t *previous = NULL;
+	accumulator = new_accumulator;
 
 	/* [F14] running pixel total of the output frames */
 	uint64_t total_pixels = 0;
 
-	/* Process each frame */
-	for (uint32_t frame_idx = 0; frame_idx < num_frames; frame_idx++) {
+	/* Process each frame (frame_idx: output frames; the hidden default image is one extra read) */
+	uint32_t frame_idx = 0;
+	for (uint32_t read_idx = 0; read_idx < num_frames + hidden_default; read_idx++) {
 		/* Read fcTL chunk (frame control) */
 		png_uint_32 frame_width, frame_height;
 		png_uint_32 x_offset, y_offset;
 		png_uint_16 delay_num, delay_den;
 		png_byte dispose_op, blend_op;
 		uint32_t delay_ms = 0;
+		const bool hidden = read_idx < hidden_default;
 
 		png_read_frame_head(png_ptr, info_ptr);
 
-		if (png_get_valid(png_ptr, info_ptr, PNG_INFO_fcTL)) {
+		if (!hidden) {
 			png_get_next_frame_fcTL(png_ptr, info_ptr, &frame_width, &frame_height, &x_offset, &y_offset, &delay_num, &delay_den, &dispose_op, &blend_op);
 			/* den 0 means 1/100 s; rounded to the nearest ms */
 			delay_ms = delay_den == 0 ? (uint32_t)delay_num * 10u : (uint32_t)(((uint32_t)delay_num * 1000u + delay_den / 2u) / delay_den);
 		} else {
-			/* First frame might not have fcTL, use canvas dimensions */
+			/* The hidden default image (no fcTL): canvas-sized, decoded only to get past it */
 			frame_width = canvas_width;
 			frame_height = canvas_height;
 			x_offset = 0;
@@ -665,7 +702,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		}
 
 		/* Allocate row pointers for frame */
-		png_bytep *row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * frame_height);
+		row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * frame_height);
 		if (row_pointers == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
 			*st = IMG2_E_NOMEM;
@@ -673,10 +710,9 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		}
 
 		/* Allocate frame buffer */
-		uint8_t *frame_buffer = (uint8_t *)malloc(frame_width * frame_height * 4);
+		frame_buffer = (uint8_t *)malloc(frame_width * frame_height * 4);
 		if (frame_buffer == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate frame buffer");
-			free(row_pointers);
 			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
@@ -689,21 +725,29 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		/* Read frame image data */
 		png_read_image(png_ptr, row_pointers);
 
-		/* Composite frame onto accumulator */
-		apng_composite_frame(accumulator, frame_buffer, x_offset, y_offset, frame_width, frame_height, canvas_width, canvas_height, blend_op);
+		if (!hidden) {
+			/* Composite frame onto accumulator */
+			apng_composite_frame(accumulator, frame_buffer, x_offset, y_offset, frame_width, frame_height, canvas_width, canvas_height, blend_op);
+		}
+
+		/* Free temporary buffers */
+		free(frame_buffer);
+		frame_buffer = NULL;
+		free(row_pointers);
+		row_pointers = NULL;
+
+		if (hidden) {
+			continue; /* not part of the animation */
+		}
 
 		/* Copy accumulator to output frame */
 		if (img2_decode_add_frame_pixels(&total_pixels, canvas_width, canvas_height) != IMG2_OK) {
-			free(frame_buffer);
-			free(row_pointers);
 			*st = IMG2_E_LIMIT;
 			goto cleanup_error;
 		}
 		frames[frame_idx] = img2_image_alloc(canvas_width, canvas_height);
 		if (frames[frame_idx] == NULL) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to create output frame %u", frame_idx);
-			free(frame_buffer);
-			free(row_pointers);
 			*st = IMG2_E_NOMEM;
 			goto cleanup_error;
 		}
@@ -712,10 +756,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 		if (num_frames > 1) {
 			frames[frame_idx]->delay_ms = delay_ms;
 		}
-
-		/* Free temporary buffers */
-		free(frame_buffer);
-		free(row_pointers);
+		frame_idx++;
 
 		/* Apply disposal method for next frame */
 		switch (dispose_op) {
@@ -750,10 +791,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 	}
 
 	/* Cleanup */
-	img2_image_destroy(accumulator);
-	if (previous != NULL) {
-		img2_image_destroy(previous);
-	}
+	apng_free_state(NULL, 0, accumulator, previous, NULL, NULL);
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 
 	*frame_count = num_frames;
@@ -765,16 +803,7 @@ static img2_image_t **decode_png_animated(const uint8_t *data, size_t len, int *
 
 cleanup_error:
 	/* Cleanup on error */
-	img2_image_destroy(accumulator);
-	if (previous != NULL) {
-		img2_image_destroy(previous);
-	}
-	for (uint32_t i = 0; i < num_frames; i++) {
-		if (frames[i] != NULL) {
-			img2_image_destroy(frames[i]);
-		}
-	}
-	free(frames);
+	apng_free_state(frames, frames_len, accumulator, previous, row_pointers, frame_buffer);
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 	return NULL; /* *st set at the goto */
 }

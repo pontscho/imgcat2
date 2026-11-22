@@ -171,4 +171,5 @@ endif()
 # --- coverage lane B begin ---
 # Coverage (docs/coverage.md) of the GIF, PNG, WebP, JPEG, TIFF, RAW and nanosvg decoders; fixtures built in-test
 img2_add_test(test_cov_b_gif SOURCES unit/test_cov_b_gif.c REQUIRES GIFLIB)
+img2_add_test(test_cov_b_png SOURCES unit/test_cov_b_png.c)
 # --- coverage lane B end ---
