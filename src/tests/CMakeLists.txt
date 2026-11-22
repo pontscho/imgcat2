@@ -167,3 +167,17 @@ if(PROJECT_IS_TOP_LEVEL)
 		RESOURCE_LOCK img2_consumer PASS_REGULAR_EXPRESSION "img2 consumer OK"
 		ENVIRONMENT "TMPDIR=${_img2_consumer_tmp}")
 endif()
+
+# --- coverage lane C begin ---
+# Coverage phase 2, lane C (docs/coverage.md): HEIF/AVIF/JXL decoders, every encoder
+img2_add_test(test_cov_c_heif SOURCES unit/test_cov_c_heif.c REQUIRES HEIF EXIF_READER TIMEOUT 60)
+img2_add_test(test_cov_c_jxl SOURCES unit/test_cov_c_jxl.c REQUIRES JXL EXIF_READER TIMEOUT 60)
+img2_add_test(test_cov_c_encoders SOURCES unit/test_cov_c_encoders.c REQUIRES WEBP)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_cov_c_alloc SOURCES unit/test_cov_c_alloc.c REQUIRES HEIF JXL LIBPNG LIBJPEG TIMEOUT 120)
+	if(TARGET test_cov_c_alloc)
+		target_link_options(test_cov_c_alloc PRIVATE
+			-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup)
+	endif()
+endif()
+# --- coverage lane C end ---
