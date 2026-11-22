@@ -198,6 +198,11 @@ img2_add_test(test_cov_b_gif SOURCES unit/test_cov_b_gif.c REQUIRES GIFLIB)
 img2_add_test(test_cov_b_png SOURCES unit/test_cov_b_png.c)
 img2_add_test(test_cov_b_webp SOURCES unit/test_cov_b_webp.c REQUIRES WEBP)
 img2_add_test(test_cov_b_jpeg SOURCES unit/test_cov_b_jpeg.c)
+if(TEST test_cov_b_jpeg)
+	# Hundreds of tiny decodes each start an OpenMP team (jpeg-quantsmooth); spinning idle threads
+	# oversubscribe the host under ctest -j and push the test past its timeout
+	set_property(TEST test_cov_b_jpeg APPEND PROPERTY ENVIRONMENT "OMP_NUM_THREADS=2")
+endif()
 img2_add_test(test_cov_b_tiff SOURCES unit/test_cov_b_tiff.c REQUIRES TIFF)
 img2_add_test(test_cov_b_svg SOURCES unit/test_cov_b_svg.c)
 img2_add_test(test_cov_b_raw SOURCES unit/test_cov_b_raw.c REQUIRES RAW TIMEOUT 30)
