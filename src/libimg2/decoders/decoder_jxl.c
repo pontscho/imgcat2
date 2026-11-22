@@ -287,8 +287,8 @@ static img2_image_t **decode_jxl_static(const uint8_t *data, size_t len, int *fr
 			}
 
 			// Verify buffer size matches our allocation
-			if (buffer_size != width * height * 4) {
-				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch: expected %zu, got %zu", (size_t)(width * height * 4), buffer_size);
+			if (buffer_size != (size_t)width * height * 4) {
+				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch: expected %zu, got %zu", (size_t)width * height * 4, buffer_size);
 				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
@@ -493,8 +493,8 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
 			}
 
 			// Verify buffer size
-			if (buffer_size != width * height * 4) {
-				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu", current_frame, (size_t)(width * height * 4), buffer_size);
+			if (buffer_size != (size_t)width * height * 4) {
+				img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu", current_frame, (size_t)width * height * 4, buffer_size);
 				*st = IMG2_E_CODEC;
 				goto cleanup_error;
 			}
