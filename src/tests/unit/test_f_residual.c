@@ -24,6 +24,10 @@
 
 #include <img2/img2.h>
 
+#ifdef IMG2_HAVE_JXL
+#include <jxl/encode.h>
+#endif
+
 #include "../../imgcat2/cli.h"
 #include "../../libimg2/decoders/decoder.h"
 #include "../ctest.h"
@@ -167,6 +171,79 @@ CTEST(f17, ticks_to_ms_saturates_instead_of_wrapping)
 	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX, UINT32_MAX, 1) == 1000u);
 	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX - 1u, UINT32_MAX, 1) == 999u);
 }
+
+#ifdef IMG2_HAVE_JXL
+/* Two-frame 1 x 1 lossless JXL animation at tps_num / 1 ticks per second, each frame `duration` ticks (malloc) */
+static uint8_t *jxl_anim(uint32_t tps_num, uint32_t duration, size_t *len)
+{
+	JxlEncoder *enc = JxlEncoderCreate(NULL);
+	uint8_t *out = NULL;
+	if (enc == NULL) {
+		return NULL;
+	}
+	JxlBasicInfo bi;
+	JxlEncoderInitBasicInfo(&bi);
+	bi.xsize = 1;
+	bi.ysize = 1;
+	bi.bits_per_sample = 8;
+	bi.uses_original_profile = JXL_TRUE;
+	bi.num_color_channels = 3;
+	bi.have_animation = JXL_TRUE;
+	bi.animation.tps_numerator = tps_num;
+	bi.animation.tps_denominator = 1;
+	JxlColorEncoding ce;
+	JxlColorEncodingSetToSRGB(&ce, JXL_FALSE);
+	JxlEncoderFrameSettings *fs = NULL;
+	if (JxlEncoderSetBasicInfo(enc, &bi) != JXL_ENC_SUCCESS || JxlEncoderSetColorEncoding(enc, &ce) != JXL_ENC_SUCCESS ||
+	    (fs = JxlEncoderFrameSettingsCreate(enc, NULL)) == NULL || JxlEncoderSetFrameLossless(fs, JXL_TRUE) != JXL_ENC_SUCCESS) {
+		goto done;
+	}
+	JxlPixelFormat fmt = { .num_channels = 3, .data_type = JXL_TYPE_UINT8, .endianness = JXL_NATIVE_ENDIAN, .align = 0 };
+	for (int i = 0; i < 2; i++) {
+		uint8_t px[3] = { (uint8_t)(i * 99), 7, 7 };
+		JxlFrameHeader fh;
+		JxlEncoderInitFrameHeader(&fh);
+		fh.duration = duration;
+		if (JxlEncoderSetFrameHeader(fs, &fh) != JXL_ENC_SUCCESS || JxlEncoderAddImageFrame(fs, &fmt, px, sizeof(px)) != JXL_ENC_SUCCESS) {
+			goto done;
+		}
+	}
+	JxlEncoderCloseInput(enc);
+	size_t cap = 4096;
+	out = malloc(cap);
+	uint8_t *next = out;
+	size_t avail = cap;
+	if (out == NULL || JxlEncoderProcessOutput(enc, &next, &avail) != JXL_ENC_SUCCESS) { /* a few hundred bytes */
+		free(out);
+		out = NULL;
+		goto done;
+	}
+	*len = (size_t)(next - out);
+done:
+	JxlEncoderDestroy(enc);
+	return out;
+}
+
+CTEST(f17, jxl_delay_saturates_in_the_decoder)
+{
+	/* 30 ticks/s: 128849019 ticks = 4294967300 ms (over UINT32_MAX by the remainder: 4294967 s + 300 ms);
+	 * 128849018 ticks = 4294967266 ms (exact, below the clamp) */
+	const uint32_t ticks[2] = { 128849019u, 128849018u };
+	const uint32_t want[2] = { UINT32_MAX, 4294967266u };
+	for (int i = 0; i < 2; i++) {
+		size_t len = 0;
+		uint8_t *d = jxl_anim(30, ticks[i], &len);
+		ASSERT_NOT_NULL(d);
+		img2_frames_t fr = { 0 };
+		ASSERT_EQUAL(IMG2_OK, img2_decode(d, len, NULL, &fr));
+		free(d);
+		ASSERT_EQUAL(2, fr.count);
+		uint32_t got = fr.frames[0]->delay_ms;
+		img2_frames_free(&fr);
+		ASSERT_TRUE(got == want[i]);
+	}
+}
+#endif
 
 /* ===== F21: jpeg_deblock outside -1 / 0 / 1 ===== */
 

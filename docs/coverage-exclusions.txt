@@ -130,9 +130,14 @@ decoders/decoder.c:268 line = }
 
 # ===== decoders/decoder.h =====
 reason: img2_decode_fail(NULL, ...): every caller passes a status pointer
-decoders/decoder.h:83 branch-false 6 = if (st != NULL) {
+decoders/decoder.h:84 branch-false 6 = if (st != NULL) {
 reason: RESOURCE-BOUND: one frame over IMG2_MAX_TOTAL_PIXELS (2^30): every caller checks the frame size against IMG2_MAX_PIXELS first ([P33]) except a HEIF/AVIF sequence sample decoded larger than its track header (or without one), i.e. a > 2^30 pixel libheif decode (test_sec_fix_limits calls the helper directly; test code is not instrumented)
-decoders/decoder.h:138 branch-true 6 = if (pixels > IMG2_MAX_TOTAL_PIXELS || *total > IMG2_MAX_TOTAL_PIXELS - pixels) {
+decoders/decoder.h:139 branch-true 6 = if (pixels > IMG2_MAX_TOTAL_PIXELS || *total > IMG2_MAX_TOTAL_PIXELS - pixels) {
+reason: img2_decode_ticks_to_ms() with tps_num 0: the only caller (decoder_jxl.c) checks tps_num != 0 first (test_f_residual calls the helper directly; test code is not instrumented)
+decoders/decoder.h:171 region 20 = if (tps_num == 0) {
+decoders/decoder.h:171 branch-true 6 = if (tps_num == 0) {
+decoders/decoder.h:172 line = return 0;
+decoders/decoder.h:173 line = }
 
 # ===== decoders/decoder_ico.c =====
 reason: bit depth default: parse_bmp_header() admits only 1/4/8/24/32 bits
@@ -247,61 +252,63 @@ decoders/decoder_gif.c:113 branch-true 6 = if (accumulator == NULL || raster == 
 decoders/decoder_gif.c:114 line = return;
 decoders/decoder_gif.c:115 line = }
 reason: giflib record errors in gif_slurp_capped(): gif_walk_records() already read the same records with the same calls successfully (defects after image 200 are never reached by the capped slurp)
-decoders/decoder_gif.c:295 region 58 = if (DGifGetRecordType(gif, &record_type) == GIF_ERROR) {
-decoders/decoder_gif.c:295 branch-true 7 = if (DGifGetRecordType(gif, &record_type) == GIF_ERROR) {
-decoders/decoder_gif.c:296 line = return GIF_ERROR;
-decoders/decoder_gif.c:296 region 11>vendor/giflib/gif_lib.h:20:19 = return GIF_ERROR;
-decoders/decoder_gif.c:297 line = }
-decoders/decoder_gif.c:340 region 70 = if (DGifGetExtension(gif, &ext_function, &ext_data) == GIF_ERROR) {
-decoders/decoder_gif.c:340 branch-true 8 = if (DGifGetExtension(gif, &ext_function, &ext_data) == GIF_ERROR) {
-decoders/decoder_gif.c:341 line = return GIF_ERROR;
-decoders/decoder_gif.c:341 region 12>vendor/giflib/gif_lib.h:20:19 = return GIF_ERROR;
-decoders/decoder_gif.c:342 line = }
-decoders/decoder_gif.c:351 region 60 = if (DGifGetExtensionNext(gif, &ext_data) == GIF_ERROR) {
-decoders/decoder_gif.c:351 branch-true 9 = if (DGifGetExtensionNext(gif, &ext_data) == GIF_ERROR) {
-decoders/decoder_gif.c:352 line = return GIF_ERROR;
-decoders/decoder_gif.c:352 region 13>vendor/giflib/gif_lib.h:20:19 = return GIF_ERROR;
-decoders/decoder_gif.c:353 line = }
+decoders/decoder_gif.c:306 region 58 = if (DGifGetRecordType(gif, &record_type) == GIF_ERROR) {
+decoders/decoder_gif.c:306 branch-true 7 = if (DGifGetRecordType(gif, &record_type) == GIF_ERROR) {
+decoders/decoder_gif.c:307 line = return GIF_ERROR;
+decoders/decoder_gif.c:307 region 11>vendor/giflib/gif_lib.h:20:19 = return GIF_ERROR;
+decoders/decoder_gif.c:308 line = }
+decoders/decoder_gif.c:352 region 70 = if (DGifGetExtension(gif, &ext_function, &ext_data) == GIF_ERROR) {
+decoders/decoder_gif.c:352 branch-true 8 = if (DGifGetExtension(gif, &ext_function, &ext_data) == GIF_ERROR) {
+decoders/decoder_gif.c:353 line = return GIF_ERROR;
+decoders/decoder_gif.c:353 region 12>vendor/giflib/gif_lib.h:20:19 = return GIF_ERROR;
+decoders/decoder_gif.c:354 line = }
+decoders/decoder_gif.c:363 region 60 = if (DGifGetExtensionNext(gif, &ext_data) == GIF_ERROR) {
+decoders/decoder_gif.c:363 branch-true 9 = if (DGifGetExtensionNext(gif, &ext_data) == GIF_ERROR) {
+decoders/decoder_gif.c:364 line = return GIF_ERROR;
+decoders/decoder_gif.c:364 region 13>vendor/giflib/gif_lib.h:20:19 = return GIF_ERROR;
+decoders/decoder_gif.c:365 line = }
+reason: [F16] width * height > INT_MAX in gif_slurp_capped(): gif_walk_records() rejected every one of the first 200 descriptors over IMG2_MAX_PIXELS (2e8) with IMG2_E_LIMIT
+decoders/decoder_gif.c:318 branch-true 37 = if (width <= 0 || height <= 0 || width > (INT_MAX / height)) {
 reason: no image in gif_slurp_capped(): the walk rejects files without images
-decoders/decoder_gif.c:358 region 28 = if (gif->ImageCount == 0) {
-decoders/decoder_gif.c:358 branch-true 6 = if (gif->ImageCount == 0) {
-decoders/decoder_gif.c:359 line = gif->Error = D_GIF_ERR_NO_IMAG_DSCR;
-decoders/decoder_gif.c:359 region 16>vendor/giflib/gif_lib.h:188:32 = gif->Error = D_GIF_ERR_NO_IMAG_DSCR;
-decoders/decoder_gif.c:360 line = return GIF_ERROR;
-decoders/decoder_gif.c:360 region 10>vendor/giflib/gif_lib.h:20:19 = return GIF_ERROR;
-decoders/decoder_gif.c:361 line = }
+decoders/decoder_gif.c:370 region 28 = if (gif->ImageCount == 0) {
+decoders/decoder_gif.c:370 branch-true 6 = if (gif->ImageCount == 0) {
+decoders/decoder_gif.c:371 line = gif->Error = D_GIF_ERR_NO_IMAG_DSCR;
+decoders/decoder_gif.c:371 region 16>vendor/giflib/gif_lib.h:188:32 = gif->Error = D_GIF_ERR_NO_IMAG_DSCR;
+decoders/decoder_gif.c:372 line = return GIF_ERROR;
+decoders/decoder_gif.c:372 region 10>vendor/giflib/gif_lib.h:20:19 = return GIF_ERROR;
+decoders/decoder_gif.c:373 line = }
 reason: static helper argument check: the only caller passes locals
-decoders/decoder_gif.c:385 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
-decoders/decoder_gif.c:385 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
+decoders/decoder_gif.c:397 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
+decoders/decoder_gif.c:397 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 reason: num_frames == 0: the walk rejects files without images
-decoders/decoder_gif.c:448 region 23 = if (num_frames == 0) {
-decoders/decoder_gif.c:448 branch-true 6 = if (num_frames == 0) {
-decoders/decoder_gif.c:449 line = img2_log(IMG2_LOG_ERROR, "Error: GIF has no images");
-decoders/decoder_gif.c:450 line = DGifCloseFile(gif, &error_code);
-decoders/decoder_gif.c:451 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_gif.c:452 line = }
+decoders/decoder_gif.c:463 region 23 = if (num_frames == 0) {
+decoders/decoder_gif.c:463 branch-true 6 = if (num_frames == 0) {
+decoders/decoder_gif.c:464 line = img2_log(IMG2_LOG_ERROR, "Error: GIF has no images");
+decoders/decoder_gif.c:465 line = DGifCloseFile(gif, &error_code);
+decoders/decoder_gif.c:466 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_gif.c:467 line = }
 reason: num_frames > MAX_GIF_FRAMES: gif_slurp_capped() stops at the cap
-decoders/decoder_gif.c:457 region 35 = if (num_frames > MAX_GIF_FRAMES) {
-decoders/decoder_gif.c:457 branch-true 6 = if (num_frames > MAX_GIF_FRAMES) {
-decoders/decoder_gif.c:458 line = num_frames = MAX_GIF_FRAMES; /* not reached: gif_slurp_capped stops at the cap */
-decoders/decoder_gif.c:458 region 16>23:24 = num_frames = MAX_GIF_FRAMES; /* not reached: gif_slurp_capped stops at the cap */
-decoders/decoder_gif.c:459 line = }
+decoders/decoder_gif.c:472 region 35 = if (num_frames > MAX_GIF_FRAMES) {
+decoders/decoder_gif.c:472 branch-true 6 = if (num_frames > MAX_GIF_FRAMES) {
+decoders/decoder_gif.c:473 line = num_frames = MAX_GIF_FRAMES; /* not reached: gif_slurp_capped stops at the cap */
+decoders/decoder_gif.c:473 region 16>23:24 = num_frames = MAX_GIF_FRAMES; /* not reached: gif_slurp_capped stops at the cap */
+decoders/decoder_gif.c:474 line = }
 reason: total pixels after the slurp: the walk already checked min(images, 200) frames of the same screen
-decoders/decoder_gif.c:466 region 118 = if (num_frames > 1 && img2_decode_check_total_pixels((uint64_t)num_frames, canvas_width, canvas_height) != IMG2_OK) {
-decoders/decoder_gif.c:466 branch-true 24 = if (num_frames > 1 && img2_decode_check_total_pixels((uint64_t)num_frames, canvas_width, canvas_height) != IMG2_OK) {
-decoders/decoder_gif.c:467 line = DGifCloseFile(gif, &error_code);
-decoders/decoder_gif.c:468 line = return img2_decode_fail(st, IMG2_E_LIMIT);
-decoders/decoder_gif.c:469 line = }
+decoders/decoder_gif.c:481 region 118 = if (num_frames > 1 && img2_decode_check_total_pixels((uint64_t)num_frames, canvas_width, canvas_height) != IMG2_OK) {
+decoders/decoder_gif.c:481 branch-true 24 = if (num_frames > 1 && img2_decode_check_total_pixels((uint64_t)num_frames, canvas_width, canvas_height) != IMG2_OK) {
+decoders/decoder_gif.c:482 line = DGifCloseFile(gif, &error_code);
+decoders/decoder_gif.c:483 line = return img2_decode_fail(st, IMG2_E_LIMIT);
+decoders/decoder_gif.c:484 line = }
 reason: previous is allocated (or the decode failed) whenever disposal is PREVIOUS
-decoders/decoder_gif.c:543 branch-false 44 = if (disposal_mode == DISPOSE_PREVIOUS && previous != NULL) {
+decoders/decoder_gif.c:558 branch-false 44 = if (disposal_mode == DISPOSE_PREVIOUS && previous != NULL) {
 reason: running total: frame count x canvas was checked up front, every frame is one canvas
-decoders/decoder_gif.c:557 region 92 = if (img2_decode_add_frame_pixels(&total_pixels, canvas_width, canvas_height) != IMG2_OK) {
-decoders/decoder_gif.c:557 branch-true 7 = if (img2_decode_add_frame_pixels(&total_pixels, canvas_width, canvas_height) != IMG2_OK) {
-decoders/decoder_gif.c:558 line = *st = IMG2_E_LIMIT;
-decoders/decoder_gif.c:559 line = goto cleanup_error;
-decoders/decoder_gif.c:560 line = }
+decoders/decoder_gif.c:572 region 92 = if (img2_decode_add_frame_pixels(&total_pixels, canvas_width, canvas_height) != IMG2_OK) {
+decoders/decoder_gif.c:572 branch-true 7 = if (img2_decode_add_frame_pixels(&total_pixels, canvas_width, canvas_height) != IMG2_OK) {
+decoders/decoder_gif.c:573 line = *st = IMG2_E_LIMIT;
+decoders/decoder_gif.c:574 line = goto cleanup_error;
+decoders/decoder_gif.c:575 line = }
 reason: previous is allocated (or the decode failed) whenever disposal is PREVIOUS
-decoders/decoder_gif.c:594 branch-false 9 = if (previous != NULL) {
+decoders/decoder_gif.c:609 branch-false 9 = if (previous != NULL) {
 
 # ===== decoders/decoder_png.c =====
 reason: io_ptr is always set by png_set_read_fn()
@@ -595,17 +602,17 @@ decoders/decoder_tiff.c:278 line = img2_log(IMG2_LOG_ERROR, "Error: Invalid para
 decoders/decoder_tiff.c:279 line = return img2_decode_fail(st, IMG2_E_ARG);
 decoders/decoder_tiff.c:280 line = }
 reason: static helper argument check: the entry point validated data/len and passes locals
-decoders/decoder_tiff.c:390 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_tiff.c:390 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_tiff.c:390 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_tiff.c:390 branch-true 6 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_tiff.c:391 line = img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_multipage");
-decoders/decoder_tiff.c:392 line = return img2_decode_fail(st, IMG2_E_ARG);
-decoders/decoder_tiff.c:393 line = }
+decoders/decoder_tiff.c:391 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_tiff.c:391 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_tiff.c:391 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_tiff.c:391 branch-true 6 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_tiff.c:392 line = img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_tiff_multipage");
+decoders/decoder_tiff.c:393 line = return img2_decode_fail(st, IMG2_E_ARG);
+decoders/decoder_tiff.c:394 line = }
 reason: every frame is set when the page loop completes
-decoders/decoder_tiff.c:501 branch-false 15 = if (exif && frames[0]) {
+decoders/decoder_tiff.c:526 branch-false 15 = if (exif && frames[0]) {
 reason: static helper argument check: the only caller passes a local frame counter
-decoders/decoder_tiff.c:539 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_tiff.c:564 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
 
 # ===== decoders/decoder_raw.c =====
 reason: called with LibRaw's char arrays only
@@ -1008,96 +1015,104 @@ reason: tps_numerator has a minimum of 1 in the AnimationHeader; JxlDecoderGetFr
 decoders/decoder_jxl.c:462 branch-false 24 = if (tps_num != 0 && JxlDecoderGetFrameHeader(dec, &frame_header) == JXL_DEC_SUCCESS) {
 decoders/decoder_jxl.c:462 branch-false 8 = if (tps_num != 0 && JxlDecoderGetFrameHeader(dec, &frame_header) == JXL_DEC_SUCCESS) {
 reason: libjxl always emits JXL_DEC_BASIC_INFO before JXL_DEC_NEED_IMAGE_OUT_BUFFER
-decoders/decoder_jxl.c:468 region 30 = if (!basic_info_received) {
-decoders/decoder_jxl.c:468 branch-true 8 = if (!basic_info_received) {
-decoders/decoder_jxl.c:469 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested before basic info");
-decoders/decoder_jxl.c:470 line = *st = IMG2_E_CODEC;
-decoders/decoder_jxl.c:471 line = goto cleanup_error;
-decoders/decoder_jxl.c:472 line = }
+decoders/decoder_jxl.c:467 region 30 = if (!basic_info_received) {
+decoders/decoder_jxl.c:467 branch-true 8 = if (!basic_info_received) {
+decoders/decoder_jxl.c:468 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested before basic info");
+decoders/decoder_jxl.c:469 line = *st = IMG2_E_CODEC;
+decoders/decoder_jxl.c:470 line = goto cleanup_error;
+decoders/decoder_jxl.c:471 line = }
+reason: [F1] structural defensive check: libjxl requests one output buffer per frame, right after that frame's JXL_DEC_FRAME (which already rejected current_frame >= num_frames), and never again once the buffer is set; no fault-injection seam reaches it
+decoders/decoder_jxl.c:473 region 70 = if (current_frame >= num_frames || frames[current_frame] != NULL) {
+decoders/decoder_jxl.c:473 branch-true 39 = if (current_frame >= num_frames || frames[current_frame] != NULL) {
+decoders/decoder_jxl.c:473 branch-true 8 = if (current_frame >= num_frames || frames[current_frame] != NULL) {
+decoders/decoder_jxl.c:474 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer requested for unexpected frame %d", current_frame);
+decoders/decoder_jxl.c:475 line = *st = IMG2_E_CODEC;
+decoders/decoder_jxl.c:476 line = goto cleanup_error;
+decoders/decoder_jxl.c:477 line = }
 reason: running total: decode_jxl_frames() already checked num_frames x canvas with the same numbers (every frame is a full canvas)
-decoders/decoder_jxl.c:475 region 79 = if (img2_decode_add_frame_pixels(&total_pixels, width, height) != IMG2_OK) {
-decoders/decoder_jxl.c:475 branch-true 8 = if (img2_decode_add_frame_pixels(&total_pixels, width, height) != IMG2_OK) {
-decoders/decoder_jxl.c:476 line = *st = IMG2_E_LIMIT;
-decoders/decoder_jxl.c:477 line = goto cleanup_error;
-decoders/decoder_jxl.c:478 line = }
+decoders/decoder_jxl.c:480 region 79 = if (img2_decode_add_frame_pixels(&total_pixels, width, height) != IMG2_OK) {
+decoders/decoder_jxl.c:480 branch-true 8 = if (img2_decode_add_frame_pixels(&total_pixels, width, height) != IMG2_OK) {
+decoders/decoder_jxl.c:481 line = *st = IMG2_E_LIMIT;
+decoders/decoder_jxl.c:482 line = goto cleanup_error;
+decoders/decoder_jxl.c:483 line = }
 reason: RGBA8 output buffer after basic info: the size query cannot fail, equals width * height * 4 (align 0, coalesced), and setting that buffer cannot fail
-decoders/decoder_jxl.c:489 region 85 = if (JxlDecoderImageOutBufferSize(dec, &format, &buffer_size) != JXL_DEC_SUCCESS) {
-decoders/decoder_jxl.c:489 branch-true 8 = if (JxlDecoderImageOutBufferSize(dec, &format, &buffer_size) != JXL_DEC_SUCCESS) {
-decoders/decoder_jxl.c:490 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to query JXL buffer size for frame %d", current_frame);
-decoders/decoder_jxl.c:491 line = *st = IMG2_E_CODEC;
-decoders/decoder_jxl.c:492 line = goto cleanup_error;
-decoders/decoder_jxl.c:493 line = }
-decoders/decoder_jxl.c:496 region 51 = if (buffer_size != (size_t)width * height * 4) {
-decoders/decoder_jxl.c:496 branch-true 8 = if (buffer_size != (size_t)width * height * 4) {
-decoders/decoder_jxl.c:497 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu", current_frame, (size_t)width * height * 4, buffer_size);
-decoders/decoder_jxl.c:498 line = *st = IMG2_E_CODEC;
-decoders/decoder_jxl.c:499 line = goto cleanup_error;
-decoders/decoder_jxl.c:500 line = }
-decoders/decoder_jxl.c:503 region 114 = if (JxlDecoderSetImageOutBuffer(dec, &format, frames[current_frame]->pixels, buffer_size) != JXL_DEC_SUCCESS) {
-decoders/decoder_jxl.c:503 branch-true 8 = if (JxlDecoderSetImageOutBuffer(dec, &format, frames[current_frame]->pixels, buffer_size) != JXL_DEC_SUCCESS) {
-decoders/decoder_jxl.c:504 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL output buffer for frame %d", current_frame);
-decoders/decoder_jxl.c:505 line = *st = IMG2_E_CODEC;
-decoders/decoder_jxl.c:506 line = goto cleanup_error;
-decoders/decoder_jxl.c:507 line = }
+decoders/decoder_jxl.c:494 region 85 = if (JxlDecoderImageOutBufferSize(dec, &format, &buffer_size) != JXL_DEC_SUCCESS) {
+decoders/decoder_jxl.c:494 branch-true 8 = if (JxlDecoderImageOutBufferSize(dec, &format, &buffer_size) != JXL_DEC_SUCCESS) {
+decoders/decoder_jxl.c:495 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to query JXL buffer size for frame %d", current_frame);
+decoders/decoder_jxl.c:496 line = *st = IMG2_E_CODEC;
+decoders/decoder_jxl.c:497 line = goto cleanup_error;
+decoders/decoder_jxl.c:498 line = }
+decoders/decoder_jxl.c:501 region 51 = if (buffer_size != (size_t)width * height * 4) {
+decoders/decoder_jxl.c:501 branch-true 8 = if (buffer_size != (size_t)width * height * 4) {
+decoders/decoder_jxl.c:502 line = img2_log(IMG2_LOG_ERROR, "Error: JXL buffer size mismatch for frame %d: expected %zu, got %zu", current_frame, (size_t)width * height * 4, buffer_size);
+decoders/decoder_jxl.c:503 line = *st = IMG2_E_CODEC;
+decoders/decoder_jxl.c:504 line = goto cleanup_error;
+decoders/decoder_jxl.c:505 line = }
+decoders/decoder_jxl.c:508 region 114 = if (JxlDecoderSetImageOutBuffer(dec, &format, frames[current_frame]->pixels, buffer_size) != JXL_DEC_SUCCESS) {
+decoders/decoder_jxl.c:508 branch-true 8 = if (JxlDecoderSetImageOutBuffer(dec, &format, frames[current_frame]->pixels, buffer_size) != JXL_DEC_SUCCESS) {
+decoders/decoder_jxl.c:509 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL output buffer for frame %d", current_frame);
+decoders/decoder_jxl.c:510 line = *st = IMG2_E_CODEC;
+decoders/decoder_jxl.c:511 line = goto cleanup_error;
+decoders/decoder_jxl.c:512 line = }
 reason: only subscribed events are emitted, and after JxlDecoderCloseInput() NEED_MORE_INPUT becomes JXL_DEC_ERROR
-decoders/decoder_jxl.c:514 branch-false 14 = } else if (status == JXL_DEC_ERROR) {
-decoders/decoder_jxl.c:518 region 10 = } else {
-decoders/decoder_jxl.c:519 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected JXL decoder status: %d", status);
-decoders/decoder_jxl.c:520 line = *st = IMG2_E_CODEC;
-decoders/decoder_jxl.c:521 line = goto cleanup_error;
-decoders/decoder_jxl.c:522 line = }
+decoders/decoder_jxl.c:519 branch-false 14 = } else if (status == JXL_DEC_ERROR) {
+decoders/decoder_jxl.c:523 region 10 = } else {
+decoders/decoder_jxl.c:524 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected JXL decoder status: %d", status);
+decoders/decoder_jxl.c:525 line = *st = IMG2_E_CODEC;
+decoders/decoder_jxl.c:526 line = goto cleanup_error;
+decoders/decoder_jxl.c:527 line = }
 reason: frame count different from jxl_get_info()'s walk over the same data (more frames only at the 200-frame clamp, handled)
-decoders/decoder_jxl.c:529 region 35 = if (current_frame != num_frames) {
-decoders/decoder_jxl.c:529 branch-true 6 = if (current_frame != num_frames) {
-decoders/decoder_jxl.c:530 line = img2_log(IMG2_LOG_ERROR, "Error: JXL frame count mismatch: expected %d, got %d", num_frames, current_frame);
-decoders/decoder_jxl.c:532 line = for (int i = 0; i < num_frames; i++) {
-decoders/decoder_jxl.c:532 region 19 = for (int i = 0; i < num_frames; i++) {
-decoders/decoder_jxl.c:532 region 35 = for (int i = 0; i < num_frames; i++) {
-decoders/decoder_jxl.c:532 region 40 = for (int i = 0; i < num_frames; i++) {
-decoders/decoder_jxl.c:532 branch-true 19 = for (int i = 0; i < num_frames; i++) {
-decoders/decoder_jxl.c:532 branch-false 19 = for (int i = 0; i < num_frames; i++) {
-decoders/decoder_jxl.c:533 line = if (frames[i] != NULL) {
-decoders/decoder_jxl.c:533 region 27 = if (frames[i] != NULL) {
-decoders/decoder_jxl.c:533 region 8 = if (frames[i] != NULL) {
-decoders/decoder_jxl.c:533 branch-true 8 = if (frames[i] != NULL) {
-decoders/decoder_jxl.c:533 branch-false 8 = if (frames[i] != NULL) {
-decoders/decoder_jxl.c:534 line = img2_image_destroy(frames[i]);
-decoders/decoder_jxl.c:535 line = }
-decoders/decoder_jxl.c:536 line = }
-decoders/decoder_jxl.c:537 line = free(frames);
-decoders/decoder_jxl.c:538 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_jxl.c:539 line = }
+decoders/decoder_jxl.c:534 region 35 = if (current_frame != num_frames) {
+decoders/decoder_jxl.c:534 branch-true 6 = if (current_frame != num_frames) {
+decoders/decoder_jxl.c:535 line = img2_log(IMG2_LOG_ERROR, "Error: JXL frame count mismatch: expected %d, got %d", num_frames, current_frame);
+decoders/decoder_jxl.c:537 line = for (int i = 0; i < num_frames; i++) {
+decoders/decoder_jxl.c:537 region 19 = for (int i = 0; i < num_frames; i++) {
+decoders/decoder_jxl.c:537 region 35 = for (int i = 0; i < num_frames; i++) {
+decoders/decoder_jxl.c:537 region 40 = for (int i = 0; i < num_frames; i++) {
+decoders/decoder_jxl.c:537 branch-true 19 = for (int i = 0; i < num_frames; i++) {
+decoders/decoder_jxl.c:537 branch-false 19 = for (int i = 0; i < num_frames; i++) {
+decoders/decoder_jxl.c:538 line = if (frames[i] != NULL) {
+decoders/decoder_jxl.c:538 region 27 = if (frames[i] != NULL) {
+decoders/decoder_jxl.c:538 region 8 = if (frames[i] != NULL) {
+decoders/decoder_jxl.c:538 branch-true 8 = if (frames[i] != NULL) {
+decoders/decoder_jxl.c:538 branch-false 8 = if (frames[i] != NULL) {
+decoders/decoder_jxl.c:539 line = img2_image_destroy(frames[i]);
+decoders/decoder_jxl.c:540 line = }
+decoders/decoder_jxl.c:541 line = }
+decoders/decoder_jxl.c:542 line = free(frames);
+decoders/decoder_jxl.c:543 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_jxl.c:544 line = }
 reason: jxl_extract_metadata() arguments: the only caller passes checked data/len and locals
-decoders/decoder_jxl.c:628 region 71 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
-decoders/decoder_jxl.c:628 branch-true 22 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
-decoders/decoder_jxl.c:628 branch-true 34 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
-decoders/decoder_jxl.c:628 branch-true 54 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
-decoders/decoder_jxl.c:628 branch-true 6 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
-decoders/decoder_jxl.c:629 line = return;
-decoders/decoder_jxl.c:630 line = }
+decoders/decoder_jxl.c:633 region 71 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
+decoders/decoder_jxl.c:633 branch-true 22 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
+decoders/decoder_jxl.c:633 branch-true 34 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
+decoders/decoder_jxl.c:633 branch-true 54 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
+decoders/decoder_jxl.c:633 branch-true 6 = if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
+decoders/decoder_jxl.c:634 line = return;
+decoders/decoder_jxl.c:635 line = }
 reason: static helper argument check: the only caller passes locals
-decoders/decoder_jxl.c:694 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
-decoders/decoder_jxl.c:694 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
+decoders/decoder_jxl.c:699 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
+decoders/decoder_jxl.c:699 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 reason: a returned frame array always has count >= 1 and a non-NULL frames[0]
-decoders/decoder_jxl.c:729 branch-false 24 = if (frames != NULL && *frame_count > 0) {
-decoders/decoder_jxl.c:737 branch-false 7 = if (frames[0] != NULL) {
-decoders/decoder_jxl.c:740 region 10 = } else {
-decoders/decoder_jxl.c:742 line = if (exif != NULL) {
-decoders/decoder_jxl.c:742 region 22 = if (exif != NULL) {
-decoders/decoder_jxl.c:742 region 8 = if (exif != NULL) {
-decoders/decoder_jxl.c:742 branch-true 8 = if (exif != NULL) {
-decoders/decoder_jxl.c:742 branch-false 8 = if (exif != NULL) {
-decoders/decoder_jxl.c:743 line = free(exif);
-decoders/decoder_jxl.c:744 line = }
-decoders/decoder_jxl.c:745 line = if (xmp != NULL) {
-decoders/decoder_jxl.c:745 region 21 = if (xmp != NULL) {
-decoders/decoder_jxl.c:745 region 8 = if (xmp != NULL) {
-decoders/decoder_jxl.c:745 branch-true 8 = if (xmp != NULL) {
-decoders/decoder_jxl.c:745 branch-false 8 = if (xmp != NULL) {
-decoders/decoder_jxl.c:746 line = img2_xmp_clear(xmp);
-decoders/decoder_jxl.c:747 line = free(xmp);
-decoders/decoder_jxl.c:748 line = }
+decoders/decoder_jxl.c:734 branch-false 24 = if (frames != NULL && *frame_count > 0) {
+decoders/decoder_jxl.c:742 branch-false 7 = if (frames[0] != NULL) {
+decoders/decoder_jxl.c:745 region 10 = } else {
+decoders/decoder_jxl.c:747 line = if (exif != NULL) {
+decoders/decoder_jxl.c:747 region 22 = if (exif != NULL) {
+decoders/decoder_jxl.c:747 region 8 = if (exif != NULL) {
+decoders/decoder_jxl.c:747 branch-true 8 = if (exif != NULL) {
+decoders/decoder_jxl.c:747 branch-false 8 = if (exif != NULL) {
+decoders/decoder_jxl.c:748 line = free(exif);
 decoders/decoder_jxl.c:749 line = }
+decoders/decoder_jxl.c:750 line = if (xmp != NULL) {
+decoders/decoder_jxl.c:750 region 21 = if (xmp != NULL) {
+decoders/decoder_jxl.c:750 region 8 = if (xmp != NULL) {
+decoders/decoder_jxl.c:750 branch-true 8 = if (xmp != NULL) {
+decoders/decoder_jxl.c:750 branch-false 8 = if (xmp != NULL) {
+decoders/decoder_jxl.c:751 line = img2_xmp_clear(xmp);
+decoders/decoder_jxl.c:752 line = free(xmp);
+decoders/decoder_jxl.c:753 line = }
+decoders/decoder_jxl.c:754 line = }
 
 # ===== encoders/encoder.c =====
 reason: configuration-specific: all encoders are built in the measured configuration
@@ -1316,27 +1331,27 @@ metadata/exif_reader.c:837 line = }
 
 # ===== text/font_manager.c =====
 reason: extract_family_name() is only called with d_name, which never contains '/'
-text/font_manager.c:289 branch-false 6 = if (base == NULL) {
-text/font_manager.c:291 region 9 = } else {
-text/font_manager.c:292 line = base++;
-text/font_manager.c:293 line = }
+text/font_manager.c:297 branch-false 6 = if (base == NULL) {
+text/font_manager.c:299 region 9 = } else {
+text/font_manager.c:300 line = base++;
+text/font_manager.c:301 line = }
 reason: is_ttf_file() admitted the name only with a ".ttf"/".otf" suffix, so strrchr(name, '.') never fails
-text/font_manager.c:302 branch-false 6 = if (dot != NULL) {
+text/font_manager.c:310 branch-false 6 = if (dot != NULL) {
 reason: init_locked's only caller (img2_font_manager_init_lazy) checks !g_initialized under the same lock
-text/font_manager.c:471 region 21 = if (g_initialized) {
-text/font_manager.c:471 branch-true 6 = if (g_initialized) {
-text/font_manager.c:472 line = return true;
-text/font_manager.c:473 line = }
+text/font_manager.c:481 region 21 = if (g_initialized) {
+text/font_manager.c:481 branch-true 6 = if (g_initialized) {
+text/font_manager.c:482 line = return true;
+text/font_manager.c:483 line = }
 reason: both entry creation sites skip the entry when the path copy fails
-text/font_manager.c:546 branch-false 23 = bool is_embedded = (entry->path != NULL && strcmp(entry->path, "[embedded]") == 0);
+text/font_manager.c:556 branch-false 23 = bool is_embedded = (entry->path != NULL && strcmp(entry->path, "[embedded]") == 0);
 reason: contract-dependent: callers hold s_font_lock after font_lock_initialized() built the cache; g_initialized can only be false here if another thread's final img2_shutdown() runs between the lazy init and the lock, which core/init.c documents as unsupported (no single-thread path: no user callback runs in that window, and a re-entrant img2_shutdown() from the log callback would deadlock on s_font_lock)
-text/font_manager.c:695 branch-true 6 = if (!g_initialized || g_fallback_font == NULL) {
-text/font_manager.c:711 region 22 = if (!g_initialized) {
-text/font_manager.c:711 branch-true 6 = if (!g_initialized) {
-text/font_manager.c:712 line = img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
-text/font_manager.c:713 line = return NULL;
-text/font_manager.c:714 line = }
+text/font_manager.c:705 branch-true 6 = if (!g_initialized || g_fallback_font == NULL) {
+text/font_manager.c:721 region 22 = if (!g_initialized) {
+text/font_manager.c:721 branch-true 6 = if (!g_initialized) {
+text/font_manager.c:722 line = img2_log(IMG2_LOG_ERROR, "Error: Font manager not initialized");
+text/font_manager.c:723 line = return NULL;
+text/font_manager.c:724 line = }
 reason: both entry creation sites skip the entry when the path copy fails
-text/font_manager.c:871 branch-false 24 = infos[i].embedded = (entry->path != NULL && strcmp(entry->path, "[embedded]") == 0);
+text/font_manager.c:881 branch-false 24 = infos[i].embedded = (entry->path != NULL && strcmp(entry->path, "[embedded]") == 0);
 reason: stbtt_GetCodepointShape() returns an allocated vertex array whenever it returns a positive count (TrueType outlines: count 0 on allocation failure; CFF outlines: an allocation failure crashes inside stb_truetype before returning, see docs/coverage.md, known limitations)
-text/font_manager.c:946 branch-true 20 = if (count <= 0 || verts == NULL) {
+text/font_manager.c:956 branch-true 20 = if (count <= 0 || verts == NULL) {

@@ -268,7 +268,7 @@ static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uin
 
 	if (!ok) {
 		*error_code = gif->Error;
-	} else if (*image_count == 0 && !over_limit) {
+	} else if (*image_count == 0) { /* (over_limit implies an image) */
 		*error_code = D_GIF_ERR_NO_IMAG_DSCR;
 		ok = false;
 	}
