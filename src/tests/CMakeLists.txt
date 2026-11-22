@@ -175,4 +175,8 @@ img2_add_test(test_cov_b_png SOURCES unit/test_cov_b_png.c)
 img2_add_test(test_cov_b_jpeg SOURCES unit/test_cov_b_jpeg.c)
 img2_add_test(test_cov_b_tiff SOURCES unit/test_cov_b_tiff.c REQUIRES TIFF)
 img2_add_test(test_cov_b_svg SOURCES unit/test_cov_b_svg.c)
+img2_add_test(test_cov_b_raw SOURCES unit/test_cov_b_raw.c REQUIRES RAW TIMEOUT 30)
+if(TARGET test_cov_b_raw)
+	target_compile_definitions(test_cov_b_raw PRIVATE IMG2_TEST_SRC_DIR="${PROJECT_SOURCE_DIR}/src/tests")
+endif()
 # --- coverage lane B end ---
