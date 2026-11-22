@@ -35,6 +35,7 @@ endif()
 # pkg-config
 find_package(PkgConfig REQUIRED)
 
+include(Img2Hardening)        # IMG2_HARDENING_FLAGS: our targets and (C/C++) the vendored codecs [F32]
 include(Img2VendorHelpers)
 include(Img2Features)
 img2_vendor_section_begin()   # vendors see the executable link flags (-static, stack size) as before
@@ -69,6 +70,12 @@ find_package(Threads REQUIRED)
 # Fat archive inputs and link interface ([R16] variables; target img2_fat when IMG2_FAT_ARCHIVE)
 include(Img2FatArchive)
 img2_add_fat_archive()
+# Vendored-library manifest next to the fat archive ([F37]; installed by Img2Install)
+if(IMG2_FAT_ARCHIVE)
+	include(Img2VendorManifest)
+	set(IMG2_VENDOR_MANIFEST_FILE "${PROJECT_BINARY_DIR}/fat/vendored-libraries.txt")
+	img2_write_vendor_manifest("${IMG2_VENDOR_MANIFEST_FILE}")
+endif()
 
 # Library (+ img2_bundled), command line tool
 add_subdirectory(src/libimg2)

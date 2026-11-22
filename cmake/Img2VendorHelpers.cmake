@@ -1,5 +1,5 @@
 # Purpose: Helpers for vendored subprojects (test/install isolation, host ldflag stripping).
-# Inputs:  BUILD_TESTING, IMG2_EXE_LINK_FLAGS, IMG2_POSITION_INDEPENDENT_CODE, CMAKE_BUILD_TYPE /
+# Inputs:  BUILD_TESTING, IMG2_EXE_LINK_FLAGS, IMG2_POSITION_INDEPENDENT_CODE, IMG2_HARDENING_FLAGS, CMAKE_BUILD_TYPE /
 #          CMAKE_CONFIGURATION_TYPES, vendored targets (ZLIB::ZLIB, png_static, webp, ...) at call time.
 # Outputs: macros imgcat2_vendor_begin/imgcat2_vendor_end, img2_vendor_section_begin/end,
 #          function imgcat2_strip_vendored_ldflags().
@@ -94,7 +94,9 @@ endfunction()
 #   BUILD_SHARED_LIBS OFF (normal variable), CMAKE_POSITION_INDEPENDENT_CODE ${IMG2_POSITION_INDEPENDENT_CODE},
 #   CMAKE_POLICY_DEFAULT_CMP0077/CMP0126/CMP0125 NEW (vendor option()/set(CACHE)/find_* honour the normal
 #   knob variables set by cmake/vendor/*.cmake, so nothing lands in a consumer's cache), and the directory
-#   COMPILE_OPTIONS -O3 -g (+ -DNDEBUG where missing). COMPILE_OPTIONS initialise the target property at
+#   COMPILE_OPTIONS -O3 -g, the C/C++ IMG2_HARDENING_FLAGS (+ -DNDEBUG where missing). The ExternalProject
+#   vendors (libjpeg-turbo, aom) get the hardening flags through CMAKE_C_FLAGS/CMAKE_CXX_FLAGS instead
+#   (cmake/vendor/Img2VendorJpeg.cmake, Img2VendorHeif.cmake). COMPILE_OPTIONS initialise the target property at
 #   target creation and are inherited by subdirectories at add_subdirectory() time, so the vendor targets
 #   compile exactly as with the former global add_compile_options(-O3 -g), and nothing reaches our targets
 #   or a consumer's.
@@ -114,6 +116,11 @@ macro(img2_vendor_section_begin)
 	set(CMAKE_POLICY_DEFAULT_CMP0126 NEW)
 	set(CMAKE_POLICY_DEFAULT_CMP0125 NEW)
 	set_property(DIRECTORY APPEND PROPERTY COMPILE_OPTIONS -O3 -g)
+	# [F32] the vendored parsers get the same hardening flags as our sources (C/C++ only: never the assembler
+	# sources; no warning flags)
+	foreach(_img2_hf IN LISTS IMG2_HARDENING_FLAGS)
+		set_property(DIRECTORY APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:C,CXX>:${_img2_hf}>")
+	endforeach()
 	_img2_vendor_ndebug_options(_img2_ndebug_opts)
 	if(_img2_ndebug_opts)
 		set_property(DIRECTORY APPEND PROPERTY COMPILE_OPTIONS ${_img2_ndebug_opts})

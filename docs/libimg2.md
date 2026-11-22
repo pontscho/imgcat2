@@ -64,11 +64,16 @@ cmake --install build --prefix /opt/img2 --component imgcat2            # CLI on
 | `IMG2_POSITION_INDEPENDENT_CODE` | ON | Build libimg2 and the vendors as PIC (needed by PIE executables and shared objects) |
 | `IMG2_ENABLE_CLANG_TIDY` / `IMG2_ENABLE_CLANG_FORMAT` | OFF / ON | Developer tooling (clang-tidy on our targets, `format` target) |
 | `IMG2_ENABLE_STATIC_LIBCXX` | OFF | macOS: link libc++ statically (Homebrew LLVM) |
+| `IMG2_STATIC_PIE` | ON | Linux, CLI builds only: link `imgcat2` with `-static-pie` (ASLR for the main image) when the toolchain supports it and `IMG2_POSITION_INDEPENDENT_CODE` is ON; otherwise plain `-static` (configure prints which) |
 
 "top level" means `PROJECT_IS_TOP_LEVEL`: ON when img2 is the main project, OFF under `add_subdirectory`.
-The vendors are always built with `-O3 -g` and `NDEBUG`; our own targets with `-O3 -g`, warnings,
-`-fstack-protector-strong` and `_FORTIFY_SOURCE=2` (unless the toolchain predefines it). Nothing is set
-globally, so a consumer's targets see none of these flags.
+The vendors are always built with `-O3 -g`, `NDEBUG` and the hardening flags (`IMG2_HARDENING_FLAGS`,
+`cmake/Img2Hardening.cmake`: `-fstack-protector-strong`, plus `-D_FORTIFY_SOURCE=2` unless the toolchain
+predefines it; C/C++ sources only, the ExternalProject builds of libjpeg-turbo and aom get them through
+`CMAKE_C_FLAGS`/`CMAKE_CXX_FLAGS`, assembler flags stay upstream's), but never with our warning flags. Our own
+targets get `-O3 -g`, warnings and the same hardening flags. Nothing is set globally, so a consumer's targets see
+none of these flags. `imgcat2` is linked fully static (static PIE where supported, see `IMG2_STATIC_PIE`) with
+full RELRO (`-z relro -z now`).
 
 ### The fat archive
 
@@ -80,6 +85,21 @@ libde265, aom, OpenJPEG, kvazaar, libtiff, LibRaw, libjxl (+jxl_cms), highway, l
 (`IMG2_USE_SYSTEM_*`, resvg) are not merged: they become link dependencies of the package, and configure warns
 about it. The imgcat2 executable, every test and the installed package use this one archive, so the shipped
 artefact is the tested one.
+
+Duplicate-symbol check: right after every merge, `cmake/scripts/img2_check_duplicate_symbols.cmake` runs `nm`
+on the fat archive and fails the build (and deletes the archive, so the next build retries) when a strong
+global symbol (nm types `T`, `D`, `B`, `R`) is defined by more than one member: the linker would silently take
+the first member in merge order. Known-legitimate duplicates go into
+`cmake/scripts/img2_duplicate_symbols_allowlist.txt` with a comment each; the list is empty today, and an entry
+that is no longer duplicated also fails the check. Skipped on Apple and when CMake found no `nm`.
+
+Vendored-library manifest: configure writes `build/fat/vendored-libraries.txt` (`cmake/Img2VendorManifest.cmake`),
+installed as `share/img2/vendored-libraries.txt` with the `img2_development` component. One tab-separated row
+per `vendor/` submodule: name, whether it is compiled into this build, submodule path, the commit pinned by the
+superproject (gitlink), the checked-out commit, `git describe --tags --always` (upstream version tag where the
+repository has one), working-tree state (`clean`/`modified`/`unknown`), upstream URL and notes (e.g. the APNG
+patch applied to libpng). It is a snapshot of configure time: re-run CMake after moving a submodule. Without a
+git checkout the commits read `unknown`.
 
 ## Consuming
 
@@ -412,7 +432,10 @@ TIFF, HEIF and AVIF frames arrive already oriented by their codecs; their EXIF o
 - **[SI1]** The fat archive embeds the vendored libpng, libjpeg-turbo, zlib-ng, giflib, libwebp, libheif
   (+ libde265, kvazaar, aom, OpenJPEG), libtiff, LibRaw and libjxl (+ highway, brotli, lcms2). A consumer that
   also links its own copy of any of them gets duplicate-symbol errors or silent first-wins binding. Mitigation:
-  link only `img2::img2` for those codecs, or build img2 with the matching `IMG2_USE_SYSTEM_*`.
+  link only `img2::img2` for those codecs, or build img2 with the matching `IMG2_USE_SYSTEM_*`;
+  `share/img2/vendored-libraries.txt` says which versions are inside. The build only checks for duplicates
+  inside the archive itself (see [The fat archive](#the-fat-archive)); prefixing the vendored symbols or hiding
+  them (partial link + hidden visibility) is a possible follow-up, not done.
 - **[SI2]** The asserts of the header-only vendors compiled into our objects (stb, nanosvg, qoi) are compiled
   out (`((void)0)`), which equals the previous `NDEBUG` release behaviour.
 - **[Q9]** CLI delta: imgcat2's iTerm2 output now encodes through `img2_encode`, so an encoder failure (in
@@ -448,8 +471,9 @@ img2 sets every vendor knob as a normal variable inside its vendor section (`CMA
 
 - **img2 options** (`option()`, user-settable): `IMG2_ENABLE_*`, `IMG2_USE_SYSTEM_*`, `IMG2_WERROR`,
   `IMG2_POSITION_INDEPENDENT_CODE`, `IMG2_FAT_ARCHIVE` (and `IMG2_BUILD_*`/`IMG2_INSTALL` unless you set
-  them as normal variables first).
-- **img2 check results** (INTERNAL): `IMG2_FORTIFY_PREDEFINED`, `IMG2_HAVE_SECURE_GETENV`.
+  them as normal variables first). `IMG2_STATIC_PIE` exists only when the CLI is built (`IMG2_BUILD_CLI`).
+- **img2 check results** (INTERNAL): `IMG2_FORTIFY_PREDEFINED`, `IMG2_HAVE_SECURE_GETENV` (and
+  `IMG2_HAVE_STATIC_PIE`, CLI builds on Linux only).
 - **Vendor-created entries with upstream defaults.** brotli, libjxl, zlib-ng and highway still create their
   own cache entries through their own non-FORCE `set(... CACHE ...)` / `option()` / `INTERNAL` calls, with the
   *upstream* default value, e.g. `BROTLI_BUILD_TOOLS=ON`, `BROTLI_BUILD_FOR_PACKAGE`

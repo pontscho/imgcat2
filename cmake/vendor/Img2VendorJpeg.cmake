@@ -41,6 +41,11 @@ else()
 		-DWITH_TOOLS:BOOL=OFF
 		-DWITH_TESTS:BOOL=OFF
 	)
+	if(IMG2_HARDENING_FLAGS_STRING)
+		# [F32] hardening flags of the vendor section (C only; the NASM SIMD flags stay upstream's). CMAKE_C_FLAGS
+		# is empty otherwise, and CMAKE_C_FLAGS_RELEASE (-O3 -DNDEBUG) is left to upstream.
+		list(APPEND _jpeg_cache_args "-DCMAKE_C_FLAGS:STRING=${IMG2_HARDENING_FLAGS_STRING}")
+	endif()
 	if(APPLE)
 		list(APPEND _jpeg_cache_args
 			"-DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHITECTURES}"

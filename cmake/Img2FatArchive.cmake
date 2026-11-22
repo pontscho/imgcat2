@@ -9,9 +9,15 @@
 #          IMG2_NEED_OPENMP, IMG2_HOST_LINK_LIBS, IMG2_INTERFACE_LINK_OPTIONS, IMG2_CONFIG_LINK_OPTIONS,
 #          IMG2_FEATURES, IMG2_FAT_LINK_LANGUAGES; target img2_fat (when IMG2_FAT_ARCHIVE).
 #
-# Duplicate symbols: at img2/s08 no strong global symbol is defined in two of the merged archives
-# (.claude/tmp/img2-split/logs/S9-dupsyms.txt is empty), so the ADDLIB order below (== the former link order)
-# needs no reordering; within one archive the linker rescans until nothing new resolves.
+# Duplicate symbols: no strong global symbol is defined in two of the merged archives, so the ADDLIB order
+# below (== the former link order) needs no reordering; within one archive the linker rescans until nothing new
+# resolves. Enforced at build time since img2/s12b: cmake/scripts/img2_check_duplicate_symbols.cmake runs on
+# every merged archive (allow-list: cmake/scripts/img2_duplicate_symbols_allowlist.txt).
+#
+# Vendored-library manifest ([F37]): cmake/Img2VendorManifest.cmake writes ${IMG2_VENDOR_MANIFEST_FILE}
+# (build/fat/vendored-libraries.txt: submodule path, URL, pinned gitlink commit, checked-out commit, git describe)
+# at configure time (top-level CMakeLists.txt, right after img2_add_fat_archive()); cmake/Img2Install.cmake
+# installs it as share/img2/vendored-libraries.txt.
 #
 # A macro (not a function), so every variable lands in the caller's (top-level) scope.
 macro(img2_add_fat_archive)
@@ -102,13 +108,26 @@ macro(img2_add_fat_archive)
 		# $<TARGET_FILE:img2> / DEPENDS img2 name img2 before it exists: both resolve at generate time
 		file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/fat/inputs.txt"
 			CONTENT "$<TARGET_FILE:img2>\n$<JOIN:${IMG2_VENDORED_ARCHIVES},\n>\n")   # [R8] order
+		# [F37] after the merge: no strong global symbol may be defined by two members (GNU/LLVM nm; skipped on
+		# Apple and without nm). The check deletes the archive on failure, so the next build re-runs both steps.
+		set(_img2_dupcheck_cmd "")
+		set(_img2_dupcheck_deps "")
+		if(CMAKE_NM AND NOT APPLE)
+			set(_img2_dupcheck_cmd COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} -DARCHIVE=${IMG2_FAT_ARCHIVE_FILE}
+				-DALLOWLIST=${PROJECT_SOURCE_DIR}/cmake/scripts/img2_duplicate_symbols_allowlist.txt
+				-P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_duplicate_symbols.cmake)
+			set(_img2_dupcheck_deps "${PROJECT_SOURCE_DIR}/cmake/scripts/img2_check_duplicate_symbols.cmake"
+				"${PROJECT_SOURCE_DIR}/cmake/scripts/img2_duplicate_symbols_allowlist.txt")
+		endif()
 		add_custom_command(OUTPUT "${IMG2_FAT_ARCHIVE_FILE}"
 			COMMAND ${CMAKE_COMMAND} -DMODE=$<IF:$<PLATFORM_ID:Darwin>,libtool,mri> -DAR=${CMAKE_AR}
 			        -DRANLIB=${CMAKE_RANLIB} -DINPUTS=${PROJECT_BINARY_DIR}/fat/inputs.txt
 			        -DOUTPUT=${IMG2_FAT_ARCHIVE_FILE}
 			        -P ${PROJECT_SOURCE_DIR}/cmake/scripts/img2_fat_archive.cmake
+			${_img2_dupcheck_cmd}
 			DEPENDS img2 ${IMG2_VENDORED_ARCHIVE_TARGETS} ${IMG2_VENDORED_ARCHIVES}
 			        "${PROJECT_BINARY_DIR}/fat/inputs.txt" "${PROJECT_SOURCE_DIR}/cmake/scripts/img2_fat_archive.cmake"
+			        ${_img2_dupcheck_deps}
 			COMMENT "Merging img2 and the vendored archives into ${IMG2_FAT_ARCHIVE_NAME}"
 			VERBATIM)
 		add_custom_target(img2_fat ALL DEPENDS "${IMG2_FAT_ARCHIVE_FILE}")

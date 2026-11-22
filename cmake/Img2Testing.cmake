@@ -1,11 +1,20 @@
 # Purpose: Executable link flags and the test registration helper.
 # Inputs:  IMG2_EXE_LINK_FLAGS, STATIC_LIBCXX_LIBS/DYNAMIC_LIBCXX_LIBS, IMG2_HAVE_<X>, targets img2_testing/imgcat2_cli
 #          (and img2_fat when the fat archive is built).
-# Outputs: functions img2_static_executable(<tgt>), img2_add_test(<name> ...).
+# Outputs: functions img2_static_executable(<tgt> [STATIC_PIE]), img2_add_test(<name> ...).
 
-# Executable link flags of today's fully static build (-static, stack size; macOS libc++)
+# Executable link flags of today's fully static build (-static, stack size; macOS libc++).
+# STATIC_PIE (Linux, caller has checked toolchain support): -static becomes -static-pie and the target's own
+# sources are compiled with -fPIE ([F30]: ASLR for the main image; every linked archive must be PIC/PIE).
+# Not the POSITION_INDEPENDENT_CODE property: on an executable CMake (CMP0083) then appends -pie to the link
+# line after -static-pie, and the last one wins (a dynamic PIE with an interpreter).
 function(img2_static_executable tgt)
-	target_link_options(${tgt} PRIVATE ${IMG2_EXE_LINK_FLAGS})
+	set(_flags ${IMG2_EXE_LINK_FLAGS})
+	if("STATIC_PIE" IN_LIST ARGN)
+		list(TRANSFORM _flags REPLACE "^-static$" "-static-pie")
+		target_compile_options(${tgt} PRIVATE -fPIE)
+	endif()
+	target_link_options(${tgt} PRIVATE ${_flags})
 	if(APPLE AND STATIC_LIBCXX_LIBS)
 		target_link_libraries(${tgt} PRIVATE ${STATIC_LIBCXX_LIBS})
 	elseif(APPLE AND DYNAMIC_LIBCXX_LIBS)

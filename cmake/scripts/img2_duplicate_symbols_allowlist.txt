@@ -1,0 +1,6 @@
+# [F37] Allow-list of strong global symbols that may be defined in more than one member of the fat libimg2.a
+# (checked by cmake/scripts/img2_check_duplicate_symbols.cmake after every merge).
+# Format: one symbol name per line; '#' starts a comment. Every entry needs a comment line above it naming the
+# defining libraries and why the duplicate is harmless. Entries that are no longer duplicated fail the check.
+#
+# Empty: no strong global symbol is defined twice (default feature set, img2/s12b).
