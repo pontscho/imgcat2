@@ -12,6 +12,10 @@
 
 #include "../ctest.h"
 
+#ifdef IMG2_HAVE_HEIF
+#include "cov_c_heif_util.h"
+#endif
+
 /* Decode a copy of buf (exactly len bytes on the heap, so an over-read is a real out-of-bounds access) */
 static img2_status_t decode_copy(const uint8_t *buf, size_t len, size_t pad_zeros, img2_mime_t force, img2_frames_t *out)
 {
@@ -46,6 +50,42 @@ CTEST(fuzz_regress, svg_edge_x_saturates)
 	ASSERT_EQUAL(1, fr.count);
 	img2_frames_free(&fr);
 }
+
+#if defined(IMG2_HAVE_HEIF) && defined(IMG2_HAVE_EXIF_READER)
+/*
+ * fuzz_decode crash-d2efec66 (29 KB HEIF, mutated src/tests/data/heif/samplefilehub.heif): the HEIF and AVIF EXIF
+ * readers built the 4-byte big-endian TIFF offset as (exif_data[0] << 24) | ... on int: a first byte >= 0x80 is a
+ * signed shift overflow (UBSan shift-base). Rebuilt with libheif: one 8x8 image (uncompressed codec -> HEIF, AV1
+ * -> AVIF) carrying an Exif item whose offset field is ff 00 00 00 (larger than the item: the data is parsed as is,
+ * is not TIFF, and the image keeps no EXIF).
+ */
+static const uint8_t k_exif_item_high_offset[] = { 0xff, 0x00, 0x00, 0x00, 'E', 'x', 'i', 'f', 0x00, 0x00, 'I', 'I', 0x2a, 0x00 };
+
+static void exif_offset_case(enum heif_compression_format comp, img2_mime_t want)
+{
+	hb_meta_t meta = { "Exif", NULL, k_exif_item_high_offset, (int)sizeof(k_exif_item_high_offset) };
+	size_t len = 0;
+	uint8_t *file = hb_list(comp, 1, 8, 8, &meta, 1, &len);
+	ASSERT_NOT_NULL(file);
+	ASSERT_EQUAL(want, img2_detect_mime(file, len));
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_OK, decode_copy(file, len, 0, IMG2_MIME_UNKNOWN, &fr));
+	free(file);
+	ASSERT_EQUAL(1, fr.count);
+	ASSERT_NULL(fr.frames[0]->exif);
+	img2_frames_free(&fr);
+}
+
+CTEST(fuzz_regress, heif_exif_offset_high_byte)
+{
+	exif_offset_case(heif_compression_uncompressed, IMG2_MIME_HEIF);
+}
+
+CTEST(fuzz_regress, avif_exif_offset_high_byte)
+{
+	exif_offset_case(heif_compression_AV1, IMG2_MIME_AVIF);
+}
+#endif
 
 #if defined(IMG2_HAVE_RAW) && defined(IMG2_HAVE_EXIF_READER)
 /*
