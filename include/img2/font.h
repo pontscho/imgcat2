@@ -30,8 +30,9 @@ typedef enum img2_font_style {
  * @brief Opaque font handle
  *
  * Interned in the library's font cache: owned by the library, never freed by callers, no
- * release API; valid until the last img2_shutdown(). Repeated loads of the same face return
- * the same pointer.
+ * release API; valid until the last img2_shutdown(), or until process exit if the cache was
+ * built lazily while no img2_init() reference was held (implicit reference, see img2_init()).
+ * Repeated loads of the same face return the same pointer.
  */
 typedef struct img2_font img2_font_t;
 
@@ -85,7 +86,7 @@ typedef struct img2_font_info {
 /**
  * @brief Visitor for img2_font_foreach()
  *
- * @param info Cache entry (valid only during the call; its strings until img2_shutdown())
+ * @param info Cache entry (valid only during the call; its strings as long as font handles, see img2_font_t)
  * @param user The user pointer passed to img2_font_foreach()
  * @return 0 to continue, nonzero to stop
  */
@@ -94,7 +95,8 @@ typedef int (*img2_font_visit_fn)(const img2_font_info_t *info, void *user);
 /**
  * @brief Visit the font cache in cache order (initialises the cache lazily)
  *
- * The visitor runs without any library lock held. Strings stay valid until img2_shutdown().
+ * The visitor runs without any library lock held. Strings stay valid as long as font handles
+ * (the last img2_shutdown(), or process exit after a lazy build, see img2_font_t).
  *
  * @param fn   Visitor
  * @param user Opaque pointer handed to every fn call

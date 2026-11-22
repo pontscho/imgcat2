@@ -64,6 +64,9 @@ void img2_free(void *ptr);
  *
  * No function requires it: the codec tables are const and the font cache initialises
  * lazily. Every img2_init() should be paired with an img2_shutdown().
+ * If the font cache is built lazily while no img2_init() reference is held, the library
+ * takes one implicit reference that is never released: the cache then lives until
+ * process exit (still reachable, not leaked).
  *
  * @return IMG2_OK
  */
@@ -72,8 +75,11 @@ img2_status_t img2_init(void);
 /**
  * @brief Release one img2_init() reference
  *
- * The last call frees the font cache (font handles become invalid). It must not race
- * any other img2_* call. An unbalanced call (reference count already 0) is ignored.
+ * The last call frees the font cache (font handles become invalid), unless the cache
+ * holds its implicit reference (built lazily without an img2_init() reference, see
+ * img2_init()): then no img2_shutdown() frees it and font handles stay valid until
+ * process exit. It must not race any other img2_* call. An unbalanced call (no
+ * img2_init() reference left) is ignored.
  */
 void img2_shutdown(void);
 

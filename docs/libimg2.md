@@ -223,12 +223,19 @@ Everything the library allocates is released by an `img2_*` function, never by `
 | `img2_frames_t` contents | `img2_decode` | `img2_frames_free` (destroys every frame, frees the array, zeroes the struct; NULL-safe) |
 | `img2_exif_t` / `img2_xmp_t` contents | decoders (attached to frames), `img2_exif_parse_*`, `img2_xmp_parse_*` | owned by the image when attached; caller-owned structs: `img2_exif_init`/`img2_exif_clear`, `img2_xmp_init`/`img2_xmp_clear` |
 | encoded buffers | `img2_encode` | `img2_free` |
-| `img2_font_t *` | `img2_font_load`, `img2_font_load_fallback` | never: interned in the font cache, owned by the library, no release API, valid until the last `img2_shutdown()` (**[R4]**) |
+| `img2_font_t *` | `img2_font_load`, `img2_font_load_fallback` | never: interned in the font cache, owned by the library, no release API, valid until the last `img2_shutdown()`, or until process exit if the cache was built lazily without an `img2_init()` reference (**[R4]**, see below) |
 
 - `img2_apply_orientation(&img)` may replace the pixel buffer and swap width/height of `*img`.
 - On error every out-param is reset (`*out = NULL`, frame sets zeroed, `*out_len = 0`).
-- `img2_init()` is reference counted; `img2_shutdown()` without a matching `img2_init()` (count already 0) is
+- `img2_init()` is reference counted; `img2_shutdown()` without a matching `img2_init()` (no reference left) is
   a no-op (**[R5]**). The last `img2_shutdown()` frees the font cache.
+- Implicit font-cache reference: if an `img2_font_*` call (or SVG `<text>` rendering) builds the font cache
+  while no `img2_init()` reference is held, the library takes one implicit reference that is never released.
+  `img2_shutdown()` never drops the count below it, so the cache, its handles and its strings (family names,
+  `img2_font_foreach` strings) stay valid until process exit; leak checkers report the cache as still
+  reachable. Explicit `img2_init()`/`img2_shutdown()` pairs work as before (the INFO registry lists are
+  printed on the first explicit `img2_init()`), but that cache is no longer freed by them. If the cache is
+  first built while an `img2_init()` reference is held, the final `img2_shutdown()` frees it as before.
 
 ## Errors and logging
 
@@ -302,7 +309,8 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
 - The library's own mutable state is limited to, and enforced by the `img2_symbols` mutable-data audit
   (`cmake/scripts/img2_mutable_allowlist.txt`):
   - log: atomic level, mutex-protected callback pair (`s_level`, `s_lock`, `s_fn`, `s_user`);
-  - init: `s_init_lock` + reference count (`s_refs`);
+  - init: `s_init_lock` + reference count (`s_refs`) and the implicit font-cache reference flag
+    (`s_font_implicit_ref`);
   - font cache: `s_font_lock` + cache list, interned fallback handle and the initialised flag;
   - read-only in practice: stb_image_resize2's dispatch/weight tables and nanosvg's colour table (non-const
     in the vendor code, never written), and stb_image's flag/gamma globals (written only by `stbi_set_*`
@@ -320,7 +328,8 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   encoders. The library keeps no shared state of its own on those paths, but no concurrency test covers them;
   serialise calls for these formats if you need a guarantee.
 - **[R19]** `img2_init`/`img2_shutdown` are serialised internally (`s_init_lock`), but any other `img2_*` call
-  concurrent with the final `img2_shutdown()` is unsupported, and font handles are invalid afterwards.
+  concurrent with the final `img2_shutdown()` is unsupported, and font handles are invalid afterwards
+  (unless the cache holds its implicit reference, see [Ownership and memory](#ownership-and-memory)).
   `img2_shutdown` must not race other calls.
 - The log callback contract above applies (thread-safe, no re-entry).
 
@@ -336,6 +345,10 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   frame is a full canvas, 4 GiB of RGBA at the cap): checked up front from the frame count and again while
   allocating frame by frame; exceeding it frees everything and returns `IMG2_E_LIMIT`. GIF/APNG/WebP also keep
   their 200-frame cap. Other multi-frame decoders (TIFF pages, HEIF/AVIF image lists, JXL) have no total cap.
+- **[F16]** GIF: before giflib decodes anything, the records are walked without LZW-decoding the rasters to
+  count the frames and check the logical screen (`IMG2_E_LIMIT`) and the total above; `img2_is_animated`
+  on a GIF only walks the records up to the second image descriptor. Beyond 200 frames the GIF decode still
+  decodes every raster before the cap trims the result.
 - **[SM2]** Every entry point that takes a caller-built `img2_image_t`/`img2_frames_t` (`img2_scale`,
   `img2_scale_fit`, `img2_encode`, `img2_apply_orientation`) validates it first: non-NULL pixels, non-zero
   dimensions within the limits, `stride == width * 4` (1.0 accepts packed rows only), frame count >= 1 and
@@ -350,7 +363,9 @@ The font cache (used by SVG `<text>` rendering and `img2_font_*`) scans, in this
 - Windows: `C:\Windows\Fonts`
 
 `~` expands from `HOME`, read with `secure_getenv` where available (ignored in setuid/setgid processes). The
-scan is lazy: it runs on the first `img2_font_*` call or the first SVG with text, never in `img2_init`. The
+scan is lazy: it runs on the first `img2_font_*` call or the first SVG with text, never in `img2_init` (a
+scan while no `img2_init()` reference is held keeps the cache until process exit, see
+[Ownership and memory](#ownership-and-memory)). The
 embedded DejaVu Sans Mono family (4 faces) is always available and is the fallback for unknown families.
 
 ## Encode quality
@@ -405,7 +420,8 @@ TIFF, HEIF and AVIF frames arrive already oriented by their codecs; their EXIF o
   `encoders/encoder.c`, one extra stderr line; only on encoder failure / OOM, normal output is unchanged).
   Not covered by the golden test (needs a TTY).
 - **[R19]** Any `img2_*` call concurrent with the final `img2_shutdown()` is unsupported; font handles are
-  invalid after it.
+  invalid after it, unless the font cache was built lazily without an `img2_init()` reference (implicit
+  reference: then it lives until process exit).
 - CLI delta: `--interpolation nearest|bilinear|cubic` now select their filters (imgcat2 1.0 accepted the
   names but always used the default filter, so their output changes); `box` and `mitchell` are new; `lanczos`
   (default) output is unchanged. See [Scaling filters](#scaling-filters).

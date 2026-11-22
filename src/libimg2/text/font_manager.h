@@ -23,7 +23,9 @@ extern "C" {
  * img2_font_get_data, img2_font_get_family, img2_font_info_t, img2_font_foreach. Internal below. */
 
 /* Every entry point initialises the font cache lazily (scan of the system font directories + the
- * embedded fallbacks, under s_font_lock); the final img2_shutdown() frees it. */
+ * embedded fallbacks, under s_font_lock) through img2_font_cache_init_lazy(); the final img2_shutdown()
+ * frees it. A lazy build while no img2_init() reference is held takes an implicit reference that is
+ * never released, so the cache then lives until process exit. */
 
 /**
  * @brief Internal: cleanup for the final img2_shutdown()
@@ -34,11 +36,30 @@ extern "C" {
 void img2_font_manager_cleanup_final(const int *refs);
 
 /**
+ * @brief Internal: build the font cache if it is not built yet
+ *
+ * Runs with s_init_lock held by the caller (img2_font_cache_init_lazy); takes s_font_lock.
+ *
+ * @return true if this call built the cache, false if it was already built
+ */
+bool img2_font_manager_init_lazy(void);
+
+/**
+ * @brief Internal (core/init.c): lazy font-cache build from a font entry point
+ *
+ * Takes s_init_lock, builds the cache via img2_font_manager_init_lazy() and, if it was built
+ * while no img2_init() reference is held, takes the implicit, never released reference.
+ * Must be called without s_font_lock held.
+ */
+void img2_font_cache_init_lazy(void);
+
+/**
  * @brief Load a font by family name
  *
  * Searches system fonts first, falls back to embedded font if not found.
  * [R4] Handles are interned in the cache: the library owns them, they stay
- * valid until the last img2_shutdown(); there is no release call.
+ * valid until the last img2_shutdown() (until process exit if the cache was
+ * built lazily without an img2_init() reference); there is no release call.
  *
  * @param family Font family name (e.g., "Arial", "DejaVu Sans")
  * @param weight Font weight (IMG2_FONT_WEIGHT_NORMAL or IMG2_FONT_WEIGHT_BOLD)

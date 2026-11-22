@@ -524,6 +524,41 @@ CTEST(cli, parse_yuv_invalid)
 }
 
 /**
+ * @test Test -w/-H parsing
+ *
+ * 0 means "not given / auto" (`-w 0 -H N` = height only), the range is
+ * 0..IMGCAT2_MAX_CUSTOM_DIMENSION; negatives, garbage and overflow fail.
+ */
+CTEST(cli, parse_dimensions)
+{
+	cli_options_t opts = { .interpolation = "lanczos", .fps = 15 };
+	optind = 1;
+	char *argv[] = { "imgcat2", "-w", "0", "-H", "200", "test.png" };
+	ASSERT_EQUAL(0, parse_arguments(6, argv, &opts));
+	ASSERT_TRUE(opts.has_custom_dimensions);
+	ASSERT_EQUAL(0, opts.target_width);
+	ASSERT_EQUAL(200, opts.target_height);
+
+	cli_options_t opts2 = { .interpolation = "lanczos", .fps = 15 };
+	optind = 1;
+	char *argv2[] = { "imgcat2", "--width", "16384", "--height", "0", "test.png" };
+	ASSERT_EQUAL(0, parse_arguments(6, argv2, &opts2));
+	ASSERT_EQUAL(IMGCAT2_MAX_CUSTOM_DIMENSION, opts2.target_width);
+	ASSERT_EQUAL(0, opts2.target_height);
+
+	static char *bad_values[] = { "-1", "16385", "abc", "12x", "", "99999999999999999999999" };
+	for (size_t i = 0; i < sizeof(bad_values) / sizeof(bad_values[0]); i++) {
+		cli_options_t o = { .interpolation = "lanczos", .fps = 15 };
+		optind = 1;
+		char *argv_w[] = { "imgcat2", "-w", bad_values[i], "test.png" };
+		ASSERT_EQUAL(-1, parse_arguments(4, argv_w, &o));
+		optind = 1;
+		char *argv_h[] = { "imgcat2", "-H", bad_values[i], "test.png" };
+		ASSERT_EQUAL(-1, parse_arguments(4, argv_h, &o));
+	}
+}
+
+/**
  * @test Test combined short options
  *
  * Verifies that parse_arguments() can handle multiple short options.

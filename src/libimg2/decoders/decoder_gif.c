@@ -183,6 +183,100 @@ static int gif_loop_count(const GifFileType *gif)
 }
 
 /**
+ * @brief Walk the GIF records from a fresh memory reader without LZW-decoding any raster data [F16]
+ *
+ * Reads the logical screen, then record by record: image descriptors (DGifGetImageDesc) with their
+ * raster sub-blocks skipped via DGifGetCode/DGifGetCodeNext, extensions via
+ * DGifGetExtension/DGifGetExtensionNext, until the trailer.
+ *
+ * @param data Raw GIF file data
+ * @param len Length of data in bytes
+ * @param stop_after Stop as soon as this many image descriptors were seen (0 = walk to the trailer)
+ * @param screen_width Output: logical screen width (may be NULL)
+ * @param screen_height Output: logical screen height (may be NULL)
+ * @param image_count Output: number of image descriptors seen
+ * @param error_code Output: giflib error code on failure
+ * @return 0 on success (also when stopped early), -1 if DGifOpen failed, -2 on a giflib error while
+ *         walking (a walk to the trailer without any image is an error: D_GIF_ERR_NO_IMAG_DSCR, as in DGifSlurp)
+ */
+static int gif_walk_records(const uint8_t *data, size_t len, int stop_after, uint32_t *screen_width, uint32_t *screen_height, int *image_count, int *error_code)
+{
+	gif_mem_reader reader;
+	reader.data = data;
+	reader.size = len;
+	reader.offset = 0;
+
+	*image_count = 0;
+	GifFileType *gif = DGifOpen(&reader, gif_read_func, error_code);
+	if (gif == NULL) {
+		return -1;
+	}
+	if (screen_width != NULL) {
+		*screen_width = (uint32_t)gif->SWidth;
+	}
+	if (screen_height != NULL) {
+		*screen_height = (uint32_t)gif->SHeight;
+	}
+
+	bool ok = true;
+	GifRecordType record_type = UNDEFINED_RECORD_TYPE;
+	do {
+		if (DGifGetRecordType(gif, &record_type) == GIF_ERROR) {
+			ok = false;
+			break;
+		}
+
+		if (record_type == IMAGE_DESC_RECORD_TYPE) {
+			int code_size;
+			GifByteType *block = NULL;
+			if (DGifGetImageDesc(gif) == GIF_ERROR) {
+				ok = false;
+				break;
+			}
+			(*image_count)++;
+			if (stop_after > 0 && *image_count >= stop_after) {
+				break;
+			}
+			/* Skip the raster sub-blocks as they are (no LZW decoding) */
+			if (DGifGetCode(gif, &code_size, &block) == GIF_ERROR) {
+				ok = false;
+				break;
+			}
+			while (block != NULL) {
+				if (DGifGetCodeNext(gif, &block) == GIF_ERROR) {
+					ok = false;
+					break;
+				}
+			}
+		} else if (record_type == EXTENSION_RECORD_TYPE) {
+			int ext_code;
+			GifByteType *ext = NULL;
+			if (DGifGetExtension(gif, &ext_code, &ext) == GIF_ERROR) {
+				ok = false;
+				break;
+			}
+			while (ext != NULL) {
+				if (DGifGetExtensionNext(gif, &ext) == GIF_ERROR) {
+					ok = false;
+					break;
+				}
+			}
+		}
+	} while (ok && record_type != TERMINATE_RECORD_TYPE);
+
+	if (!ok) {
+		*error_code = gif->Error;
+	} else if (*image_count == 0) {
+		*error_code = D_GIF_ERR_NO_IMAG_DSCR;
+		ok = false;
+	}
+
+	int close_error;
+	DGifCloseFile(gif, &close_error);
+	return ok ? 0 : -2;
+}
+
+/**
  * @brief Decode animated GIF with all frames
  *
  * Decodes all frames of an animated GIF with proper frame composition.
@@ -211,6 +305,34 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 	*frame_count = 0;
 	*loop_count = 0;
 
+	// [F16] count and validate before DGifSlurp LZW-decodes every raster
+	int error_code;
+	{
+		uint32_t screen_width = 0;
+		uint32_t screen_height = 0;
+		int walk_frames = 0;
+		int walk = gif_walk_records(data, len, 0, &screen_width, &screen_height, &walk_frames, &error_code);
+		if (walk == -1) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to open GIF: %s", GifErrorString(error_code));
+			return img2_decode_fail(st, IMG2_E_CODEC);
+		}
+		if (walk != 0) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to read GIF structure: %s", GifErrorString(error_code));
+			return img2_decode_fail(st, IMG2_E_CODEC);
+		}
+		if (walk_frames > MAX_GIF_FRAMES) {
+			walk_frames = MAX_GIF_FRAMES; // capped below with a warning, as before
+		}
+		if (walk_frames > 1 && img2_decode_check_total_pixels((uint64_t)walk_frames, screen_width, screen_height) != IMG2_OK) {
+			return img2_decode_fail(st, IMG2_E_LIMIT);
+		}
+		size_t canvas_bytes;
+		if (!img2_image_calc_size(screen_width, screen_height, &canvas_bytes)) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to create accumulator canvas");
+			return img2_decode_fail(st, IMG2_E_LIMIT);
+		}
+	}
+
 	// Setup memory reader
 	gif_mem_reader reader;
 	reader.data = data;
@@ -218,7 +340,6 @@ static img2_image_t **decode_gif_animated_frames(const uint8_t *data, size_t len
 	reader.offset = 0;
 
 	// Open GIF file from memory
-	int error_code;
 	GifFileType *gif = DGifOpen(&reader, gif_read_func, &error_code);
 	if (gif == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to open GIF: %s", GifErrorString(error_code));
@@ -423,9 +544,9 @@ cleanup_error:
 /**
  * @brief Check if GIF is animated (has multiple frames)
  *
- * Quickly checks if a GIF file contains multiple frames without
- * fully decoding the image data. Useful for determining whether
- * to use native protocols or fallback rendering.
+ * Walks the GIF records until the second image descriptor without
+ * decoding any raster data (gif_walk_records). Useful for determining
+ * whether to use native protocols or fallback rendering.
  *
  * @param data Raw GIF file data
  * @param size Size of data in bytes
@@ -440,32 +561,14 @@ bool img2_gif_is_animated(const uint8_t *data, size_t size)
 		return false;
 	}
 
-	/* Setup memory reader */
-	gif_mem_reader reader;
-	reader.data = data;
-	reader.size = size;
-	reader.offset = 0;
-
-	/* Open GIF */
+	/* Record walk only: raster data is skipped, not LZW-decoded; stop at the 2nd image descriptor */
 	int error_code = 0;
-	GifFileType *gif = DGifOpen(&reader, gif_read_func, &error_code);
-	if (gif == NULL) {
+	int image_count = 0;
+	if (gif_walk_records(data, size, 2, NULL, NULL, &image_count, &error_code) != 0) {
 		return false;
 	}
 
-	/* Read GIF metadata (does not decode pixel data) */
-	if (DGifSlurp(gif) == GIF_ERROR) {
-		DGifCloseFile(gif, &error_code);
-		return false;
-	}
-
-	/* Check if animated (more than one frame) */
-	bool is_animated = (gif->ImageCount > 1);
-
-	/* Cleanup */
-	DGifCloseFile(gif, &error_code);
-
-	return is_animated;
+	return image_count > 1;
 }
 
 img2_status_t img2_decode_gif_animated(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)

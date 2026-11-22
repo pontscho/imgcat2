@@ -405,3 +405,40 @@ CTEST(public_api, fonts)
 	ASSERT_NULL(g);
 	ASSERT_EQUAL(IMG2_E_ARG, img2_font_load_fallback(NULL));
 }
+
+CTEST(public_api, fonts_lazy_handles_survive_shutdown)
+{
+	/* No img2_init() reference is held here (every other case balances its init/shutdown): the lazy
+	 * build takes the implicit font-cache reference, so explicit init/shutdown pairs (and unbalanced
+	 * shutdowns) never free the cache and the handles stay valid until process exit. */
+	img2_font_t *f = NULL;
+	img2_font_t *b = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_font_load_fallback(&f));
+	ASSERT_EQUAL(IMG2_OK, img2_font_load("monospace", IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_NORMAL, &b));
+	ASSERT_NOT_NULL(f);
+	ASSERT_NOT_NULL(b);
+	const char *family = img2_font_get_family(b);
+	ASSERT_NOT_NULL(family);
+
+	ASSERT_EQUAL(IMG2_OK, img2_init());
+	img2_shutdown();
+	ASSERT_EQUAL(IMG2_OK, img2_init());
+	ASSERT_EQUAL(IMG2_OK, img2_init());
+	img2_shutdown();
+	img2_shutdown();
+	img2_shutdown(); /* unbalanced: must not drop the implicit reference */
+
+	ASSERT_STR("DejaVu Sans Mono", img2_font_get_family(f));
+	ASSERT_TRUE(family == img2_font_get_family(b)); /* same string, not freed and rebuilt */
+	size_t size = 0;
+	ASSERT_NOT_NULL(img2_font_get_data(f, &size));
+	ASSERT_TRUE(size > 0);
+
+	/* interned handles: the cache was not rebuilt */
+	img2_font_t *f2 = NULL;
+	img2_font_t *b2 = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_font_load_fallback(&f2));
+	ASSERT_EQUAL(IMG2_OK, img2_font_load("monospace", IMG2_FONT_WEIGHT_BOLD, IMG2_FONT_STYLE_NORMAL, &b2));
+	ASSERT_TRUE(f == f2);
+	ASSERT_TRUE(b == b2);
+}

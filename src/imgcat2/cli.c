@@ -248,7 +248,9 @@ void print_font_list(void)
 }
 
 /**
- * @brief Parse a -w/-H value: decimal integer in [1, IMGCAT2_MAX_CUSTOM_DIMENSION], nothing else
+ * @brief Parse a -w/-H value: decimal integer in [0, IMGCAT2_MAX_CUSTOM_DIMENSION], nothing else
+ *
+ * 0 means "not given / auto" (e.g. `-w 0 -H 200` scales by height only).
  *
  * @return 0 on success, -1 on error (error printed to stderr)
  */
@@ -257,8 +259,8 @@ static int parse_dimension_arg(const char *arg, const char *what, int *out)
 	char *end = NULL;
 	errno = 0;
 	long v = strtol(arg, &end, 10);
-	if (errno != 0 || end == arg || *end != '\0' || v < 1 || v > IMGCAT2_MAX_CUSTOM_DIMENSION) {
-		fprintf(stderr, "Error: %s must be between 1 and %d pixels (got '%s')\n", what, IMGCAT2_MAX_CUSTOM_DIMENSION, arg);
+	if (errno != 0 || end == arg || *end != '\0' || v < 0 || v > IMGCAT2_MAX_CUSTOM_DIMENSION) {
+		fprintf(stderr, "Error: %s must be between 0 (auto) and %d pixels (got '%s')\n", what, IMGCAT2_MAX_CUSTOM_DIMENSION, arg);
 		return -1;
 	}
 	*out = (int)v;

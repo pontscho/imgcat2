@@ -528,6 +528,31 @@ void img2_font_manager_cleanup_final(const int *refs)
 	pthread_mutex_unlock(&s_font_lock);
 }
 
+bool img2_font_manager_init_lazy(void)
+{
+	/* the caller (img2_font_cache_init_lazy) holds s_init_lock; lock order s_init_lock -> s_font_lock */
+	pthread_mutex_lock(&s_font_lock);
+	bool built = !g_initialized;
+	if (built) {
+		img2_font_manager_init_locked();
+	}
+	pthread_mutex_unlock(&s_font_lock);
+	return built;
+}
+
+/**
+ * @brief Take s_font_lock with the cache built (a missing cache is built via img2_font_cache_init_lazy())
+ */
+static void font_lock_initialized(void)
+{
+	pthread_mutex_lock(&s_font_lock);
+	if (!g_initialized) {
+		pthread_mutex_unlock(&s_font_lock); /* s_init_lock must be taken first */
+		img2_font_cache_init_lazy();
+		pthread_mutex_lock(&s_font_lock);
+	}
+}
+
 /**
  * @brief Load font file into memory
  */
@@ -677,7 +702,7 @@ static img2_font_t *img2_font_find_locked(const char *family, img2_font_weight_t
 		return img2_font_find_fallback_locked();
 	}
 
-	/* [R4] Interned handle: built once per cache entry, owned by the cache until the last img2_shutdown() */
+	/* [R4] Interned handle: built once per cache entry, owned by the cache until the cache is freed (final img2_shutdown(); never after a lazy build without an img2_init() reference) */
 	if (entry->handle != NULL) {
 		return entry->handle;
 	}
@@ -706,10 +731,7 @@ static img2_font_t *img2_font_find_locked(const char *family, img2_font_weight_t
 /** @brief img2_font_find() with the failure reason in *st (IMG2_E_NOMEM or IMG2_E_NOT_FOUND) */
 static img2_font_t *font_find_status(const char *family, img2_font_weight_t weight, img2_font_style_t style, img2_status_t *st)
 {
-	pthread_mutex_lock(&s_font_lock);
-	if (!g_initialized) {
-		img2_font_manager_init_locked();
-	}
+	font_lock_initialized();
 	img2_font_t *font = img2_font_find_locked(family, weight, style, st);
 	pthread_mutex_unlock(&s_font_lock);
 	return font;
@@ -723,10 +745,7 @@ img2_font_t *img2_font_find(const char *family, img2_font_weight_t weight, img2_
 
 img2_font_t *img2_font_find_fallback(void)
 {
-	pthread_mutex_lock(&s_font_lock);
-	if (!g_initialized) {
-		img2_font_manager_init_locked();
-	}
+	font_lock_initialized();
 	img2_font_t *font = img2_font_find_fallback_locked();
 	pthread_mutex_unlock(&s_font_lock);
 	return font;
@@ -783,11 +802,9 @@ img2_status_t img2_font_foreach(img2_font_visit_fn fn, void *user)
 		return IMG2_E_ARG;
 	}
 
-	/* Snapshot the cache under the lock; the visitor runs unlocked (strings live until img2_shutdown()) */
-	pthread_mutex_lock(&s_font_lock);
-	if (!g_initialized) {
-		img2_font_manager_init_locked();
-	}
+	/* Snapshot the cache under the lock; the visitor runs unlocked (strings live until the final
+	 * img2_shutdown(), or until process exit after a lazy build without an img2_init() reference) */
+	font_lock_initialized();
 	size_t count = 0;
 	for (const font_cache_entry_t *entry = g_font_cache; entry != NULL; entry = entry->next) {
 		count++;
@@ -841,10 +858,7 @@ static img2_font_face_t *img2_font_face_open_locked(const img2_font_t *font)
 
 img2_font_face_t *img2_font_face_open(const img2_font_t *font)
 {
-	pthread_mutex_lock(&s_font_lock);
-	if (!g_initialized) {
-		img2_font_manager_init_locked();
-	}
+	font_lock_initialized();
 	img2_font_face_t *face = img2_font_face_open_locked(font);
 	pthread_mutex_unlock(&s_font_lock);
 	return face;

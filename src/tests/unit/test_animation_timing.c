@@ -212,6 +212,40 @@ CTEST(anim_timing, gif_total_pixels_is_limit)
 	ASSERT_EQUAL(0, fr.count);
 }
 
+CTEST(anim_timing, gif_is_animated_record_walk)
+{
+	if (!img2_can_decode(IMG2_MIME_GIF)) {
+		return; /* skipped: GIF decoder not built */
+	}
+	/* [F16] img2_is_animated only walks the records */
+	uint8_t buf[256];
+	size_t len = build_gif(buf, sizeof(buf), 4, 3, 2);
+	ASSERT_TRUE(len > 0);
+	ASSERT_TRUE(img2_is_animated(buf, len));
+
+	len = build_gif(buf, sizeof(buf), 4, 3, 1);
+	ASSERT_TRUE(len > 0);
+	ASSERT_FALSE(img2_is_animated(buf, len));
+
+	/* Raster data is skipped, not LZW-decoded: undefined LZW codes (0xFF 0xFF = code 7 with no
+	 * prior entry) make the decode fail, but the probe still sees two frames */
+	len = build_gif(buf, sizeof(buf), 4, 3, 2);
+	ASSERT_TRUE(len > 0);
+	for (size_t i = 0; i + 15 <= len; i++) {
+		if (buf[i] == 0x2C && buf[i + 10] == 0x02 && buf[i + 11] == 0x02) {
+			buf[i + 12] = 0xFF;
+			buf[i + 13] = 0xFF;
+		}
+	}
+	img2_frames_t fr;
+	ASSERT_NOT_EQUAL(IMG2_OK, img2_decode(buf, len, NULL, &fr));
+	ASSERT_TRUE(img2_is_animated(buf, len));
+
+	/* Truncated after the first frame's raster (no 2nd descriptor, no trailer) -> false */
+	len = build_gif(buf, sizeof(buf), 4, 3, 2);
+	ASSERT_FALSE(img2_is_animated(buf, len - 16));
+}
+
 CTEST(anim_timing, max_frames_keeps_loop_count)
 {
 	if (!img2_can_decode(IMG2_MIME_GIF)) {

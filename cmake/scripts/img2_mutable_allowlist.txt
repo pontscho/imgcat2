@@ -10,6 +10,7 @@ log.c.o s_user callback user pointer, guarded by s_lock
 
 init.c.o s_init_lock serialises img2_init/img2_shutdown bodies [R19]
 init.c.o s_refs init reference count, guarded by s_init_lock [R19]
+init.c.o s_font_implicit_ref implicit font-cache reference flag (set once), guarded by s_init_lock
 
 font_manager.c.o s_font_lock font cache mutex [M1a]
 font_manager.c.o g_font_cache font cache list, guarded by s_font_lock
