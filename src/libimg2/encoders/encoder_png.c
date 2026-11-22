@@ -120,6 +120,68 @@ static void png_warning_handler(png_structp png_ptr, png_const_charp warning_msg
 }
 
 /**
+ * @brief Run libpng over prepared rows, appending the PNG stream to *state
+ *
+ * The only function with a setjmp(): everything that must survive a libpng error (output buffer, row
+ * pointers) is owned by the caller, because automatic objects changed between setjmp() and longjmp() are
+ * indeterminate afterwards. On error *state may hold a partial buffer; the caller frees it.
+ *
+ * @return IMG2_OK, or IMG2_E_CODEC (libpng error, including a failed write-buffer allocation)
+ */
+static img2_status_t encode_png_rows(const img2_image_t *img, int compression, png_bytep *row_pointers, png_memory_write_state *state)
+{
+	/* Create PNG write structure */
+	jmp_buf jmpbuf;
+	png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, &jmpbuf, png_error_handler, png_warning_handler);
+	if (png_ptr == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG write struct");
+		return IMG2_E_CODEC;
+	}
+
+	/* Create PNG info structure */
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG info struct");
+		png_destroy_write_struct(&png_ptr, NULL);
+		return IMG2_E_CODEC;
+	}
+
+	/* Setup error handling with longjmp (png_ptr / info_ptr are not changed after this point) */
+	if (setjmp(jmpbuf)) {
+		/* longjmp returns here if error occurs */
+		png_destroy_write_struct(&png_ptr, &info_ptr);
+		return IMG2_E_CODEC;
+	}
+
+	/* Set custom write function */
+	png_set_write_fn(png_ptr, state, png_memory_write_func, png_memory_flush_func);
+
+	/* Set compression level */
+	png_set_compression_level(png_ptr, compression);
+
+	/* Set IHDR (image header) */
+	png_set_IHDR(
+	    png_ptr,
+	    info_ptr,
+	    img->width,
+	    img->height,
+	    8, /* bit depth */
+	    PNG_COLOR_TYPE_RGBA, /* color type with alpha */
+	    PNG_INTERLACE_NONE,
+	    PNG_COMPRESSION_TYPE_DEFAULT,
+	    PNG_FILTER_TYPE_DEFAULT);
+
+	/* Write info, image data, end */
+	png_write_info(png_ptr, info_ptr);
+	png_write_image(png_ptr, row_pointers);
+	png_write_end(png_ptr, NULL);
+
+	/* Cleanup PNG structures */
+	png_destroy_write_struct(&png_ptr, &info_ptr);
+	return IMG2_OK;
+}
+
+/**
  * @brief Encode RGBA image to PNG format
  *
  * Encodes RGBA8888 image to PNG format with compression control.
@@ -146,97 +208,35 @@ img2_status_t img2_encode_png(const img2_image_t *img, int quality, uint8_t **ou
 	*out_size = 0;
 
 	/* Clamp compression to valid range [0, 9] */
-	/* Use volatile to prevent clobbering by longjmp */
-	volatile int png_compression = quality;
+	int png_compression = quality;
 	if (png_compression < 0) {
-		// fprintf(stderr, "Warning: PNG compression %d < 0, clamping to 0\n", png_compression);
 		png_compression = 0;
 	}
 	if (png_compression > 9) {
-		// fprintf(stderr, "Warning: PNG compression %d > 9, clamping to 9\n", png_compression);
 		png_compression = 9;
 	}
-
-	/* Initialize memory write state */
-	png_memory_write_state write_state;
-	write_state.buffer = NULL;
-	write_state.size = 0;
-	write_state.capacity = 0;
-
-	/* Create PNG write structure */
-	jmp_buf jmpbuf;
-	png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, &jmpbuf, png_error_handler, png_warning_handler);
-	if (png_ptr == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG write struct");
-		return IMG2_E_CODEC;
-	}
-
-	/* Create PNG info structure */
-	png_infop info_ptr = png_create_info_struct(png_ptr);
-	if (info_ptr == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Failed to create PNG info struct");
-		png_destroy_write_struct(&png_ptr, NULL);
-		return IMG2_E_CODEC;
-	}
-
-	/* Setup error handling with longjmp */
-	if (setjmp(jmpbuf)) {
-		/* longjmp returns here if error occurs */
-		png_destroy_write_struct(&png_ptr, &info_ptr);
-		if (write_state.buffer != NULL) {
-			free(write_state.buffer);
-		}
-		return IMG2_E_CODEC;
-	}
-
-	/* Set custom write function */
-	png_set_write_fn(png_ptr, &write_state, png_memory_write_func, png_memory_flush_func);
-
-	/* Set compression level */
-	png_set_compression_level(png_ptr, png_compression);
-
-	/* Set IHDR (image header) */
-	png_set_IHDR(
-	    png_ptr,
-	    info_ptr,
-	    img->width,
-	    img->height,
-	    8, /* bit depth */
-	    PNG_COLOR_TYPE_RGBA, /* color type with alpha */
-	    PNG_INTERLACE_NONE,
-	    PNG_COMPRESSION_TYPE_DEFAULT,
-	    PNG_FILTER_TYPE_DEFAULT);
-
-	/* Write info */
-	png_write_info(png_ptr, info_ptr);
 
 	/* Prepare row pointers (each row points to pixel data in img->pixels) */
 	png_bytep *row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * img->height);
 	if (row_pointers == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
-		png_destroy_write_struct(&png_ptr, &info_ptr);
-		if (write_state.buffer != NULL) {
-			free(write_state.buffer);
-		}
 		return IMG2_E_NOMEM;
 	}
-
-	/* Setup row pointers to point to each row in the image */
 	for (uint32_t y = 0; y < img->height; y++) {
 		row_pointers[y] = img->pixels + (y * img->width * 4); /* RGBA: 4 bytes per pixel */
 	}
 
-	/* Write image data */
-	png_write_image(png_ptr, row_pointers);
-
-	/* Write end */
-	png_write_end(png_ptr, NULL);
-
-	/* Free row pointers */
+	/* Encode into the memory write state */
+	png_memory_write_state write_state;
+	write_state.buffer = NULL;
+	write_state.size = 0;
+	write_state.capacity = 0;
+	img2_status_t st = encode_png_rows(img, png_compression, row_pointers, &write_state);
 	free(row_pointers);
-
-	/* Cleanup PNG structures */
-	png_destroy_write_struct(&png_ptr, &info_ptr);
+	if (st != IMG2_OK) {
+		free(write_state.buffer);
+		return st;
+	}
 
 	/* Allocate and copy output data */
 	if (write_state.buffer == NULL || write_state.size == 0) {

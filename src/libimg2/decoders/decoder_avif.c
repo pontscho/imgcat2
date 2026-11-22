@@ -242,14 +242,9 @@ static img2_image_t **decode_avif_static(const uint8_t *data, size_t len, int *f
 		}
 
 	} else {
-		// Allocation failed - free what we have
-		if (exif) {
-			free(exif);
-		}
-		if (xmp) {
-			img2_xmp_clear(xmp);
-			free(xmp);
-		}
+		// Allocation failed - free what we have (never initialised: no img2_xmp_clear)
+		free(exif);
+		free(xmp);
 		output->exif = NULL;
 		output->xmp = NULL;
 	}
