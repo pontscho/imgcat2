@@ -345,3 +345,8 @@ endif()
 # F27 font family names from file names (library) and in `--fonts` (CLI)
 img2_add_test(test_f_residual SOURCES unit/test_f_residual.c LINK cli)
 # --- f-residual end ---
+
+# --- svg-text-cap ---
+# nanosvg.h dropped a <text> / <tspan> content run that did not fit the 4094-byte text buffer whole (an 8000-char run
+# rendered nothing): now truncated at a UTF-8 code point boundary, the budget shared by the runs of one <text>
+img2_add_test(test_svg_text_cap SOURCES unit/test_svg_text_cap.c TIMEOUT 60)

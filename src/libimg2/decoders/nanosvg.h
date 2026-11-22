@@ -481,6 +481,7 @@ typedef struct NSVGparser
 	int fontStyle;                 /* 0=normal, 1=italic */
 	char textContent[4096];        /* Accumulated text content */
 	int textContentLen;            /* Length of text content */
+	char textTruncWarned;          /* [img2] over-long text truncation already logged in this parse */
 } NSVGparser;
 
 static void nsvg__xformIdentity(float* t)
@@ -3295,12 +3296,29 @@ static void nsvg__content(void* ud, const char* s)
 		return; /* Only capture text content */
 	}
 
-	/* Accumulate text content */
+	/* Accumulate text content: at most sizeof(textContent) - 2 bytes per <text>/<tspan> (the cap bounds the text
+	 * cost). [img2] A run that does not fit is truncated to the room left, cut at a UTF-8 code point boundary (never
+	 * inside a multi-byte sequence), instead of being dropped whole */
 	size_t len = strlen(s);
-	if (p->textContentLen + len < sizeof(p->textContent) - 1) {
-		strcpy(p->textContent + p->textContentLen, s);
-		p->textContentLen += (int)len;
+	size_t cap = sizeof(p->textContent) - 2;
+	size_t room = (size_t)p->textContentLen < cap ? cap - (size_t)p->textContentLen : 0;
+	if (len > room) {
+		len = room;
+		/* s[len] is the first byte cut off: if it continues a sequence, the sequence's start is cut off too (at most
+		 * 3 bytes back, a code point is at most 4 bytes: a longer continuation run is invalid UTF-8 anyway, which
+		 * nsvg__decodeUTF8 reads as '?') */
+		size_t min = room > 3 ? room - 3 : 0;
+		while (len > min && ((unsigned char)s[len] & 0xC0) == 0x80) {
+			len--;
+		}
+		if (!p->textTruncWarned) {
+			p->textTruncWarned = 1;
+			img2_log(IMG2_LOG_WARN, "SVG <text> content over %d bytes, truncated", (int)cap);
+		}
 	}
+	memcpy(p->textContent + p->textContentLen, s, len);
+	p->textContentLen += (int)len;
+	p->textContent[p->textContentLen] = '\0';
 }
 
 static void nsvg__imageBounds(NSVGparser* p, float* bounds)

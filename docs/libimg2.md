@@ -520,8 +520,10 @@ TIFF, HEIF and AVIF frames arrive already oriented by their codecs; their EXIF o
 - nanosvg SVG `<text>` cost bounds. Rendering is linear in the text length since nanosvgrast.h merges the
   edges starting on a scanline in one pass (`nsvg__insertActive`; the one-by-one insertion made a `<text>`
   quadratic: 4000 characters took 1.5 s, now 0.14 s). A `<text>` / `<tspan>` collects at most 4094 bytes of content
-  (`NSVGparser.textContent[4096]`): a content chunk (the text between two tags) that does not fit is dropped
-  whole, not truncated, so one 8000-character run renders nothing. Every `<text>` / `<tspan>` run is its own
+  (`NSVGparser.textContent[4096]`): a content chunk (the text between two tags) that does not fit is truncated
+  to the room left, cut at a UTF-8 code point boundary (never inside a multi-byte sequence), and the first
+  truncation of a parse logs a WARN (`nsvg__content`); so one 8000-character run renders its first 4094 bytes,
+  and later chunks of the same `<text>` / `<tspan>` (split by comments) share the one budget. Every `<text>` / `<tspan>` run is its own
   shape, so many short texts cost linear in their count. What stays: every shape is rasterized over all
   canvas rows (a per-shape cost of clearing width x height scanline bytes, about 0.14 ms per shape on
   2000x2000), glyphs outside the canvas are still flattened and kept in the active-edge list, and the active
