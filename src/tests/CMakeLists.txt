@@ -327,3 +327,8 @@ img2_add_test(test_jpeg_log SOURCES unit/test_jpeg_log.c)
 # LibRaw data errors ("unknown file: Unexpected end of file" / "data corrupted at N") routed the same way
 # (decoders/decoder_raw.c, libraw_set_dataerror_handler)
 img2_add_test(test_jpeg_log_raw SOURCES unit/test_jpeg_log_raw.c REQUIRES RAW)
+
+# --- svg-text-perf ---
+# nanosvgrast.h inserted each new active edge by a linear scan: SVG <text> rendering was quadratic in the text
+# length (fuzzing S17). Ratio-based timing (16x the text < 40x the time) and pixels pinned to the pre-fix render
+img2_add_test(test_svg_text_perf SOURCES unit/test_svg_text_perf.c TIMEOUT 120)

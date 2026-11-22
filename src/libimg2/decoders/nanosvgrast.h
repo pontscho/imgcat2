@@ -109,6 +109,7 @@ typedef struct NSVGactiveEdge {
 	int x,dx;
 	float ey;
 	int dir;
+	int seq; /* [img2] insertion order within one subsample scanline (nsvg__insertActive) */
 	struct NSVGactiveEdge *next;
 } NSVGactiveEdge;
 
@@ -916,6 +917,87 @@ static void nsvg__freeActive(NSVGrasterizer* r, NSVGactiveEdge* z)
 	r->freelist = z;
 }
 
+/* [img2] Stable merge sort of a NULL-terminated list of n active edges by x (equal x keep their order) */
+static NSVGactiveEdge* nsvg__sortActive(NSVGactiveEdge* list, int n)
+{
+	NSVGactiveEdge *a, *b, *mid, *head = NULL, **tail = &head;
+	int i;
+	if (n < 2) return list;
+	mid = list;
+	for (i = 1; i < n / 2; i++) mid = mid->next;
+	b = mid->next;
+	mid->next = NULL;
+	a = nsvg__sortActive(list, n / 2);
+	b = nsvg__sortActive(b, n - n / 2);
+	while (a != NULL && b != NULL) {
+		if (b->x < a->x) {
+			*tail = b;
+			b = b->next;
+		} else {
+			*tail = a;
+			a = a->next;
+		}
+		tail = &(*tail)->next;
+	}
+	*tail = (a != NULL) ? a : b;
+	return head;
+}
+
+/*
+ * [img2] Insert the n edges starting on one subsample scanline (list fresh, in insertion order, seq = 0..n-1) into
+ * the x-sorted active list in O(A + n log n). Upstream inserted them one by one, each by a linear scan from the list
+ * head: O(A * n) per scanline, quadratic in the text length for a <text> (all of its glyphs are one shape whose
+ * edges start on the same few scanlines). The result is the list the one-by-one insertion builds, ties included:
+ * an edge went before the first edge with x >= its x, except that an edge with the head's x went right after the
+ * head. So within the edges of one x, a later edge goes to the front of the group, or second while no edge with a
+ * smaller x is in the list yet (no old one: active->x >= x; no earlier new one: seq < minLess).
+ */
+static NSVGactiveEdge* nsvg__insertActive(NSVGactiveEdge* active, NSVGactiveEdge* fresh, int n)
+{
+	NSVGactiveEdge *out = NULL, **tail = &out, *old = active;
+	int minLess = INT_MAX; /* smallest seq of the new edges with x below the current group */
+
+	fresh = nsvg__sortActive(fresh, n);
+	while (fresh != NULL) {
+		int x = fresh->x;
+		int headGroup = (active == NULL || active->x >= x);
+		int minSeq = fresh->seq; /* sorted stably: the group's first new edge was inserted first */
+		NSVGactiveEdge *first = NULL, *last = NULL;
+
+		while (old != NULL && old->x < x) {
+			*tail = old;
+			tail = &old->next;
+			old = old->next;
+		}
+		if (old != NULL && old->x == x) {
+			first = old;
+			while (old->next != NULL && old->next->x == x) old = old->next;
+			last = old;
+			old = old->next;
+		}
+		while (fresh != NULL && fresh->x == x) {
+			NSVGactiveEdge* z = fresh;
+			fresh = fresh->next;
+			if (first == NULL) {
+				z->next = NULL;
+				first = last = z;
+			} else if (headGroup && z->seq < minLess) {
+				z->next = first->next;
+				first->next = z;
+				if (last == first) last = z;
+			} else {
+				z->next = first;
+				first = z;
+			}
+		}
+		*tail = first;
+		tail = &last->next;
+		if (minSeq < minLess) minLess = minSeq;
+	}
+	*tail = old;
+	return out;
+}
+
 static void nsvg__fillScanline(unsigned char* scanline, int len, int x0, int x1, int maxWeight, int* xmin, int* xmax)
 {
 	int i = x0 >> NSVG__FIXSHIFT;
@@ -1194,29 +1276,21 @@ static void nsvg__rasterizeSortedEdges(NSVGrasterizer *r, float tx, float ty, fl
 			}
 
 			// insert all edges that start before the center of this scanline -- omit ones that also end on this scanline
+			// ([img2] collected first, then merged into the sorted list at once: nsvg__insertActive)
+			NSVGactiveEdge *fresh = NULL, **freshTail = &fresh;
+			int nfresh = 0;
 			while (e < r->nedges && r->edges[e].y0 <= scany) {
 				if (r->edges[e].y1 > scany) {
 					NSVGactiveEdge* z = nsvg__addActive(r, &r->edges[e], scany);
 					if (z == NULL) break;
-					// find insertion point
-					if (active == NULL) {
-						active = z;
-					} else if (z->x < active->x) {
-						// insert at front
-						z->next = active;
-						active = z;
-					} else {
-						// find thing to insert AFTER
-						NSVGactiveEdge* p = active;
-						while (p->next && p->next->x < z->x)
-							p = p->next;
-						// at this point, p->next->x is NOT < z->x
-						z->next = p->next;
-						p->next = z;
-					}
+					z->seq = nfresh++;
+					*freshTail = z;
+					freshTail = &z->next;
 				}
 				e++;
 			}
+			if (fresh != NULL)
+				active = nsvg__insertActive(active, fresh, nfresh);
 
 			// now process all active edges in non-zero fashion
 			if (active != NULL)
