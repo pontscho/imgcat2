@@ -159,6 +159,64 @@ static char *convert_utf16be_to_utf8(const uint8_t *utf16be, int length)
 	return utf8;
 }
 
+static uint32_t sfnt_u32(const uint8_t *p)
+{
+	return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+}
+
+/**
+ * @brief Validate an sfnt header and table directory before stbtt_InitFont() sees the data
+ *
+ * stb_truetype does no range checking: stbtt_InitFont() walks the table directory and reads the cmap
+ * encoding records, head (+50) and maxp (+4) at offsets taken from the file. Accepts the sfnt versions
+ * stb_truetype knows (TrueType 1.0, 'true', 'typ1', '1\0\0\0', 'OTTO'); requires the whole directory and every
+ * table (offset + length, 64-bit) inside the data, and cmap / head / maxp long enough for those reads.
+ * Offsets inside tables (cmap subtables, loca/glyf, hmtx, kern, CFF) are used later by glyph lookups and stay
+ * unchecked (stb_truetype trusts its input).
+ *
+ * @return true if stbtt_InitFont() may be called on data
+ */
+static bool sfnt_is_valid(const uint8_t *data, size_t size)
+{
+	static const uint32_t versions[] = { 0x00010000u, 0x74727565u /* true */, 0x74797031u /* typ1 */, 0x31000000u, 0x4F54544Fu /* OTTO */ };
+
+	if (size < 12) {
+		return false;
+	}
+	size_t v = 0;
+	while (v < sizeof(versions) / sizeof(versions[0]) && sfnt_u32(data) != versions[v]) {
+		v++;
+	}
+	if (v == sizeof(versions) / sizeof(versions[0])) {
+		return false;
+	}
+	uint64_t num_tables = ((uint64_t)data[4] << 8) | data[5];
+	if (12 + 16 * num_tables > size) {
+		return false;
+	}
+	for (uint64_t i = 0; i < num_tables; i++) {
+		const uint8_t *rec = data + 12 + 16 * i;
+		uint64_t offset = sfnt_u32(rec + 8);
+		uint64_t length = sfnt_u32(rec + 12);
+		if (offset + length > size) {
+			return false;
+		}
+		/* minimum lengths for stbtt_InitFont's fixed reads (every record of these tags) */
+		uint64_t need = 0;
+		if (memcmp(rec, "cmap", 4) == 0) {
+			need = length < 4 ? 4 : 4 + 8 * (uint64_t)(((uint32_t)data[offset + 2] << 8) | data[offset + 3]);
+		} else if (memcmp(rec, "head", 4) == 0) {
+			need = 54;
+		} else if (memcmp(rec, "maxp", 4) == 0) {
+			need = 6;
+		}
+		if (length < need) {
+			return false;
+		}
+	}
+	return true;
+}
+
 /**
  * @brief Extract font family name from TTF name table using stb_truetype
  */
@@ -192,9 +250,9 @@ static char *parse_font_family_from_ttf(const char *font_path)
 		return NULL;
 	}
 
-	/* Parse with stb_truetype */
+	/* Parse with stb_truetype (only a structurally valid sfnt: it does no range checking) */
 	stbtt_fontinfo font;
-	if (!stbtt_InitFont(&font, data, 0)) {
+	if (!sfnt_is_valid(data, (size_t)size) || !stbtt_InitFont(&font, data, 0)) {
 		free(data);
 		return NULL;
 	}
@@ -832,6 +890,9 @@ static img2_font_face_t *img2_font_face_open_locked(const img2_font_t *font)
 		return NULL;
 	}
 
+	if (!sfnt_is_valid(data, size)) {
+		return NULL; /* the file may have changed since the scan; stb_truetype does no range checking */
+	}
 	img2_font_face_t *face = malloc(sizeof(*face));
 	if (face == NULL) {
 		return NULL;
