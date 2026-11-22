@@ -296,3 +296,7 @@ endif()
 # compiled in by the IMG2_HAVE_* macros of img2_testing
 img2_add_test(test_fuzz_regress SOURCES unit/test_fuzz_regress.c TIMEOUT 30)
 # --- fuzz regressions end ---
+
+# --- iso-widen ---
+# ISO above 65535: ISOSpeedRatings 65535 resolved through the EXIF 2.3 LONG sensitivity tags (metadata/exif_reader.c)
+img2_add_test(test_iso_widen SOURCES unit/test_iso_widen.c REQUIRES EXIF_READER)
