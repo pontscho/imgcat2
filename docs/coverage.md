@@ -301,6 +301,10 @@ Phase 3:
     `stbtt__find_table` / `stbtt_InitFont_internal`, 3 invalid fonts (table past the end, 32-bit wrapping offset,
     WOFF / collection signature) were accepted.
 
+Sanitizer sweep (S16, ASan + UBSan / TSan, [docs/sanitizers.md](sanitizers.md)): HEIF/AVIF Exif offset shift
+overflow, RAW ISO float-to-uint16 conversion (ISO 102400 read as 36864), SVG size float-to-uint32 conversion
+(sizes >= 2^32 wrapped below the limit), and the ctest runner that ran 0 tests under clang's ASan.
+
 ## Known limitations
 
 * Vendored code that crashes after an allocation failure (not ours to patch; these paths are not
@@ -336,3 +340,4 @@ Phase 3:
 | `test_cov_p3_jxl` | phase 3: JXL container box walk (lookalikes, bare codestream, largesize, size 0, malformed headers, box cap, brob) |
 | `test_cov_p3_font` | phase 3: sfnt validation (guard-page font buffers; truncated directory, tables past the end, short cmap/head/maxp, 32-bit wrap, versions) |
 | `test_cov_p3_gaps` | phase 3: GIF with a 0x0 logical screen and two frames (decoder.h total check with a zero-area canvas) |
+| `test_sanitize_regress` | sanitizer sweep (docs/sanitizers.md): RAW ISO above 65535 saturates, SVG sizes beyond 2^32 / infinite are IMG2_E_LIMIT |
