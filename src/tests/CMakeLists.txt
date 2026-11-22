@@ -232,3 +232,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	endif()
 endif()
 # --- coverage lane C end ---
+
+# --- coverage phase 3 begin ---
+# Coverage phase 3 (docs/coverage.md): leak checks with a live-block counter, remaining gaps, bug-fix tests
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_cov_p3_leak SOURCES unit/test_cov_p3_leak.c REQUIRES EXIF_READER)
+	if(TARGET test_cov_p3_leak)
+		target_link_options(test_cov_p3_leak PRIVATE
+			-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup,--wrap=free)
+	endif()
+endif()
+# --- coverage phase 3 end ---

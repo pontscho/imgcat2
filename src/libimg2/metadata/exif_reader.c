@@ -796,9 +796,13 @@ img2_status_t img2_xmp_parse_xml(img2_xmp_t *xmp, const char *xml_data, size_t l
 					}
 
 					if (keywords_len > 0) {
-						xmp->keywords = malloc(keywords_len + 1);
-						if (xmp->keywords) {
-							strcpy(xmp->keywords, keywords_buf);
+						/* a later dc:subject (same packet, or another XMP item parsed into the same struct)
+						 * replaces the earlier keywords */
+						char *copy = malloc(keywords_len + 1);
+						if (copy) {
+							strcpy(copy, keywords_buf);
+							free(xmp->keywords);
+							xmp->keywords = copy;
 							xmp->has_keywords = true;
 						}
 					}
