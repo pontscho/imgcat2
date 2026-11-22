@@ -398,6 +398,7 @@ CTEST(font_scan, lookups_load_failures_and_fallbacks)
 	const uint8_t *no_font = img2_font_get_data(NULL, &sz);
 	const uint8_t *no_size = img2_font_get_data(f[0], NULL);
 	const char *no_family = img2_font_get_family(NULL);
+	img2_font_face_t *no_face = img2_font_face_open(NULL);
 	img2_font_t *unused = NULL;
 	img2_status_t st_null_family = img2_font_load(NULL, IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, &unused);
 	img2_status_t st_null_out = img2_font_load("Plain", IMG2_FONT_WEIGHT_NORMAL, IMG2_FONT_STYLE_NORMAL, NULL);
@@ -427,6 +428,7 @@ CTEST(font_scan, lookups_load_failures_and_fallbacks)
 	ASSERT_NULL(no_font);
 	ASSERT_NULL(no_size);
 	ASSERT_NULL(no_family);
+	ASSERT_NULL(no_face);
 	ASSERT_EQUAL(IMG2_E_ARG, st_null_family);
 	ASSERT_EQUAL(IMG2_E_ARG, st_null_out);
 }
