@@ -131,8 +131,6 @@ decoders/decoder.c:268 line = }
 # ===== decoders/decoder.h =====
 reason: img2_decode_fail(NULL, ...): every caller passes a status pointer
 decoders/decoder.h:83 branch-false 6 = if (st != NULL) {
-reason: a single frame never exceeds 2^30 pixels: frame sizes are checked against IMG2_MAX_PIXELS (2e8) first, HEIF/AVIF handle and image sizes are capped by libheif's max_image_size_pixels (32768^2 = 2^30)
-decoders/decoder.h:117 branch-true 6 = if (pixels > IMG2_MAX_TOTAL_PIXELS || *total > IMG2_MAX_TOTAL_PIXELS - pixels) {
 
 # ===== decoders/decoder_ico.c =====
 reason: bit depth default: parse_bmp_header() admits only 1/4/8/24/32 bits
@@ -694,30 +692,9 @@ decoders/decoder_heif.c:245 region 21 = if (img != NULL) {
 decoders/decoder_heif.c:245 branch-true 8 = if (img != NULL) {
 decoders/decoder_heif.c:246 line = heif_image_release(img);
 decoders/decoder_heif.c:247 line = }
-reason: libheif always creates the interleaved RGBA plane with the image size after a successful decode
-decoders/decoder_heif.c:262 region 51 = if (plane == NULL || width <= 0 || height <= 0) {
+reason: a non-NULL interleaved plane has width and height >= 1: libheif cannot allocate a 0-sized channel (HeifPixelImage::ImagePlane::alloc rejects 0), and heif_image_get_plane_readonly() returns NULL for a stride > INT_MAX, so the width also fits an int (heif_image_get_width() returns -1 only for 0 or > INT_MAX)
 decoders/decoder_heif.c:262 branch-true 24 = if (plane == NULL || width <= 0 || height <= 0) {
 decoders/decoder_heif.c:262 branch-true 38 = if (plane == NULL || width <= 0 || height <= 0) {
-decoders/decoder_heif.c:262 branch-true 7 = if (plane == NULL || width <= 0 || height <= 0) {
-decoders/decoder_heif.c:263 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get %s sequence plane %d", fmt, count);
-decoders/decoder_heif.c:264 line = heif_image_release(img);
-decoders/decoder_heif.c:265 line = *st = IMG2_E_CODEC;
-decoders/decoder_heif.c:266 line = goto cleanup_error;
-decoders/decoder_heif.c:267 line = }
-reason: RESOURCE-BOUND: needs more than 2^30 decoded sequence pixels in memory (>= 4 GiB of RGBA frames); each frame is <= IMG2_MAX_PIXELS (sample-entry check, covered)
-decoders/decoder_heif.c:270 region 98 = if (img2_decode_add_frame_pixels(&total_pixels, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
-decoders/decoder_heif.c:270 branch-true 7 = if (img2_decode_add_frame_pixels(&total_pixels, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
-decoders/decoder_heif.c:271 line = heif_image_release(img);
-decoders/decoder_heif.c:272 line = *st = IMG2_E_LIMIT;
-decoders/decoder_heif.c:273 line = goto cleanup_error;
-decoders/decoder_heif.c:274 line = }
-reason: libheif refuses visual tracks without samples while reading, so the first decode never reports End_of_sequence
-decoders/decoder_heif.c:292 region 18 = if (count == 0) {
-decoders/decoder_heif.c:292 branch-true 6 = if (count == 0) {
-decoders/decoder_heif.c:293 line = img2_log(IMG2_LOG_ERROR, "Error: %s image sequence has no frames", fmt);
-decoders/decoder_heif.c:294 line = *st = IMG2_E_CODEC;
-decoders/decoder_heif.c:295 line = goto cleanup_error;
-decoders/decoder_heif.c:296 line = }
 reason: static helper argument check: decode_heif_frames() checked the same arguments and passes a local
 decoders/decoder_heif.c:343 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
 decoders/decoder_heif.c:343 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
@@ -732,15 +709,6 @@ decoders/decoder_heif.c:353 branch-true 6 = if (ctx == NULL) {
 decoders/decoder_heif.c:354 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
 decoders/decoder_heif.c:355 line = return img2_decode_fail(st, IMG2_E_NOMEM);
 decoders/decoder_heif.c:356 line = }
-reason: libheif always creates the interleaved RGBA plane after a successful decode
-decoders/decoder_heif.c:392 region 21 = if (plane == NULL) {
-decoders/decoder_heif.c:392 branch-true 6 = if (plane == NULL) {
-decoders/decoder_heif.c:393 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get HEIF image plane");
-decoders/decoder_heif.c:394 line = heif_image_release(img);
-decoders/decoder_heif.c:395 line = heif_image_handle_release(handle);
-decoders/decoder_heif.c:396 line = heif_context_free(ctx);
-decoders/decoder_heif.c:397 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_heif.c:398 line = }
 reason: the metadata IDs come from the same handle's list: the item type always exists
 decoders/decoder_heif.c:437 region 24 = if (type == NULL) {
 decoders/decoder_heif.c:437 branch-true 10 = if (type == NULL) {
@@ -752,9 +720,6 @@ reason: libheif returns std::string::c_str() for an existing item's content type
 decoders/decoder_heif.c:493 branch-false 11 = if (content_type != NULL && strcmp(content_type, "application/rdf+xml") == 0) {
 reason: heif_image_handle_get_metadata() after get_metadata_size() > 0: the data is already loaded, the copy cannot fail
 decoders/decoder_heif.c:499 branch-false 14 = if (err.code == heif_error_Ok) {
-reason: libheif rejects a zero ispe while reading ("Invalid image size")
-decoders/decoder_heif.c:588 branch-false 20 = if (width > 0 && height > 0 && img2_decode_add_frame_pixels(&total, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
-decoders/decoder_heif.c:588 branch-false 7 = if (width > 0 && height > 0 && img2_decode_add_frame_pixels(&total, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
 reason: decode_heif_animated() runs only for IMG2_HEIF_LAYOUT_LIST: arguments checked by the caller
 decoders/decoder_heif.c:615 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
 decoders/decoder_heif.c:615 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
@@ -797,23 +762,6 @@ decoders/decoder_heif.c:697 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to ge
 decoders/decoder_heif.c:698 line = *st = IMG2_E_CODEC;
 decoders/decoder_heif.c:699 line = goto cleanup_error;
 decoders/decoder_heif.c:700 line = }
-reason: libheif always creates the interleaved RGBA plane after a successful decode
-decoders/decoder_heif.c:719 region 22 = if (plane == NULL) {
-decoders/decoder_heif.c:719 branch-true 7 = if (plane == NULL) {
-decoders/decoder_heif.c:720 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get HEIF image plane %d", i);
-decoders/decoder_heif.c:721 line = heif_image_release(img);
-decoders/decoder_heif.c:722 line = heif_image_handle_release(handle);
-decoders/decoder_heif.c:723 line = *st = IMG2_E_CODEC;
-decoders/decoder_heif.c:724 line = goto cleanup_error;
-decoders/decoder_heif.c:725 line = }
-reason: running total: the pre-check summed the same handles' sizes, and the decoded image has its handle's size
-decoders/decoder_heif.c:728 region 98 = if (img2_decode_add_frame_pixels(&total_pixels, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
-decoders/decoder_heif.c:728 branch-true 7 = if (img2_decode_add_frame_pixels(&total_pixels, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
-decoders/decoder_heif.c:729 line = heif_image_release(img);
-decoders/decoder_heif.c:730 line = heif_image_handle_release(handle);
-decoders/decoder_heif.c:731 line = *st = IMG2_E_LIMIT;
-decoders/decoder_heif.c:732 line = goto cleanup_error;
-decoders/decoder_heif.c:733 line = }
 reason: static helper argument check: the only caller passes locals
 decoders/decoder_heif.c:794 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 decoders/decoder_heif.c:794 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
@@ -835,15 +783,6 @@ decoders/decoder_avif.c:56 branch-true 6 = if (ctx == NULL) {
 decoders/decoder_avif.c:57 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context for AVIF");
 decoders/decoder_avif.c:58 line = return img2_decode_fail(st, IMG2_E_NOMEM);
 decoders/decoder_avif.c:59 line = }
-reason: libheif always creates the interleaved RGBA plane after a successful decode
-decoders/decoder_avif.c:95 region 21 = if (plane == NULL) {
-decoders/decoder_avif.c:95 branch-true 6 = if (plane == NULL) {
-decoders/decoder_avif.c:96 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get AVIF image plane");
-decoders/decoder_avif.c:97 line = heif_image_release(img);
-decoders/decoder_avif.c:98 line = heif_image_handle_release(handle);
-decoders/decoder_avif.c:99 line = heif_context_free(ctx);
-decoders/decoder_avif.c:100 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_avif.c:101 line = }
 reason: the metadata IDs come from the same handle's list: the item type always exists
 decoders/decoder_avif.c:140 region 24 = if (type == NULL) {
 decoders/decoder_avif.c:140 branch-true 10 = if (type == NULL) {
@@ -855,9 +794,6 @@ reason: libheif returns std::string::c_str() for an existing item's content type
 decoders/decoder_avif.c:196 branch-false 11 = if (content_type != NULL && strcmp(content_type, "application/rdf+xml") == 0) {
 reason: heif_image_handle_get_metadata() after get_metadata_size() > 0: the data is already loaded, the copy cannot fail
 decoders/decoder_avif.c:202 branch-false 14 = if (err.code == heif_error_Ok) {
-reason: libheif rejects a zero ispe while reading ("Invalid image size")
-decoders/decoder_avif.c:291 branch-false 20 = if (width > 0 && height > 0 && img2_decode_add_frame_pixels(&total, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
-decoders/decoder_avif.c:291 branch-false 7 = if (width > 0 && height > 0 && img2_decode_add_frame_pixels(&total, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
 reason: decode_avif_animated() runs only for IMG2_HEIF_LAYOUT_LIST: arguments checked by the caller
 decoders/decoder_avif.c:318 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
 decoders/decoder_avif.c:318 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
@@ -900,23 +836,6 @@ decoders/decoder_avif.c:400 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to ge
 decoders/decoder_avif.c:401 line = *st = IMG2_E_CODEC;
 decoders/decoder_avif.c:402 line = goto cleanup_error;
 decoders/decoder_avif.c:403 line = }
-reason: libheif always creates the interleaved RGBA plane after a successful decode
-decoders/decoder_avif.c:422 region 22 = if (plane == NULL) {
-decoders/decoder_avif.c:422 branch-true 7 = if (plane == NULL) {
-decoders/decoder_avif.c:423 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get AVIF image plane %d", i);
-decoders/decoder_avif.c:424 line = heif_image_release(img);
-decoders/decoder_avif.c:425 line = heif_image_handle_release(handle);
-decoders/decoder_avif.c:426 line = *st = IMG2_E_CODEC;
-decoders/decoder_avif.c:427 line = goto cleanup_error;
-decoders/decoder_avif.c:428 line = }
-reason: running total: the pre-check summed the same handles' sizes, and the decoded image has its handle's size
-decoders/decoder_avif.c:431 region 98 = if (img2_decode_add_frame_pixels(&total_pixels, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
-decoders/decoder_avif.c:431 branch-true 7 = if (img2_decode_add_frame_pixels(&total_pixels, (uint32_t)width, (uint32_t)height) != IMG2_OK) {
-decoders/decoder_avif.c:432 line = heif_image_release(img);
-decoders/decoder_avif.c:433 line = heif_image_handle_release(handle);
-decoders/decoder_avif.c:434 line = *st = IMG2_E_LIMIT;
-decoders/decoder_avif.c:435 line = goto cleanup_error;
-decoders/decoder_avif.c:436 line = }
 reason: static helper argument check: the only caller passes locals
 decoders/decoder_avif.c:497 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 decoders/decoder_avif.c:497 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
