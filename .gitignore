@@ -4,4 +4,6 @@ origin
 build
 build-cov
 build-fuzz
+build-asan
+build-tsan
 tmp
