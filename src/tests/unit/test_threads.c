@@ -3,7 +3,8 @@
  * @brief Concurrency smoke test for the library ([SM3], S6 item 12)
  *
  * 8 threads x 20 iterations decode (round-robin) a PNG, a JPEG (jpegqs path), an animated GIF
- * (giflib path) and an SVG with text (font cache contention) through img2_decoder_dispatch,
+ * (giflib path), an SVG with text (font cache contention), an animated WebP, an APNG, a JPEG 2000 HEIF,
+ * an AVIF, a TIFF and a JPEG XL (each only when its decoder is built) through img2_decoder_dispatch,
  * scale frame 0 to 64x64 and encode it as PNG. Meanwhile one thread toggles the log callback.
  * Every call must succeed and every PNG must equal a single-threaded reference.
  * A lock-order violation hangs; the ctest TIMEOUT turns that into a failure.
@@ -29,7 +30,7 @@
 
 #define N_THREADS 8
 #define N_ITERS 20
-#define N_INPUTS 4
+#define N_INPUTS 10
 
 typedef struct {
 	const char *rel;
@@ -46,6 +47,13 @@ static input_t s_inputs[N_INPUTS] = {
 	{ .rel = "data/jpg/DSCN0010.jpg" },
 	{ .rel = "data/anim/smoke_anim.gif" },
 	{ .rel = "fixtures/svg/text_simple.svg" },
+	/* S16 (TSan sweep, docs/sanitizers.md): every other codec family that may run on several threads at once */
+	{ .rel = "data/anim/smoke_anim.webp" },
+	{ .rel = "data/anim/smoke_anim.png" },
+	{ .rel = "data/heif/j2k_64x48.heif" },
+	{ .rel = "data/heif/mountains.avif" },
+	{ .rel = "data/tiff/Arbitro.tiff" },
+	{ .rel = "data/jxl/test_0001.jxl" },
 };
 
 static atomic_int s_failures;
