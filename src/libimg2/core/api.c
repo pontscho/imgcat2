@@ -41,6 +41,11 @@ img2_status_t img2_decode(const uint8_t *buf, size_t len, const img2_decode_opts
 		img2_log(IMG2_LOG_DEBUG, "img2_decode: input of %zu bytes exceeds IMG2_MAX_FILE_SIZE", len);
 		return IMG2_E_LIMIT;
 	}
+	/* [F21] the JPEG decoder treats any non-zero value as "on": only the documented values are accepted */
+	if (opts != NULL && (opts->jpeg_deblock < -1 || opts->jpeg_deblock > 1)) {
+		img2_log(IMG2_LOG_DEBUG, "img2_decode: jpeg_deblock %d is not -1, 0 or 1", opts->jpeg_deblock);
+		return IMG2_E_ARG;
+	}
 
 	img2_mime_t mime = (opts != NULL && opts->force_mime != IMG2_MIME_UNKNOWN) ? opts->force_mime : img2_detect_mime(buf, len);
 	return img2_decoder_dispatch(opts, buf, len, mime, out);

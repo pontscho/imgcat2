@@ -6,6 +6,8 @@
  *      controls / DEL (the name-table path replaced them); `imgcat2 --fonts` printed families raw.
  * F17: the JPEG XL frame duration in ms, ticks * 1000 * tps_den / tps_num, wrapped in 64 bits before the
  *      UINT32_MAX clamp (img2_decode_ticks_to_ms()).
+ * F21: img2_decode() accepted any img2_decode_opts_t.jpeg_deblock (documented -1 / 0 / 1); the JPEG decoder
+ *      treated every non-zero value as "on".
  */
 
 #define _GNU_SOURCE
@@ -164,4 +166,38 @@ CTEST(f17, ticks_to_ms_saturates_instead_of_wrapping)
 	ASSERT_TRUE(img2_decode_ticks_to_ms(7u, 3000000000u, 4000000000u) == 9333u);
 	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX, UINT32_MAX, 1) == 1000u);
 	ASSERT_TRUE(img2_decode_ticks_to_ms(UINT32_MAX - 1u, UINT32_MAX, 1) == 999u);
+}
+
+/* ===== F21: jpeg_deblock outside -1 / 0 / 1 ===== */
+
+CTEST(f21, jpeg_deblock_out_of_range_is_arg)
+{
+	img2_image_t *img = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(4, 4, &img));
+	img2_frames_t one = { .frames = &img, .count = 1 };
+	img2_encode_opts_t eo = { .quality = 90 };
+	uint8_t *jpg = NULL;
+	size_t jlen = 0;
+	img2_status_t est = img2_encode(&one, IMG2_FORMAT_JPEG, &eo, &jpg, &jlen);
+	img2_image_destroy(img);
+	ASSERT_EQUAL(IMG2_OK, est);
+
+	const int bad[] = { -2, 2, 5, INT32_MIN, INT32_MAX };
+	img2_decode_opts_t o = IMG2_DECODE_OPTS_INIT;
+	img2_frames_t fr = { 0 };
+	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+		o.jpeg_deblock = bad[i];
+		img2_status_t st = img2_decode(jpg, jlen, &o, &fr);
+		img2_frames_free(&fr);
+		ASSERT_EQUAL(IMG2_E_ARG, st);
+	}
+	for (int v = -1; v <= 1; v++) {
+		o.jpeg_deblock = v;
+		ASSERT_EQUAL(IMG2_OK, img2_decode(jpg, jlen, &o, &fr));
+		ASSERT_EQUAL(1, fr.count);
+		img2_frames_free(&fr);
+	}
+	ASSERT_EQUAL(IMG2_OK, img2_decode(jpg, jlen, NULL, &fr)); /* NULL options: the default */
+	img2_frames_free(&fr);
+	img2_free(jpg);
 }
