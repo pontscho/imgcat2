@@ -77,16 +77,16 @@ static void decode_dib_1bit(img2_image_t *img, const uint8_t *pixels, const uint
 static int find_best_ico_entry(const ico_dir_entry_t *entries, int count)
 {
 	int best_index = 0;
-	uint32_t best_score = 0;
+	uint64_t best_score = 0;
 
 	for (int i = 0; i < count; i++) {
 		// Handle width/height 0 = 256
 		uint32_t width = (entries[i].width == 0) ? 256 : entries[i].width;
 		uint32_t height = (entries[i].height == 0) ? 256 : entries[i].height;
 
-		// Calculate score: (area << 16) | bit_count
-		uint32_t area = width * height;
-		uint32_t score = (area << 16) | entries[i].bit_count;
+		// Calculate score: (area << 16) | bit_count; 64-bit: a 256x256 area shifted by 16 is 2^32
+		uint64_t area = (uint64_t)width * height;
+		uint64_t score = (area << 16) | entries[i].bit_count;
 
 		if (score > best_score) {
 			best_score = score;

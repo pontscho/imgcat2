@@ -167,3 +167,27 @@ if(PROJECT_IS_TOP_LEVEL)
 		RESOURCE_LOCK img2_consumer PASS_REGULAR_EXPRESSION "img2 consumer OK"
 		ENVIRONMENT "TMPDIR=${_img2_consumer_tmp}")
 endif()
+
+# --- coverage lane A begin ---
+# Coverage phase 2, lane A (core, ICO/QOI/PNM/YUV/stb decoders, XML/EXIF, font manager); fixtures built in-test
+img2_add_test(test_cov_a_ico SOURCES unit/test_cov_a_ico.c)
+img2_add_test(test_cov_a_xml SOURCES unit/test_cov_a_xml.c REQUIRES EXIF_READER)
+if(TARGET test_cov_a_xml)
+	target_link_libraries(test_cov_a_xml PRIVATE Threads::Threads)
+endif()
+img2_add_test(test_cov_a_font SOURCES unit/test_cov_a_font.c)
+img2_add_test(test_cov_a_exif SOURCES unit/test_cov_a_exif.c REQUIRES EXIF_READER)
+img2_add_test(test_cov_a_yuv SOURCES unit/test_cov_a_yuv.c)
+img2_add_test(test_cov_a_core SOURCES unit/test_cov_a_core.c)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_cov_a_alloc SOURCES unit/test_cov_a_alloc.c REQUIRES EXIF_READER TIMEOUT 60)
+	if(TARGET test_cov_a_alloc)
+		target_link_options(test_cov_a_alloc PRIVATE
+			-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup)
+	endif()
+	img2_add_test(test_cov_a_nostrdup SOURCES unit/test_cov_a_nostrdup.c)
+	if(TARGET test_cov_a_nostrdup)
+		target_link_options(test_cov_a_nostrdup PRIVATE -Wl,--wrap=strdup)
+	endif()
+endif()
+# --- coverage lane A end ---

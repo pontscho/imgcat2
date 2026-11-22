@@ -127,6 +127,8 @@ static bool is_ttf_file(const char *filename)
 
 /**
  * @brief Convert UTF-16BE to UTF-8
+ *
+ * @param length Length in bytes; a trailing odd byte (a truncated code unit) is ignored
  */
 static char *convert_utf16be_to_utf8(const uint8_t *utf16be, int length)
 {
@@ -137,7 +139,7 @@ static char *convert_utf16be_to_utf8(const uint8_t *utf16be, int length)
 	}
 
 	int out_pos = 0;
-	for (int i = 0; i < length; i += 2) {
+	for (int i = 0; i + 1 < length; i += 2) {
 		uint16_t code = (utf16be[i] << 8) | utf16be[i + 1];
 
 		if (code < 0x80) {
@@ -202,7 +204,8 @@ static char *parse_font_family_from_ttf(const char *font_path)
 	const char *name = stbtt_GetFontNameString(&font, &length, STBTT_PLATFORM_ID_MICROSOFT, STBTT_MS_EID_UNICODE_BMP, STBTT_MS_LANG_ENGLISH, 1); /* nameID 1 = Font Family */
 
 	char *family = NULL;
-	if (name && length > 0) {
+	/* the record's offset and length come from the file: the string must lie inside it */
+	if (name && length > 0 && (size_t)((const uint8_t *)name - data) + (size_t)length <= (size_t)size) {
 		/* Convert UTF-16BE to UTF-8 (Microsoft platform) */
 		family = convert_utf16be_to_utf8((const uint8_t *)name, length);
 	}

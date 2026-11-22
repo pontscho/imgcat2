@@ -13,6 +13,16 @@
 #include <stddef.h>
 
 /**
+ * @brief Maximum element nesting depth accepted by img2_xml_document_parse() (the root element is depth 1)
+ *
+ * The parser is recursive descent (one parse_element() + parse_content() frame pair per level); a deeper
+ * document is a parse error instead of a stack overflow. XMP packets nest about 6-10 levels
+ * (x:xmpmeta / rdf:RDF / rdf:Description / property / rdf:Seq / rdf:li, plus nested structures); 256 is far
+ * above any legitimate packet and needs only some tens of KiB of stack, even on small thread stacks.
+ */
+#define IMG2_XML_MAX_DEPTH 256
+
+/**
  * @brief XML node types
  */
 typedef enum {

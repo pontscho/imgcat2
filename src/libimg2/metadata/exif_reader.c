@@ -199,6 +199,8 @@ typedef struct {
 	const uint8_t *tiff_data;
 	size_t tiff_len;
 	byte_order_t byte_order;
+	bool exif_ifd_done; /* IFD0's ExifIFD pointer followed (at most once) */
+	bool gps_ifd_done; /* IFD0's GPS IFD pointer followed (at most once) */
 } tiff_context_t;
 
 /**
@@ -503,7 +505,7 @@ static void parse_gps_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag
 						exif->gps_latitude_ref = (value_offset >> 24) & 0xFF;
 					}
 
-				} else if (value_offset + 1 <= tiff_len) {
+				} else if ((size_t)value_offset + 1 <= tiff_len) { /* size_t: no uint32 wrap-around */
 					exif->gps_latitude_ref = tiff[value_offset];
 				}
 			}
@@ -519,14 +521,14 @@ static void parse_gps_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag
 						exif->gps_longitude_ref = (value_offset >> 24) & 0xFF;
 					}
 
-				} else if (value_offset + 1 <= tiff_len) {
+				} else if ((size_t)value_offset + 1 <= tiff_len) {
 					exif->gps_longitude_ref = tiff[value_offset];
 				}
 			}
 			break;
 
 		case TAG_GPS_LATITUDE:
-			if (type == TYPE_RATIONAL && count == 3 && value_offset + 24 <= tiff_len) {
+			if (type == TYPE_RATIONAL && count == 3 && (size_t)value_offset + 24 <= tiff_len) {
 				const uint8_t *data = tiff + value_offset;
 				double degrees = read_rational(data, order);
 				double minutes = read_rational(data + 8, order);
@@ -539,7 +541,7 @@ static void parse_gps_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag
 			break;
 
 		case TAG_GPS_LONGITUDE:
-			if (type == TYPE_RATIONAL && count == 3 && value_offset + 24 <= tiff_len) {
+			if (type == TYPE_RATIONAL && count == 3 && (size_t)value_offset + 24 <= tiff_len) {
 				const uint8_t *data = tiff + value_offset;
 				double degrees = read_rational(data, order);
 				double minutes = read_rational(data + 8, order);
@@ -558,7 +560,7 @@ static void parse_gps_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag
 			break;
 
 		case TAG_GPS_ALTITUDE:
-			if (type == TYPE_RATIONAL && value_offset + 8 <= tiff_len) {
+			if (type == TYPE_RATIONAL && (size_t)value_offset + 8 <= tiff_len) {
 				exif->gps_altitude = read_rational(tiff + value_offset, order);
 				if (exif->gps_altitude_ref == 1) {
 					exif->gps_altitude = -exif->gps_altitude;
@@ -567,7 +569,7 @@ static void parse_gps_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag
 			break;
 
 		case TAG_GPS_DATESTAMP:
-			if (type == TYPE_ASCII && count < sizeof(exif->gps_datestamp) && value_offset + count <= tiff_len) {
+			if (type == TYPE_ASCII && count < sizeof(exif->gps_datestamp) && (size_t)value_offset + count <= tiff_len) {
 				memcpy(exif->gps_datestamp, tiff + value_offset, count);
 				exif->gps_datestamp[count] = '\0';
 			}
@@ -577,29 +579,34 @@ static void parse_gps_entry(tiff_context_t *ctx, img2_exif_t *exif, uint16_t tag
 
 /**
  * @brief Parse IFD (Image File Directory)
+ *
+ * The ExifIFD and GPS IFD pointers are followed only from IFD0 (is_ifd0), and each at most once: offsets come
+ * from the file, so a pointer back to an IFD (directly or through another sub-IFD) must not recurse forever,
+ * and repeated pointers must not multiply the work.
  */
-static void parse_ifd(tiff_context_t *ctx, img2_exif_t *exif, uint32_t ifd_offset, bool is_gps)
+static void parse_ifd(tiff_context_t *ctx, img2_exif_t *exif, uint32_t ifd_offset, bool is_gps, bool is_ifd0)
 {
 	const uint8_t *tiff = ctx->tiff_data;
 	size_t tiff_len = ctx->tiff_len;
 	byte_order_t order = ctx->byte_order;
+	size_t pos = ifd_offset; /* size_t: offsets near 4 GiB must not wrap around the bounds checks */
 
-	if (ifd_offset + 2 > tiff_len) {
+	if (pos + 2 > tiff_len) {
 		return;
 	}
 
-	uint16_t num_entries = read_u16(tiff + ifd_offset, order);
-	ifd_offset += 2;
+	uint16_t num_entries = read_u16(tiff + pos, order);
+	pos += 2;
 
 	for (uint16_t i = 0; i < num_entries; i++) {
-		if (ifd_offset + 12 > tiff_len) {
+		if (pos + 12 > tiff_len) {
 			return;
 		}
 
-		uint16_t tag = read_u16(tiff + ifd_offset, order);
-		uint16_t type = read_u16(tiff + ifd_offset + 2, order);
-		uint32_t count = read_u32(tiff + ifd_offset + 4, order);
-		uint32_t value_offset = read_u32(tiff + ifd_offset + 8, order);
+		uint16_t tag = read_u16(tiff + pos, order);
+		uint16_t type = read_u16(tiff + pos + 2, order);
+		uint32_t count = read_u32(tiff + pos + 4, order);
+		uint32_t value_offset = read_u32(tiff + pos + 8, order);
 
 		if (is_gps) {
 			parse_gps_entry(ctx, exif, tag, type, count, value_offset);
@@ -607,15 +614,17 @@ static void parse_ifd(tiff_context_t *ctx, img2_exif_t *exif, uint32_t ifd_offse
 		} else {
 			parse_ifd_entry(ctx, exif, tag, type, count, value_offset);
 
-			/* Check for sub-IFD offsets */
-			if (tag == TAG_EXIF_OFFSET) {
-				parse_ifd(ctx, exif, value_offset, false);
-			} else if (tag == TAG_GPS_OFFSET) {
-				parse_ifd(ctx, exif, value_offset, true);
+			/* Sub-IFD offsets (IFD0 only, once each) */
+			if (is_ifd0 && tag == TAG_EXIF_OFFSET && !ctx->exif_ifd_done) {
+				ctx->exif_ifd_done = true;
+				parse_ifd(ctx, exif, value_offset, false, false);
+			} else if (is_ifd0 && tag == TAG_GPS_OFFSET && !ctx->gps_ifd_done) {
+				ctx->gps_ifd_done = true;
+				parse_ifd(ctx, exif, value_offset, true, false);
 			}
 		}
 
-		ifd_offset += 12;
+		pos += 12;
 	}
 }
 
@@ -671,9 +680,11 @@ img2_status_t img2_exif_parse_tiff(img2_exif_t *exif, const uint8_t *tiff_data, 
 	ctx.tiff_data = tiff_data;
 	ctx.tiff_len = len;
 	ctx.byte_order = byte_order;
+	ctx.exif_ifd_done = false;
+	ctx.gps_ifd_done = false;
 
 	/* Call parse_ifd() for IFD0 */
-	parse_ifd(&ctx, exif, ifd0_offset, false);
+	parse_ifd(&ctx, exif, ifd0_offset, false, true);
 
 	return IMG2_OK;
 }

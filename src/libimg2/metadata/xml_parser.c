@@ -156,18 +156,12 @@ struct img2_xml_document {
 typedef enum {
 	TOKEN_NONE,
 	TOKEN_ELEMENT_OPEN, /* < */
-	TOKEN_ELEMENT_CLOSE, /* > */
 	TOKEN_ELEMENT_END, /* </ */
-	TOKEN_ELEMENT_EMPTY, /* /> */
 	TOKEN_DECLARATION_OPEN, /* <? */
-	TOKEN_DECLARATION_CLOSE, /* ?> */
 	TOKEN_COMMENT_OPEN, /* <!-- */
-	TOKEN_COMMENT_CLOSE, /* --> */
 	TOKEN_TEXT,
 	TOKEN_NAME,
-	TOKEN_ATTRIBUTE,
-	TOKEN_EOF,
-	TOKEN_ERROR
+	TOKEN_EOF
 } token_type_t;
 
 typedef struct {
@@ -240,27 +234,9 @@ static token_type_t next_token(xml_tokenizer_t *tok)
 		}
 	}
 
-	/* Check for closing markers */
-	if (match_string(tok, "/>")) {
-		tok->pos += 2;
-		tok->current_token = TOKEN_ELEMENT_EMPTY;
-		return TOKEN_ELEMENT_EMPTY;
-
-	} else if (match_string(tok, "?>")) {
-		tok->pos += 2;
-		tok->current_token = TOKEN_DECLARATION_CLOSE;
-		return TOKEN_DECLARATION_CLOSE;
-
-	} else if (match_string(tok, "-->")) {
-		tok->pos += 3;
-		tok->current_token = TOKEN_COMMENT_CLOSE;
-		return TOKEN_COMMENT_CLOSE;
-
-	} else if (*p == '>') {
-		tok->pos++;
-		tok->current_token = TOKEN_ELEMENT_CLOSE;
-		return TOKEN_ELEMENT_CLOSE;
-	}
+	/* No closing-marker tokens ("/>", "?>", "-->", ">"): parse_element() reads a tag's end itself and comments /
+	 * declarations are skipped with read_until(), so outside markup these are character data ('>' is legal
+	 * unescaped text) */
 
 	/* Read name (element/attribute name) - single word with name characters */
 	if (isalpha((unsigned char)*p) || *p == '_' || *p == ':') {
@@ -279,19 +255,14 @@ static token_type_t next_token(xml_tokenizer_t *tok)
 		return TOKEN_NAME;
 	}
 
-	/* Read text content (anything else until '<') */
-	if (*p != '<') {
-		tok->token_start = p;
-		while (tok->pos < tok->len && tok->xml[tok->pos] != '<') {
-			tok->pos++;
-		}
-		tok->token_len = tok->xml + tok->pos - tok->token_start;
-		tok->current_token = TOKEN_TEXT;
-		return TOKEN_TEXT;
+	/* Read text content (anything else until '<'; *p is not '<' here) */
+	tok->token_start = p;
+	while (tok->pos < tok->len && tok->xml[tok->pos] != '<') {
+		tok->pos++;
 	}
-
-	tok->current_token = TOKEN_ERROR;
-	return TOKEN_ERROR;
+	tok->token_len = tok->xml + tok->pos - tok->token_start;
+	tok->current_token = TOKEN_TEXT;
+	return TOKEN_TEXT;
 }
 
 static char *read_until(xml_tokenizer_t *tok, const char *delimiter, arena_t *arena)
@@ -517,9 +488,10 @@ static int add_attribute(xml_element_node_t *elem, const char *name, size_t name
 
 /* ========== DOM Tree Builder ========== */
 
-static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent);
+static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent, int depth);
 
-static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent)
+/* depth: nesting depth of parent (the element whose content this is) */
+static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent, int depth)
 {
 	while (1) {
 		token_type_t token = next_token(tok);
@@ -571,7 +543,7 @@ static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xm
 			}
 
 		} else if (token == TOKEN_ELEMENT_OPEN) {
-			if (parse_element(tok, doc, parent) != 0) {
+			if (parse_element(tok, doc, parent, depth + 1) != 0) {
 				return -1;
 			}
 
@@ -594,8 +566,13 @@ static int parse_content(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xm
 	}
 }
 
-static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent)
+/* depth: nesting depth of the element being parsed (root element: 1) */
+static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xml_node_t *parent, int depth)
 {
+	if (depth > IMG2_XML_MAX_DEPTH) {
+		return -1; /* recursion bound: a hostile document must not exhaust the stack */
+	}
+
 	/* Expect element name */
 	token_type_t token = next_token(tok);
 	if (token != TOKEN_NAME) {
@@ -653,7 +630,7 @@ static int parse_element(xml_tokenizer_t *tok, img2_xml_document_t *doc, img2_xm
 	add_child_node(parent, elem);
 
 	/* Parse element content */
-	if (parse_content(tok, doc, elem) != 0) {
+	if (parse_content(tok, doc, elem, depth) != 0) {
 		return -1;
 	}
 
@@ -738,7 +715,7 @@ int img2_xml_document_parse(img2_xml_document_t *doc, const char *xml_data, size
 		img2_xml_node_t temp_root;
 		memset(&temp_root, 0, sizeof(img2_xml_node_t));
 
-		if (parse_element(&tok, doc, &temp_root) != 0) {
+		if (parse_element(&tok, doc, &temp_root, 1) != 0) {
 			return -1;
 		}
 
