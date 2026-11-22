@@ -360,6 +360,11 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   (`IMG2_E_LIMIT` / `false`).
 - Every frame goes through one gate: each axis `<= IMG2_MAX_DIMENSION` (65536), total
   `<= IMG2_MAX_PIXELS` (200 megapixels); violations are `IMG2_E_LIMIT`.
+- **[P33]** The size in the file header is checked against the same gate before the codec allocates for the
+  image (JPEG before `jpeg_start_decompress`, QOI header, `stbi_info` for the stb_image formats, WebP image /
+  animation canvas from `WebPGetFeatures`, HEIF/AVIF image handles, RAW size after `libraw_open_buffer`), so a
+  small file announcing a huge image fails with `IMG2_E_LIMIT` without the gigabyte-sized codec buffers. PNG,
+  GIF, TIFF, JPEG XL, ICO, PNM, YUV and SVG already checked before allocating.
 - `img2_decode_opts_t.max_frames > 0` keeps only the first N frames. It trims the result after decoding,
   so it does not bound decode time or memory.
 - **[F14]** Animated GIF, APNG, WebP and JPEG XL decodes are capped at 2^30 pixels summed over all output
