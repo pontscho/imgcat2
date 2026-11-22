@@ -10,8 +10,11 @@
 #   WORK_DIR      corpora, seeds, crash artifacts, logs   (default: $BUILD_DIR/fuzz-work)
 #   FUZZ_TIME     seconds of fuzzing per target            (default: 600)
 #   FUZZ_JOBS     parallel fuzzing processes per target    (default: 8)
-#   FUZZ_MODE     fork (libFuzzer -fork, keeps going after findings) | jobs (-jobs/-workers, a job stops at
-#                 its first finding)                       (default: fork)
+#   FUZZ_MODE     fork (libFuzzer -fork, keeps going after findings; every fork job re-runs a corpus sample first,
+#                 which dominates with slow inputs) | jobs (FUZZ_JOBS workers running up to 16 x FUZZ_JOBS jobs:
+#                 a job ends at its first finding and the next one starts; better for the slow decode targets)
+#                                                          (default: fork)
+#   FUZZ_MAX_LEN  -max_len override                        (default: per target, see maxlen_of)
 #   BUILD_JOBS    build parallelism                        (default: 16)
 #   RSS_MB        -rss_limit_mb                            (default: 2048)
 #   TIMEOUT       -timeout per input, seconds              (default: 10)
@@ -96,7 +99,7 @@ for t in "${targets[@]}"; do
 	corpus="$WORK_DIR/corpus/$t"
 	art="$WORK_DIR/artifacts/$t"
 	mkdir -p "$corpus" "$art"
-	common=(-dict="$ROOT/src/tests/fuzz/dict/$(dict_of "$t")" -max_len="$(maxlen_of "$t")" -rss_limit_mb="$RSS_MB"
+	common=(-dict="$ROOT/src/tests/fuzz/dict/$(dict_of "$t")" -max_len="${FUZZ_MAX_LEN:-$(maxlen_of "$t")}" -rss_limit_mb="$RSS_MB"
 		-malloc_limit_mb="$RSS_MB" -timeout="$TIMEOUT")
 	if [ "$do_run" = 1 ]; then
 		echo "fuzz.sh: $t for ${FUZZ_TIME}s x $FUZZ_JOBS ($FUZZ_MODE) -> $WORK_DIR/logs/$t.log"
@@ -107,7 +110,11 @@ for t in "${targets[@]}"; do
 				"$corpus" "$SEEDS/$(seed_of "$t")" > "$WORK_DIR/logs/$t.log" 2>&1 || true
 		else
 			# shellcheck disable=SC2086
-			(cd "$art" && "$BIN/$t" "${common[@]}" -jobs="$FUZZ_JOBS" -workers="$FUZZ_JOBS" \
+			# every job gets -max_total_time; timeout (signalling the whole process group) bounds the wall time;
+			# the per-job logs (fuzz-<n>.log) land in $WORK_DIR/logs/<target>.jobs/
+			mkdir -p "$WORK_DIR/logs/$t.jobs"
+			(cd "$WORK_DIR/logs/$t.jobs" && timeout -s INT -k 30 "$((FUZZ_TIME + 15))" \
+				"$BIN/$t" "${common[@]}" -jobs="$((FUZZ_JOBS * 16))" -workers="$FUZZ_JOBS" \
 				-max_total_time="$FUZZ_TIME" -artifact_prefix="$art/" -print_final_stats=1 $FUZZ_ARGS \
 				"$corpus" "$SEEDS/$(seed_of "$t")" > "$WORK_DIR/logs/$t.log" 2>&1) || true
 		fi

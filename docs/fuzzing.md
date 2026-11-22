@@ -65,4 +65,12 @@ limit knob), so the harness tightens them from the outside: ASan's `max_allocati
 Findings land in `<work>/artifacts/<target>/` (`crash-*`, `leak-*`, `timeout-*`, `oom-*`). Reproduce with
 `build-fuzz/src/tests/fuzz/<target> <file>`, minimise with `-minimize_crash=1 -runs=10000 <file>`.
 Every fixed finding becomes a regression test in `src/tests/unit/test_fuzz_regress.c` (the input embedded as a
-C array), registered between the `fuzz regressions` markers at the end of `src/tests/CMakeLists.txt`.
+C array), registered between the `fuzz regressions` markers at the end of `src/tests/CMakeLists.txt`. Undefined
+behaviour often has no visible effect in the normal build, so these tests are also built sanitized: configure the
+fuzz tree with `-DIMG2_BUILD_TESTS=ON` and run `cmake --build build-fuzz --target test_fuzz_regress` +
+`build-fuzz/src/tests/test_fuzz_regress` (UBSan aborts on the unfixed code; img2's link interface carries the
+sanitizer runtimes, `-fsanitize-link-c++-runtime` included, for C-linked test executables).
+
+Throughput: `fork` mode re-runs a corpus sample at the start of every fork job; with the slow codecs (HEIF/AVIF,
+JXL, RAW: ~0.1-1 s per input under ASan) that dominates, so the decode targets are better run with
+`FUZZ_MODE=jobs FUZZ_MAX_LEN=32768` (each worker loads the corpus once, then mutates at ~30-40 exec/s).

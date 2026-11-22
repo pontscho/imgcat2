@@ -46,6 +46,8 @@ function(img2_fuzz_instrument tgt)
 	if(IMG2_FUZZ)
 		target_compile_options(${tgt} PRIVATE -fno-sanitize-recover=undefined
 			"-fsanitize-ignorelist=${PROJECT_SOURCE_DIR}/src/tests/fuzz/ubsan_ignorelist.txt")
-		target_link_options(${tgt} INTERFACE "$<BUILD_INTERFACE:-fsanitize=address,undefined>")
+		# -fsanitize-link-c++-runtime: C-linked consumers (the unit tests) still get UBSan's C++ part, which the
+		# sanitized C++ vendors reference
+		target_link_options(${tgt} INTERFACE "$<BUILD_INTERFACE:-fsanitize=address,undefined;-fsanitize-link-c++-runtime>")
 	endif()
 endfunction()
