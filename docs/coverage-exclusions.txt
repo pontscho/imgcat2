@@ -503,46 +503,46 @@ decoders/decoder_webp.c:455 branch-true 57 = if (data == NULL || len == 0 || fra
 
 # ===== decoders/decoder_jpeg.c =====
 reason: static helper argument check: the only caller passes a local frame counter
-decoders/decoder_jpeg.c:80 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_jpeg.c:81 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
 reason: jpeg_read_header(TRUE) on a memory source: a tables-only stream is a libjpeg error (longjmp), jpeg_mem_src never suspends
-decoders/decoder_jpeg.c:125 region 56 = if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
-decoders/decoder_jpeg.c:125 branch-true 6 = if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
-decoders/decoder_jpeg.c:126 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG header");
-decoders/decoder_jpeg.c:127 line = jpeg_destroy_decompress(&cinfo);
-decoders/decoder_jpeg.c:128 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_jpeg.c:129 line = }
+decoders/decoder_jpeg.c:127 region 56 = if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
+decoders/decoder_jpeg.c:127 branch-true 6 = if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
+decoders/decoder_jpeg.c:128 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG header");
+decoders/decoder_jpeg.c:129 line = jpeg_destroy_decompress(&cinfo);
+decoders/decoder_jpeg.c:130 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_jpeg.c:131 line = }
 reason: jpeg_start_decompress() returns FALSE only for a suspending data source
-decoders/decoder_jpeg.c:148 region 16 = if (!started) {
-decoders/decoder_jpeg.c:148 branch-true 6 = if (!started) {
-decoders/decoder_jpeg.c:149 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to start JPEG decompression");
-decoders/decoder_jpeg.c:150 line = jpeg_destroy_decompress(&cinfo);
-decoders/decoder_jpeg.c:151 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_jpeg.c:152 line = }
+decoders/decoder_jpeg.c:150 region 16 = if (!started) {
+decoders/decoder_jpeg.c:150 branch-true 6 = if (!started) {
+decoders/decoder_jpeg.c:151 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to start JPEG decompression");
+decoders/decoder_jpeg.c:152 line = jpeg_destroy_decompress(&cinfo);
+decoders/decoder_jpeg.c:153 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_jpeg.c:154 line = }
 reason: out_color_space is JCS_RGB: libjpeg errors (longjmp) for unsupported conversions, so output_components is 3
-decoders/decoder_jpeg.c:159 region 21 = if (channels != 3) {
-decoders/decoder_jpeg.c:159 branch-true 6 = if (channels != 3) {
-decoders/decoder_jpeg.c:160 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected JPEG output channels: %d (expected 3)", channels);
-decoders/decoder_jpeg.c:161 line = jpeg_destroy_decompress(&cinfo);
-decoders/decoder_jpeg.c:162 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_jpeg.c:163 line = }
+decoders/decoder_jpeg.c:161 region 21 = if (channels != 3) {
+decoders/decoder_jpeg.c:161 branch-true 6 = if (channels != 3) {
+decoders/decoder_jpeg.c:162 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected JPEG output channels: %d (expected 3)", channels);
+decoders/decoder_jpeg.c:163 line = jpeg_destroy_decompress(&cinfo);
+decoders/decoder_jpeg.c:164 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_jpeg.c:165 line = }
 reason: jpeg_read_scanlines() returns 0 only on suspension; errors longjmp
-decoders/decoder_jpeg.c:192 region 57 = if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
-decoders/decoder_jpeg.c:192 branch-true 7 = if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
-decoders/decoder_jpeg.c:193 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG scanline %u", y);
-decoders/decoder_jpeg.c:194 line = free(row_buffer);
-decoders/decoder_jpeg.c:195 line = img2_image_destroy(img);
-decoders/decoder_jpeg.c:196 line = jpeg_destroy_decompress(&cinfo);
-decoders/decoder_jpeg.c:197 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_jpeg.c:198 line = }
+decoders/decoder_jpeg.c:194 region 57 = if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
+decoders/decoder_jpeg.c:194 branch-true 7 = if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
+decoders/decoder_jpeg.c:195 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG scanline %u", y);
+decoders/decoder_jpeg.c:196 line = free(row_buffer);
+decoders/decoder_jpeg.c:197 line = img2_image_destroy(img);
+decoders/decoder_jpeg.c:198 line = jpeg_destroy_decompress(&cinfo);
+decoders/decoder_jpeg.c:199 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_jpeg.c:200 line = }
 reason: jpeg_finish_decompress() returns FALSE only on suspension
-decoders/decoder_jpeg.c:218 region 42 = if (!jpegqs_finish_decompress(&cinfo)) {
-decoders/decoder_jpeg.c:218 branch-true 7 = if (!jpegqs_finish_decompress(&cinfo)) {
-decoders/decoder_jpeg.c:219 line = img2_log(IMG2_LOG_WARN, "Warning: jpegqs_finish_decompress() returned false");
-decoders/decoder_jpeg.c:220 line = }
-decoders/decoder_jpeg.c:221 region 46 = } else if (!jpeg_finish_decompress(&cinfo)) {
-decoders/decoder_jpeg.c:221 branch-true 13 = } else if (!jpeg_finish_decompress(&cinfo)) {
-decoders/decoder_jpeg.c:222 line = img2_log(IMG2_LOG_WARN, "Warning: jpeg_finish_decompress() returned false");
-decoders/decoder_jpeg.c:223 line = }
+decoders/decoder_jpeg.c:220 region 42 = if (!jpegqs_finish_decompress(&cinfo)) {
+decoders/decoder_jpeg.c:220 branch-true 7 = if (!jpegqs_finish_decompress(&cinfo)) {
+decoders/decoder_jpeg.c:221 line = img2_log(IMG2_LOG_WARN, "Warning: jpegqs_finish_decompress() returned false");
+decoders/decoder_jpeg.c:222 line = }
+decoders/decoder_jpeg.c:223 region 46 = } else if (!jpeg_finish_decompress(&cinfo)) {
+decoders/decoder_jpeg.c:223 branch-true 13 = } else if (!jpeg_finish_decompress(&cinfo)) {
+decoders/decoder_jpeg.c:224 line = img2_log(IMG2_LOG_WARN, "Warning: jpeg_finish_decompress() returned false");
+decoders/decoder_jpeg.c:225 line = }
 
 # ===== decoders/decoder_tiff.c =====
 reason: libtiff never writes to a handle opened "r"
@@ -614,20 +614,23 @@ reason: the timestamp comes from LibRaw's mktime() of a parsed date: localtime_r
 decoders/decoder_raw.c:79 branch-false 7 = if (localtime_r(&raw->other.timestamp, &tm_info)) {
 reason: LibRaw allocates xmpdata with its length
 decoders/decoder_raw.c:187 branch-true 29 = if (!raw->idata.xmpdata || raw->idata.xmplen == 0) {
+reason: LibRaw data error callback: libraw_open_buffer()'s LibRaw_buffer_datastream::fname() is always NULL
+decoders/decoder_raw.c:261 region 36 = const char *name = file != NULL ? file : "unknown file";
+decoders/decoder_raw.c:261 branch-true 21 = const char *name = file != NULL ? file : "unknown file";
 reason: static helper argument check: the only caller passes a local frame counter
-decoders/decoder_raw.c:267 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_raw.c:285 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
 reason: make_mem_thumb() returns NULL for previews without data
-decoders/decoder_raw.c:303 branch-false 16 = if (thumb && thumb->data_size > 0) {
+decoders/decoder_raw.c:322 branch-false 16 = if (thumb && thumb->data_size > 0) {
 reason: img2_decode_jpeg() never returns IMG2_OK without a frame
-decoders/decoder_raw.c:315 branch-false 82 = if (img2_decode_jpeg(thumb->data, thumb->data_size, NULL, &tf) == IMG2_OK && tf.count > 0) {
+decoders/decoder_raw.c:334 branch-false 82 = if (img2_decode_jpeg(thumb->data, thumb->data_size, NULL, &tf) == IMG2_OK && tf.count > 0) {
 reason: output_bps is 8 and LibRaw converts to RGB (or keeps 1 colour for monochrome sensors)
-decoders/decoder_raw.c:414 region 33 = if (!raw_bitmap_ok(processed)) {
-decoders/decoder_raw.c:414 branch-true 6 = if (!raw_bitmap_ok(processed)) {
-decoders/decoder_raw.c:415 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected RAW output format (%d colours)", processed->colors);
-decoders/decoder_raw.c:416 line = libraw_dcraw_clear_mem(processed);
-decoders/decoder_raw.c:417 line = libraw_close(raw);
-decoders/decoder_raw.c:418 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_raw.c:419 line = }
+decoders/decoder_raw.c:433 region 33 = if (!raw_bitmap_ok(processed)) {
+decoders/decoder_raw.c:433 branch-true 6 = if (!raw_bitmap_ok(processed)) {
+decoders/decoder_raw.c:434 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected RAW output format (%d colours)", processed->colors);
+decoders/decoder_raw.c:435 line = libraw_dcraw_clear_mem(processed);
+decoders/decoder_raw.c:436 line = libraw_close(raw);
+decoders/decoder_raw.c:437 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_raw.c:438 line = }
 
 # ===== decoders/decoder_nanosvg.c =====
 reason: a rule is appended only while style_pos + rule_len < 4095, so style_pos never reaches 4095
@@ -1183,19 +1186,19 @@ encoders/encoder_heif.c:234 line = }
 
 # ===== encoders/encoder_jpeg.c =====
 reason: jpeg_write_scanlines() returns 0 only for a suspending destination; the memory destination grows or longjmps
-encoders/encoder_jpeg.c:158 region 57 = if (jpeg_write_scanlines(cinfo, row_pointer, 1) != 1) {
-encoders/encoder_jpeg.c:158 branch-true 7 = if (jpeg_write_scanlines(cinfo, row_pointer, 1) != 1) {
-encoders/encoder_jpeg.c:159 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to write JPEG scanline %u", y);
-encoders/encoder_jpeg.c:160 line = jpeg_destroy_compress(cinfo);
-encoders/encoder_jpeg.c:161 line = return IMG2_E_CODEC;
-encoders/encoder_jpeg.c:162 line = }
+encoders/encoder_jpeg.c:160 region 57 = if (jpeg_write_scanlines(cinfo, row_pointer, 1) != 1) {
+encoders/encoder_jpeg.c:160 branch-true 7 = if (jpeg_write_scanlines(cinfo, row_pointer, 1) != 1) {
+encoders/encoder_jpeg.c:161 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to write JPEG scanline %u", y);
+encoders/encoder_jpeg.c:162 line = jpeg_destroy_compress(cinfo);
+encoders/encoder_jpeg.c:163 line = return IMG2_E_CODEC;
+encoders/encoder_jpeg.c:164 line = }
 reason: a successful libjpeg compression always writes SOI and headers
-encoders/encoder_jpeg.c:233 region 22 = if (jpeg_size == 0) {
-encoders/encoder_jpeg.c:233 branch-true 6 = if (jpeg_size == 0) {
-encoders/encoder_jpeg.c:234 line = img2_log(IMG2_LOG_ERROR, "Error: JPEG encoder produced no output");
-encoders/encoder_jpeg.c:235 line = free(dest.buffer);
-encoders/encoder_jpeg.c:236 line = return IMG2_E_CODEC;
-encoders/encoder_jpeg.c:237 line = }
+encoders/encoder_jpeg.c:235 region 22 = if (jpeg_size == 0) {
+encoders/encoder_jpeg.c:235 branch-true 6 = if (jpeg_size == 0) {
+encoders/encoder_jpeg.c:236 line = img2_log(IMG2_LOG_ERROR, "Error: JPEG encoder produced no output");
+encoders/encoder_jpeg.c:237 line = free(dest.buffer);
+encoders/encoder_jpeg.c:238 line = return IMG2_E_CODEC;
+encoders/encoder_jpeg.c:239 line = }
 
 # ===== encoders/encoder_jxl.c =====
 reason: JxlEncoderSetColorEncoding(sRGB) right after a successful JxlEncoderSetBasicInfo() cannot fail

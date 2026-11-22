@@ -17,6 +17,7 @@
 
 #include "decoder.h"
 #include "../core/log.h"
+#include "../core/log_jpeg.h"
 
 #ifdef IMG2_HAVE_JPEGQS
 #include "libjpegqs.h"
@@ -101,6 +102,7 @@ static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *f
 	// Setup error handler with longjmp
 	cinfo.err = jpeg_std_error(&jerr.pub);
 	jerr.pub.error_exit = jpeg_error_exit;
+	jerr.pub.output_message = img2_jpeg_output_message; /* warnings to img2_log, never stderr */
 
 	// Allocated after setjmp and freed on the longjmp path (libjpeg errors in jpeg_read_scanlines, e.g. a
 	// 12-bit file, or in jpeg_finish_decompress, e.g. a second scan): must be volatile

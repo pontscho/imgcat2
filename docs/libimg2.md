@@ -305,7 +305,16 @@ Every diagnostic goes through one process-global sink; the library never writes 
   prefixes (`Error: `, `Warning: `, `Note: `, `image_scale_fit: `, ...) so the CLI's stderr is unchanged.
 - libpng and libtiff diagnostics arrive through the callback with their historic text (`libpng error: ...`,
   `libpng warning: ...`, `<module>: ...`, `<module>: Warning, ....`) at ERROR/WARN (**[M1b]**); libjpeg errors
-  are trapped by its `error_exit` handler and logged.
+  are trapped by its `error_exit` handler and logged. libjpeg warnings (`Corrupt JPEG data: ...`,
+  `Premature end of JPEG file`; the first one of an image, as libjpeg's `emit_message` decides) arrive at WARN
+  through the `output_message` override `img2_jpeg_output_message` (core/log_jpeg.c, decoder and encoder, the
+  jpeg-quantsmooth path included), and LibRaw data errors (`unknown file: Unexpected end of file`,
+  `unknown file: data corrupted at N`) at WARN through `libraw_set_dataerror_handler`: same text as the
+  vendor defaults printed to stderr themselves.
+- Vendor output that has no public redirection hook and can still reach stderr directly: libjpeg warnings of
+  LibRaw's internal JPEG readers (thumbnail header probe, lossy DNG, Kodak) and of libheif's JPEG plugin,
+  kvazaar's (HEVC encoder) own messages, libjxl messages in debug builds only. libtiff uses its process-global
+  default handlers only when built against a host libtiff older than 4.5 (no `TIFFOpenOptions`).
 - `imgcat2` sets `IMG2_LOG_WARN` at start-up and `IMG2_LOG_INFO` with `-v`.
 - **Log callback contract** (**[R20]**): `img2_set_log_callback(fn, user)` installs `fn` process-wide (NULL
   restores the stderr sink). `fn` runs on the logging thread, possibly while `s_init_lock` is held (the INFO

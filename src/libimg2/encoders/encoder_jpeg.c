@@ -18,6 +18,7 @@
 
 #include "encoder.h"
 #include "../core/log.h"
+#include "../core/log_jpeg.h"
 
 /**
  * @struct jpeg_error_mgr_extended
@@ -107,6 +108,7 @@ static img2_status_t encode_jpeg_rows(const img2_image_t *img, int quality, stru
 	/* Setup error handler with longjmp */
 	cinfo->err = jpeg_std_error(&jerr->pub);
 	jerr->pub.error_exit = jpeg_error_exit;
+	jerr->pub.output_message = img2_jpeg_output_message; /* warnings to img2_log, never stderr */
 
 	if (setjmp(jerr->setjmp_buffer)) {
 		/* longjmp returns here if error occurs */
