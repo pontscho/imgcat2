@@ -532,7 +532,9 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, img
 			if (fr.frames[i]->exif != NULL && fr.frames[i]->exif->orientation > 1) {
 				if (!opts->silent) {
 					const char *descriptions[] = { "Normal", "Flip horizontal", "Rotate 180°", "Flip vertical", "Transpose", "Rotate 90° CW", "Transverse", "Rotate 270° CW" };
-					fprintf(stderr, "Applying EXIF orientation: %u (%s)\n", fr.frames[i]->exif->orientation, descriptions[fr.frames[i]->exif->orientation - 1]);
+					const unsigned orientation = fr.frames[i]->exif->orientation;
+					/* [P11] the EXIF value is any SHORT: only 1..8 have a description */
+					fprintf(stderr, "Applying EXIF orientation: %u (%s)\n", orientation, orientation <= 8 ? descriptions[orientation - 1] : "invalid");
 				}
 				if (img2_apply_orientation(&fr.frames[i]) < 0) {
 					fprintf(stderr, "Warning: Failed to apply orientation %u, displaying as-is\n", fr.frames[i]->exif->orientation);
