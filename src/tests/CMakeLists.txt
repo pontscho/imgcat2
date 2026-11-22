@@ -249,3 +249,22 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 img2_add_test(test_cov_p3_jxl SOURCES unit/test_cov_p3_jxl.c REQUIRES JXL EXIF_READER)
 img2_add_test(test_cov_p3_gaps SOURCES unit/test_cov_p3_gaps.c REQUIRES GIFLIB)# --- coverage phase 3 end ---
+
+# --- core-fix begin ---
+# Exclusions the audit found reachable (docs/coverage-exclusions.txt): stb_image zero dimensions, RAW make /
+# 2-colour preview / libraw_init failure, TIFF multipage with no directories (two allocation faults)
+img2_add_test(test_core_fix_raw SOURCES unit/test_core_fix_raw.c REQUIRES RAW TIMEOUT 30)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_core_fix_alloc SOURCES unit/test_core_fix_alloc.c TIMEOUT 60)
+	if(TARGET test_core_fix_alloc)
+		target_link_options(test_core_fix_alloc PRIVATE
+			-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=strdup,--wrap=free)
+	endif()
+	# operator new throwing std::bad_alloc (unit/core_fix_new_wrap.cpp)
+	img2_add_test(test_core_fix_new SOURCES unit/test_core_fix_new.c unit/core_fix_new_wrap.cpp REQUIRES RAW
+		TIMEOUT 30)
+	if(TARGET test_core_fix_new)
+		target_link_options(test_core_fix_new PRIVATE -Wl,--wrap=_Znwm,--wrap=_Znam)
+	endif()
+endif()
+# --- core-fix end ---

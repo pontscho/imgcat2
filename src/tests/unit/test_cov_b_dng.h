@@ -129,6 +129,8 @@ typedef struct {
 	int gps_ne;        /* GPS references N / E instead of S / W */
 	int no_camera;     /* no Make, Model, UniqueCameraModel */
 	int not_dng;       /* no DNGVersion: a plain CFA TIFF */
+	const char *make;  /* Make tag (only without full_meta), NULL: none */
+	const char *ucm;   /* UniqueCameraModel instead of "Img2 Test Camera" (without no_camera), NULL: default */
 } dng_opts_t;
 
 /** JPEG preview (16x12) with an XMP APP1 segment, encoded in-test; free() the result */
@@ -273,6 +275,8 @@ static inline void dng_build(cb_buf_t *b, const dng_opts_t *o)
 		dng_ascii(&ifd, 315, "Ann Artist");
 		dng_long(&ifd, 34665, exif_off);
 		dng_long(&ifd, 34853, gps_off);
+	} else if (o->make != NULL) {
+		dng_ascii(&ifd, 271, o->make);
 	}
 	if (o->desc != NULL) {
 		dng_ascii(&ifd, 270, o->desc);
@@ -298,7 +302,7 @@ static inline void dng_build(cb_buf_t *b, const dng_opts_t *o)
 		dng_bytes(&ifd, 50706, T_BYTE, "\x01\x04\x00\x00", 4);              /* DNGVersion */
 	}
 	if (!o->no_camera) {
-		dng_ascii(&ifd, 50708, "Img2 Test Camera");                          /* UniqueCameraModel */
+		dng_ascii(&ifd, 50708, o->ucm != NULL ? o->ucm : "Img2 Test Camera"); /* UniqueCameraModel */
 	}
 	dng_long(&ifd, 50717, 65535);                                            /* WhiteLevel */
 	dng_rationals(&ifd, 50721, T_SRATIONAL, 9, (const int32_t[]){ 10, -3, -1, -4, 12, 1, -1, 2, 6 }, (const int32_t[]){ 10, 10, 10, 10, 10, 10, 10, 10, 10 });
