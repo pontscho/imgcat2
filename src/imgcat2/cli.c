@@ -16,6 +16,7 @@
 
 #include "terminal/terminal.h"
 #include "cli.h"
+#include "safe_text.h"
 
 /** Project version from CMake (IMGCAT2_VERSION_STRING compile definition) */
 #ifndef IMGCAT2_VERSION_STRING
@@ -260,7 +261,8 @@ static int parse_dimension_arg(const char *arg, const char *what, int *out)
 	errno = 0;
 	long v = strtol(arg, &end, 10);
 	if (errno != 0 || end == arg || *end != '\0' || v < 0 || v > IMGCAT2_MAX_CUSTOM_DIMENSION) {
-		fprintf(stderr, "Error: %s must be between 0 (auto) and %d pixels (got '%s')\n", what, IMGCAT2_MAX_CUSTOM_DIMENSION, arg);
+		char safe[CLI_SAFE_PATH_SIZE]; /* [P39] the argument with control characters escaped */
+		fprintf(stderr, "Error: %s must be between 0 (auto) and %d pixels (got '%s')\n", what, IMGCAT2_MAX_CUSTOM_DIMENSION, cli_safe_str(arg, safe, sizeof(safe)));
 		return -1;
 	}
 	*out = (int)v;
@@ -321,6 +323,8 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	/* Parse options */
 	int opt;
 	int option_index = 0;
+	char safe[CLI_SAFE_PATH_SIZE];  /* [P39] an argument echoed in an error message, control characters escaped */
+	char safe2[CLI_SAFE_PATH_SIZE]; /* a second one in the same message */
 
 	while ((opt = getopt_long(argc, argv, "hb:i:frvaFt:w:H:AIJELj:p:o:n:", long_options, &option_index)) != -1) {
 		switch (opt) {
@@ -386,7 +390,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 			{
 				char err[160];
 				if (img2_yuv_parse_spec(optarg, &opts->yuv, err, sizeof(err)) < 0) {
-					fprintf(stderr, "Error: Invalid --yuv '%s': %s\n", optarg, err);
+					fprintf(stderr, "Error: Invalid --yuv '%s': %s\n", cli_safe_str(optarg, safe, sizeof(safe)), cli_safe_str(err, safe2, sizeof(safe2)));
 					fprintf(stderr, "Usage: --yuv format:width:height[:y_stride][:uv_stride]\n");
 					return -1;
 				}
@@ -407,7 +411,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 					} else if (strcasecmp(optarg, "jpeg") == 0) {
 						opts->iterm2_format = IMG2_FORMAT_JPEG;
 					} else {
-						fprintf(stderr, "Error: Invalid iterm2-format '%s' (must be 'png' or 'jpeg')\n", optarg);
+						fprintf(stderr, "Error: Invalid iterm2-format '%s' (must be 'png' or 'jpeg')\n", cli_safe_str(optarg, safe, sizeof(safe)));
 						return -1;
 					}
 				}
@@ -415,7 +419,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 
 			case '?':
 				/* getopt_long already printed error message */
-				fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
+				fprintf(stderr, "Try '%s --help' for more information.\n", cli_safe_str(argv[0], safe, sizeof(safe)));
 				return -1;
 
 			default: return -1;
@@ -485,7 +489,8 @@ int validate_options(cli_options_t *opts)
 			}
 		}
 		if (i == sizeof(methods) / sizeof(methods[0])) {
-			fprintf(stderr, "Error: Invalid interpolation method '%s'\n", opts->interpolation);
+			char safe[CLI_SAFE_PATH_SIZE]; /* [P39] the argument with control characters escaped */
+			fprintf(stderr, "Error: Invalid interpolation method '%s'\n", cli_safe_str(opts->interpolation, safe, sizeof(safe)));
 			fprintf(stderr, "Valid methods: lanczos, bilinear, nearest, cubic, box, mitchell\n");
 			return -1;
 		}

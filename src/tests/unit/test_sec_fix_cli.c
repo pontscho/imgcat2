@@ -594,3 +594,55 @@ CTEST(sec_fix_cli, paths_escaped_in_messages)
 	rmdir(p);
 	rmdir(base);
 }
+
+/* ---- P39: command-line arguments echoed in argument-error messages ---- */
+
+/* parse_arguments() (and validate_options() if it parsed) on argv; returns stderr (free()) */
+static char *cli_errors(int argc, char **argv, int expect_parse)
+{
+	cli_options_t opts;
+	memset(&opts, 0, sizeof(opts));
+	opts.fps = 15;
+	cap_t c;
+	cap_begin(&c, STDERR_FILENO, "args");
+	optind = 0; /* glibc: full re-initialisation of getopt */
+	int rc = parse_arguments(argc, argv, &opts);
+	if (rc == 0) {
+		rc = validate_options(&opts);
+	}
+	size_t n = 0;
+	char *err = cap_end(&c, &n);
+	ASSERT_EQUAL(expect_parse, rc);
+	ASSERT_NOT_NULL(err);
+	return err;
+}
+
+CTEST(sec_fix_cli, argument_errors_escaped)
+{
+	static const struct {
+		const char *opt;
+		const char *arg;
+		const char *expect;
+	} cases[] = {
+		{ "-w", "1\x1b[2J", "(got '1\\x1b[2J')" },
+		{ "--iterm2-format", "x\x1b]0;t\x07", "Invalid iterm2-format 'x\\x1b]0;t\\x07'" },
+		{ "--yuv", "nv12\x1b[2J:1:1", "Invalid --yuv 'nv12\\x1b[2J:1:1': " },
+		{ "-i", "bogus\x1b[2J", "Invalid interpolation method 'bogus\\x1b[2J'" },
+	};
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		char *argv[] = { (char *)"imgcat2", (char *)cases[i].opt, (char *)cases[i].arg, NULL };
+		char *err = cli_errors(3, argv, -1);
+		if (count_controls(err, strlen(err)) != 0 || strstr(err, cases[i].expect) == NULL) {
+			fprintf(stderr, "  case %zu: stderr: %s\n", i, err);
+		}
+		ASSERT_EQUAL(0, count_controls(err, strlen(err)));
+		ASSERT_NOT_NULL(strstr(err, cases[i].expect));
+		free(err);
+	}
+
+	/* unknown option: our "Try" line escapes argv[0] (getopt's own message before it is glibc's) */
+	char *argv[] = { (char *)"img\x1b[2Jcat", (char *)"--no-such-option", NULL };
+	char *err = cli_errors(2, argv, -1);
+	ASSERT_NOT_NULL(strstr(err, "Try 'img\\x1b[2Jcat --help' for more information.\n"));
+	free(err);
+}
