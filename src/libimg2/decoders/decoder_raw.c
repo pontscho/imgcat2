@@ -349,6 +349,14 @@ static img2_image_t **decode_raw_static(const uint8_t *data, size_t len, int *fr
 	// Thumbnail extraction failed or unavailable - try full RAW processing
 	// fprintf(stderr, "Info: Processing full RAW image...\n");
 
+	// [P33] libraw_unpack / libraw_dcraw_process allocate for the raw size (up to LibRaw's own 2 GB cap) before
+	// the output size could be checked: check the size known since libraw_open_buffer first
+	img2_status_t pre_st = img2_decode_check_header_size("RAW", raw->sizes.width, raw->sizes.height);
+	if (pre_st != IMG2_OK) {
+		libraw_close(raw);
+		return img2_decode_fail(st, pre_st);
+	}
+
 	// Unpack RAW data
 	ret = libraw_unpack(raw);
 	if (ret != LIBRAW_SUCCESS) {

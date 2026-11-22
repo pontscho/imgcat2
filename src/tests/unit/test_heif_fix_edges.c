@@ -96,7 +96,8 @@ CTEST(heif_fix_edges, list_single_image_above_total_limit)
 	size_t len = 0;
 	uint8_t *d = hb_list(heif_compression_uncompressed, 2, 16, 16, NULL, 0, &len);
 	ASSERT_NOT_NULL(d);
-	/* 40000 x 40000 = 1.6e9 pixels > 2^30: img2_decode_add_frame_pixels() rejects the first handle by itself */
+	/* 40000 x 40000 = 1.6e9 pixels > 2^30: the first handle is rejected by itself (since [P33] by the per-image
+	 * size pre-check, before img2_decode_add_frame_pixels()) */
 	ASSERT_TRUE(patch_ispe(d, len, 40000, 40000) > 0);
 	ASSERT_EQUAL(IMG2_HEIF_LAYOUT_LIST, img2_heif_layout(d, len, NULL));
 	hd_expect(d, len, IMG2_E_LIMIT, 0);

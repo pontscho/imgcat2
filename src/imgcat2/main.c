@@ -15,6 +15,7 @@
 #include "cli.h"
 #include "metadata.h"
 #include "pipeline.h"
+#include "safe_text.h"
 #include "terminal/file.h"
 #include "terminal/terminal.h"
 
@@ -130,7 +131,8 @@ int main(int argc, char **argv)
 	}
 
 	if (!opts.silent) {
-		fprintf(stderr, "Read %zu bytes from %s\n", buffer_size, opts.input_file ? opts.input_file : "stdin");
+		char safe[CLI_SAFE_PATH_SIZE]; /* [P39] the path with control characters escaped */
+		fprintf(stderr, "Read %zu bytes from %s\n", buffer_size, opts.input_file ? cli_safe_str(opts.input_file, safe, sizeof(safe)) : "stdin");
 	}
 
 	/* DECISION POINT: Kitty / ANSI rendering */

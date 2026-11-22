@@ -106,6 +106,27 @@ static inline img2_status_t img2_decode_image_alloc(uint32_t width, uint32_t hei
 }
 
 /**
+ * @brief Internal [P33]: reject a header-announced size before the codec allocates for it
+ *
+ * Codecs (libjpeg buffered mode, qoi.h, stb_image, libwebp, libheif, LibRaw) allocate image-sized buffers
+ * before the decoder sees the decoded size: the header's size is checked against img2_image_calc_size() first.
+ *
+ * @param fmt Format name of the log line
+ * @return IMG2_E_LIMIT (logged) if width and height are both > 0 and fail img2_image_calc_size(); else IMG2_OK
+ *         (a size <= 0 is left to the codec, which reports it as before)
+ */
+static inline img2_status_t img2_decode_check_header_size(const char *fmt, int64_t width, int64_t height)
+{
+	size_t byte_count;
+
+	if (width <= 0 || height <= 0 || (width <= IMG2_MAX_DIMENSION && height <= IMG2_MAX_DIMENSION && img2_image_calc_size((uint32_t)width, (uint32_t)height, &byte_count))) {
+		return IMG2_OK;
+	}
+	img2_log(IMG2_LOG_ERROR, "Error: %s dimensions %lldx%lld exceed the limits (%u per side, %lu pixels)", fmt, (long long)width, (long long)height, (unsigned)IMG2_MAX_DIMENSION, (unsigned long)IMG2_MAX_PIXELS);
+	return IMG2_E_LIMIT;
+}
+
+/**
  * @brief Internal [F14]: add one frame of width x height to the running pixel total of an animated decode
  *
  * @return IMG2_OK, or IMG2_E_LIMIT if the total would exceed IMG2_MAX_TOTAL_PIXELS (total unchanged then)

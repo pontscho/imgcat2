@@ -6,6 +6,7 @@
  * Provides superior SVG spec compliance compared to nanosvg.
  */
 
+#include <math.h>
 #include <resvg/resvg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -61,8 +62,10 @@ static img2_image_t **decode_svg_resvg_frames(const uint8_t *data, size_t len, i
 
 	// Get SVG dimensions
 	resvg_size size = resvg_get_image_size(tree);
-	uint32_t width = (uint32_t)size.width;
-	uint32_t height = (uint32_t)size.height;
+	/* [P17] float -> uint32_t is undefined for NaN, negative and >= 2^32 sizes: <= 0 / NaN become 0 (FORMAT
+	 * below), anything above IMG2_MAX_DIMENSION is clamped to IMG2_MAX_DIMENSION + 1 (LIMIT below) */
+	uint32_t width = size.width > 0.0f ? (uint32_t)fminf(size.width, (float)IMG2_MAX_DIMENSION + 1.0f) : 0;
+	uint32_t height = size.height > 0.0f ? (uint32_t)fminf(size.height, (float)IMG2_MAX_DIMENSION + 1.0f) : 0;
 
 	// Validate dimensions
 	if (width == 0 || height == 0) {

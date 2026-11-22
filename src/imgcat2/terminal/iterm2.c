@@ -86,8 +86,9 @@ int iterm2_render(img2_image_t **frames, int frame_count, const cli_options_t *o
 
 	/* Task-010: Bandwidth savings diagnostic output */
 	if (!opts->silent && original_size > 0) {
-		double reduction = ((double)(original_size - encoded_size) / original_size) * 100.0;
-		fprintf(stderr, "iTerm2: Encoded to %s: %.1f MB → %.1f MB (%.1f%% reduction)\n", format_name, original_size / 1048576.0, encoded_size / 1048576.0, reduction);
+		/* [P20] in double: (original - encoded) in size_t wrapped when the encoded image is larger */
+		double reduction = (((double)original_size - (double)encoded_size) / original_size) * 100.0;
+		fprintf(stderr, "iTerm2: Encoded to %s: %.1f MB → %.1f MB (%.1f%% %s)\n", format_name, original_size / 1048576.0, encoded_size / 1048576.0, reduction >= 0.0 ? reduction : -reduction, reduction >= 0.0 ? "reduction" : "increase");
 	}
 
 	/* Task-011: Base64 encode the PNG/JPEG data */

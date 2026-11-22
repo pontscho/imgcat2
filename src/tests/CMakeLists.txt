@@ -304,3 +304,18 @@ img2_add_test(test_iso_widen SOURCES unit/test_iso_widen.c REQUIRES EXIF_READER)
 # --- svg-state ---
 # nanosvg.h transform parsers read stack args[] they had not written: an SVG decode depended on earlier decodes
 img2_add_test(test_svg_state SOURCES unit/test_svg_state.c)
+
+# --- sec-fix ---
+# Security fixes (P-numbers of the audit). [P33] header dimensions over the limits rejected before the codecs
+# allocate: allocations above 256 MiB fail and are counted through GNU ld --wrap (Linux only)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	img2_add_test(test_sec_fix_limits SOURCES unit/test_sec_fix_limits.c TIMEOUT 60)
+	if(TARGET test_sec_fix_limits)
+		target_link_options(test_sec_fix_limits PRIVATE -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc)
+		set_property(TEST test_sec_fix_limits APPEND PROPERTY ENVIRONMENT "OMP_NUM_THREADS=2")
+	endif()
+endif()
+# CLI: [P11] EXIF orientation outside 1..8 in the "Applying EXIF orientation" line; [P20] iTerm2 size line
+# when the re-encoded image is larger; [P38/P39] control characters of EXIF / XMP text and paths escaped
+img2_add_test(test_sec_fix_cli SOURCES unit/test_sec_fix_cli.c LINK cli REQUIRES EXIF_READER)
+# --- sec-fix end ---

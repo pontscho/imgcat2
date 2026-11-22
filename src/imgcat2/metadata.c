@@ -10,6 +10,7 @@
 #include <img2/img2.h>
 
 #include "metadata.h"
+#include "safe_text.h"
 
 /**
  * @brief Output metadata in human-readable text format
@@ -40,6 +41,29 @@ void output_metadata_json(img2_mime_t mime, uint32_t width, uint32_t height, int
 }
 
 #if IMG2_HAS_EXIF
+/** @brief [P38] One text line "<label><value>\n", the file's string with control characters escaped */
+static void text_field(const char *label, const char *value)
+{
+	fputs(label, stdout);
+	cli_fputs_safe(value, stdout);
+	putchar('\n');
+}
+
+/**
+ * @brief [P38] The GPS reference character of the file and the newline (it was "%c": an ESC went out raw)
+ *
+ * An absent reference ('\0') is still written as the NUL byte "%c" wrote, so the output of existing files is
+ * unchanged; any other control character is escaped.
+ */
+static void gps_ref_field(char ref)
+{
+	const char s[2] = { ref, '\0' };
+	if (ref == '\0') {
+		putchar('\0');
+	}
+	text_field("", s);
+}
+
 /**
  * @brief Output EXIF metadata in human-readable format
  */
@@ -55,14 +79,16 @@ void output_exif_text(const struct img2_exif *exif)
 	if (exif->make[0] != '\0' || exif->model[0] != '\0') {
 		printf("Camera:\n");
 		if (exif->make[0] != '\0' && exif->model[0] != '\0') {
-			printf("  Make/Model: %s %s\n", exif->make, exif->model);
+			fputs("  Make/Model: ", stdout);
+			cli_fputs_safe(exif->make, stdout);
+			text_field(" ", exif->model);
 		} else if (exif->make[0] != '\0') {
-			printf("  Make: %s\n", exif->make);
+			text_field("  Make: ", exif->make);
 		} else {
-			printf("  Model: %s\n", exif->model);
+			text_field("  Model: ", exif->model);
 		}
 		if (exif->software[0] != '\0') {
-			printf("  Software: %s\n", exif->software);
+			text_field("  Software: ", exif->software);
 		}
 	}
 
@@ -91,7 +117,7 @@ void output_exif_text(const struct img2_exif *exif)
 	if (exif->lens_model[0] != '\0' || exif->has_focal_length) {
 		printf("\nLens:\n");
 		if (exif->lens_model[0] != '\0') {
-			printf("  Model: %s\n", exif->lens_model);
+			text_field("  Model: ", exif->lens_model);
 		}
 		if (exif->has_focal_length) {
 			printf("  Focal Length: %.0f mm", exif->focal_length);
@@ -116,22 +142,26 @@ void output_exif_text(const struct img2_exif *exif)
 			printf("  Orientation: %s\n", orientations[exif->orientation - 1]);
 		}
 		if (exif->has_datetime && exif->date_time[0] != '\0') {
-			printf("  Date/Time: %s\n", exif->date_time);
+			text_field("  Date/Time: ", exif->date_time);
 		}
 	}
 
 	// GPS information
 	if (exif->has_gps) {
 		printf("\nGPS:\n");
-		printf("  Latitude: %.6f%c\n", exif->gps_latitude, exif->gps_latitude_ref);
-		printf("  Longitude: %.6f%c\n", exif->gps_longitude, exif->gps_longitude_ref);
+		printf("  Latitude: %.6f", exif->gps_latitude);
+		gps_ref_field(exif->gps_latitude_ref);
+		printf("  Longitude: %.6f", exif->gps_longitude);
+		gps_ref_field(exif->gps_longitude_ref);
 		if (exif->gps_altitude != 0.0) {
 			printf("  Altitude: %.1f m\n", exif->gps_altitude);
 		}
 		if (exif->gps_datestamp[0] != '\0') {
-			printf("  Date: %s", exif->gps_datestamp);
+			fputs("  Date: ", stdout);
+			cli_fputs_safe(exif->gps_datestamp, stdout);
 			if (exif->gps_timestamp[0] != '\0') {
-				printf(" %s", exif->gps_timestamp);
+				putchar(' ');
+				cli_fputs_safe(exif->gps_timestamp, stdout);
 			}
 			printf("\n");
 		}
@@ -141,10 +171,10 @@ void output_exif_text(const struct img2_exif *exif)
 	if (exif->artist[0] != '\0' || exif->copyright[0] != '\0') {
 		printf("\nRights:\n");
 		if (exif->artist[0] != '\0') {
-			printf("  Artist: %s\n", exif->artist);
+			text_field("  Artist: ", exif->artist);
 		}
 		if (exif->copyright[0] != '\0') {
-			printf("  Copyright: %s\n", exif->copyright);
+			text_field("  Copyright: ", exif->copyright);
 		}
 	}
 
@@ -152,10 +182,10 @@ void output_exif_text(const struct img2_exif *exif)
 	if (exif->description[0] != '\0' || exif->user_comment[0] != '\0') {
 		printf("\nAnnotations:\n");
 		if (exif->description[0] != '\0') {
-			printf("  Description: %s\n", exif->description);
+			text_field("  Description: ", exif->description);
 		}
 		if (exif->user_comment[0] != '\0') {
-			printf("  Comment: %s\n", exif->user_comment);
+			text_field("  Comment: ", exif->user_comment);
 		}
 	}
 }
@@ -182,19 +212,19 @@ void output_xmp_text(const struct img2_xmp *xmp)
 
 	// Dublin Core
 	if (xmp->creator[0] != '\0') {
-		printf("  Creator: %s\n", xmp->creator);
+		text_field("  Creator: ", xmp->creator);
 	}
 	if (xmp->title[0] != '\0') {
-		printf("  Title: %s\n", xmp->title);
+		text_field("  Title: ", xmp->title);
 	}
 	if (xmp->description[0] != '\0') {
-		printf("  Description: %s\n", xmp->description);
+		text_field("  Description: ", xmp->description);
 	}
 	if (xmp->has_keywords && xmp->keywords != NULL) {
-		printf("  Keywords: %s\n", xmp->keywords);
+		text_field("  Keywords: ", xmp->keywords);
 	}
 	if (xmp->copyright[0] != '\0') {
-		printf("  Copyright: %s\n", xmp->copyright);
+		text_field("  Copyright: ", xmp->copyright);
 	}
 
 	// XMP Basic
@@ -202,33 +232,34 @@ void output_xmp_text(const struct img2_xmp *xmp)
 		printf("  Rating: %d star%s\n", xmp->rating, xmp->rating == 1 ? "" : "s");
 	}
 	if (xmp->label[0] != '\0') {
-		printf("  Label: %s\n", xmp->label);
+		text_field("  Label: ", xmp->label);
 	}
 	if (xmp->create_date[0] != '\0') {
-		printf("  Created: %s\n", xmp->create_date);
+		text_field("  Created: ", xmp->create_date);
 	}
 	if (xmp->modify_date[0] != '\0') {
-		printf("  Modified: %s\n", xmp->modify_date);
+		text_field("  Modified: ", xmp->modify_date);
 	}
 
 	// IPTC/Photoshop
 	if (xmp->city[0] != '\0' || xmp->country[0] != '\0') {
 		printf("  Location: ");
 		if (xmp->city[0] != '\0') {
-			printf("%s", xmp->city);
+			cli_fputs_safe(xmp->city, stdout);
 			if (xmp->country[0] != '\0') {
-				printf(", %s", xmp->country);
+				printf(", ");
+				cli_fputs_safe(xmp->country, stdout);
 			}
 		} else {
-			printf("%s", xmp->country);
+			cli_fputs_safe(xmp->country, stdout);
 		}
 		printf("\n");
 	}
 	if (xmp->credit[0] != '\0') {
-		printf("  Credit: %s\n", xmp->credit);
+		text_field("  Credit: ", xmp->credit);
 	}
 	if (xmp->source[0] != '\0') {
-		printf("  Source: %s\n", xmp->source);
+		text_field("  Source: ", xmp->source);
 	}
 }
 

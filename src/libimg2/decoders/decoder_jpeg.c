@@ -128,6 +128,14 @@ static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *f
 		return img2_decode_fail(st, IMG2_E_CODEC);
 	}
 
+	// [P33] Before jpeg(qs)_start_decompress: buffered image mode (jpeg-quantsmooth, progressive files) allocates
+	// whole-image coefficient arrays there. The output size equals the header size (no scaling).
+	img2_status_t pre_st = img2_decode_check_header_size("JPEG", cinfo.image_width, cinfo.image_height);
+	if (pre_st != IMG2_OK) {
+		jpeg_destroy_decompress(&cinfo);
+		return img2_decode_fail(st, pre_st);
+	}
+
 	// Set output format to RGB (3 channels)
 	cinfo.out_color_space = JCS_RGB;
 

@@ -20,6 +20,7 @@
 
 #include <img2/img2.h>
 
+#include "../safe_text.h"
 #include "file.h"
 
 /**
@@ -38,11 +39,12 @@ static bool validate_path_safe(const char *path, char *canonical_out)
 		return false;
 	}
 
+	char safe[CLI_SAFE_PATH_SIZE]; /* [P39] a path with control characters escaped, for messages */
 #ifdef _WIN32
 	/* Windows: GetFullPathName */
 	DWORD result = GetFullPathName(path, PATH_MAX, canonical_out, NULL);
 	if (result == 0 || result >= PATH_MAX) {
-		fprintf(stderr, "Error: Failed to resolve path: %s\n", path);
+		fprintf(stderr, "Error: Failed to resolve path: %s\n", cli_safe_str(path, safe, sizeof(safe)));
 		return false;
 	}
 #else
@@ -61,7 +63,7 @@ static bool validate_path_safe(const char *path, char *canonical_out)
 
 		char parent_dir[PATH_MAX];
 		if (dir_len >= PATH_MAX) {
-			fprintf(stderr, "Error: Path too long: %s\n", path);
+			fprintf(stderr, "Error: Path too long: %s\n", cli_safe_str(path, safe, sizeof(safe)));
 			return false;
 		}
 		memcpy(parent_dir, path, dir_len);
@@ -70,7 +72,7 @@ static bool validate_path_safe(const char *path, char *canonical_out)
 		/* Try to resolve parent directory */
 		char resolved_parent[PATH_MAX];
 		if (realpath(parent_dir, resolved_parent) == NULL) {
-			fprintf(stderr, "Error: Parent directory does not exist: %s\n", parent_dir);
+			fprintf(stderr, "Error: Parent directory does not exist: %s\n", cli_safe_str(parent_dir, safe, sizeof(safe)));
 			return false;
 		}
 
@@ -181,8 +183,9 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	if (opts->output_file != NULL) {
 		/* Write to file */
 		char canonical_path[PATH_MAX];
+		char safe[CLI_SAFE_PATH_SIZE]; /* [P39] a path with control characters escaped, for messages */
 		if (!validate_path_safe(opts->output_file, canonical_path)) {
-			fprintf(stderr, "Error: Invalid output file path: %s\n", opts->output_file);
+			fprintf(stderr, "Error: Invalid output file path: %s\n", cli_safe_str(opts->output_file, safe, sizeof(safe)));
 			img2_free(encoded_data);
 			return -1;
 		}
@@ -190,7 +193,8 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		/* Open file for writing */
 		FILE *fp = fopen(canonical_path, "wb");
 		if (fp == NULL) {
-			fprintf(stderr, "Error: Cannot open file '%s' for writing: %s\n", canonical_path, strerror(errno));
+			const int err = errno;
+			fprintf(stderr, "Error: Cannot open file '%s' for writing: %s\n", cli_safe_str(canonical_path, safe, sizeof(safe)), strerror(err));
 			img2_free(encoded_data);
 			return -1;
 		}
@@ -212,7 +216,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		}
 
 		if (!opts->silent) {
-			fprintf(stderr, "Successfully wrote %zu bytes to: %s\n", encoded_size, canonical_path);
+			fprintf(stderr, "Successfully wrote %zu bytes to: %s\n", encoded_size, cli_safe_str(canonical_path, safe, sizeof(safe)));
 		}
 	} else {
 		/* Write to stdout */

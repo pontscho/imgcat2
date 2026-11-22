@@ -131,6 +131,8 @@ decoders/decoder.c:268 line = }
 # ===== decoders/decoder.h =====
 reason: img2_decode_fail(NULL, ...): every caller passes a status pointer
 decoders/decoder.h:83 branch-false 6 = if (st != NULL) {
+reason: RESOURCE-BOUND: one frame over IMG2_MAX_TOTAL_PIXELS (2^30): every caller checks the frame size against IMG2_MAX_PIXELS first ([P33]) except a HEIF/AVIF sequence sample decoded larger than its track header (or without one), i.e. a > 2^30 pixel libheif decode (test_sec_fix_limits calls the helper directly; test code is not instrumented)
+decoders/decoder.h:138 branch-true 6 = if (pixels > IMG2_MAX_TOTAL_PIXELS || *total > IMG2_MAX_TOTAL_PIXELS - pixels) {
 
 # ===== decoders/decoder_ico.c =====
 reason: bit depth default: parse_bmp_header() admits only 1/4/8/24/32 bits
@@ -510,37 +512,37 @@ decoders/decoder_jpeg.c:127 line = jpeg_destroy_decompress(&cinfo);
 decoders/decoder_jpeg.c:128 line = return img2_decode_fail(st, IMG2_E_CODEC);
 decoders/decoder_jpeg.c:129 line = }
 reason: jpeg_start_decompress() returns FALSE only for a suspending data source
-decoders/decoder_jpeg.c:140 region 16 = if (!started) {
-decoders/decoder_jpeg.c:140 branch-true 6 = if (!started) {
-decoders/decoder_jpeg.c:141 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to start JPEG decompression");
-decoders/decoder_jpeg.c:142 line = jpeg_destroy_decompress(&cinfo);
-decoders/decoder_jpeg.c:143 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_jpeg.c:144 line = }
+decoders/decoder_jpeg.c:148 region 16 = if (!started) {
+decoders/decoder_jpeg.c:148 branch-true 6 = if (!started) {
+decoders/decoder_jpeg.c:149 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to start JPEG decompression");
+decoders/decoder_jpeg.c:150 line = jpeg_destroy_decompress(&cinfo);
+decoders/decoder_jpeg.c:151 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_jpeg.c:152 line = }
 reason: out_color_space is JCS_RGB: libjpeg errors (longjmp) for unsupported conversions, so output_components is 3
-decoders/decoder_jpeg.c:151 region 21 = if (channels != 3) {
-decoders/decoder_jpeg.c:151 branch-true 6 = if (channels != 3) {
-decoders/decoder_jpeg.c:152 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected JPEG output channels: %d (expected 3)", channels);
-decoders/decoder_jpeg.c:153 line = jpeg_destroy_decompress(&cinfo);
-decoders/decoder_jpeg.c:154 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_jpeg.c:155 line = }
+decoders/decoder_jpeg.c:159 region 21 = if (channels != 3) {
+decoders/decoder_jpeg.c:159 branch-true 6 = if (channels != 3) {
+decoders/decoder_jpeg.c:160 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected JPEG output channels: %d (expected 3)", channels);
+decoders/decoder_jpeg.c:161 line = jpeg_destroy_decompress(&cinfo);
+decoders/decoder_jpeg.c:162 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_jpeg.c:163 line = }
 reason: jpeg_read_scanlines() returns 0 only on suspension; errors longjmp
-decoders/decoder_jpeg.c:184 region 57 = if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
-decoders/decoder_jpeg.c:184 branch-true 7 = if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
-decoders/decoder_jpeg.c:185 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG scanline %u", y);
-decoders/decoder_jpeg.c:186 line = free(row_buffer);
-decoders/decoder_jpeg.c:187 line = img2_image_destroy(img);
-decoders/decoder_jpeg.c:188 line = jpeg_destroy_decompress(&cinfo);
-decoders/decoder_jpeg.c:189 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_jpeg.c:190 line = }
+decoders/decoder_jpeg.c:192 region 57 = if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
+decoders/decoder_jpeg.c:192 branch-true 7 = if (jpeg_read_scanlines(&cinfo, row_pointer, 1) != 1) {
+decoders/decoder_jpeg.c:193 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read JPEG scanline %u", y);
+decoders/decoder_jpeg.c:194 line = free(row_buffer);
+decoders/decoder_jpeg.c:195 line = img2_image_destroy(img);
+decoders/decoder_jpeg.c:196 line = jpeg_destroy_decompress(&cinfo);
+decoders/decoder_jpeg.c:197 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_jpeg.c:198 line = }
 reason: jpeg_finish_decompress() returns FALSE only on suspension
-decoders/decoder_jpeg.c:210 region 42 = if (!jpegqs_finish_decompress(&cinfo)) {
-decoders/decoder_jpeg.c:210 branch-true 7 = if (!jpegqs_finish_decompress(&cinfo)) {
-decoders/decoder_jpeg.c:211 line = img2_log(IMG2_LOG_WARN, "Warning: jpegqs_finish_decompress() returned false");
-decoders/decoder_jpeg.c:212 line = }
-decoders/decoder_jpeg.c:213 region 46 = } else if (!jpeg_finish_decompress(&cinfo)) {
-decoders/decoder_jpeg.c:213 branch-true 13 = } else if (!jpeg_finish_decompress(&cinfo)) {
-decoders/decoder_jpeg.c:214 line = img2_log(IMG2_LOG_WARN, "Warning: jpeg_finish_decompress() returned false");
-decoders/decoder_jpeg.c:215 line = }
+decoders/decoder_jpeg.c:218 region 42 = if (!jpegqs_finish_decompress(&cinfo)) {
+decoders/decoder_jpeg.c:218 branch-true 7 = if (!jpegqs_finish_decompress(&cinfo)) {
+decoders/decoder_jpeg.c:219 line = img2_log(IMG2_LOG_WARN, "Warning: jpegqs_finish_decompress() returned false");
+decoders/decoder_jpeg.c:220 line = }
+decoders/decoder_jpeg.c:221 region 46 = } else if (!jpeg_finish_decompress(&cinfo)) {
+decoders/decoder_jpeg.c:221 branch-true 13 = } else if (!jpeg_finish_decompress(&cinfo)) {
+decoders/decoder_jpeg.c:222 line = img2_log(IMG2_LOG_WARN, "Warning: jpeg_finish_decompress() returned false");
+decoders/decoder_jpeg.c:223 line = }
 
 # ===== decoders/decoder_tiff.c =====
 reason: libtiff never writes to a handle opened "r"
@@ -619,13 +621,13 @@ decoders/decoder_raw.c:303 branch-false 16 = if (thumb && thumb->data_size > 0) 
 reason: img2_decode_jpeg() never returns IMG2_OK without a frame
 decoders/decoder_raw.c:315 branch-false 82 = if (img2_decode_jpeg(thumb->data, thumb->data_size, NULL, &tf) == IMG2_OK && tf.count > 0) {
 reason: output_bps is 8 and LibRaw converts to RGB (or keeps 1 colour for monochrome sensors)
-decoders/decoder_raw.c:406 region 33 = if (!raw_bitmap_ok(processed)) {
-decoders/decoder_raw.c:406 branch-true 6 = if (!raw_bitmap_ok(processed)) {
-decoders/decoder_raw.c:407 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected RAW output format (%d colours)", processed->colors);
-decoders/decoder_raw.c:408 line = libraw_dcraw_clear_mem(processed);
-decoders/decoder_raw.c:409 line = libraw_close(raw);
-decoders/decoder_raw.c:410 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_raw.c:411 line = }
+decoders/decoder_raw.c:414 region 33 = if (!raw_bitmap_ok(processed)) {
+decoders/decoder_raw.c:414 branch-true 6 = if (!raw_bitmap_ok(processed)) {
+decoders/decoder_raw.c:415 line = img2_log(IMG2_LOG_ERROR, "Error: Unexpected RAW output format (%d colours)", processed->colors);
+decoders/decoder_raw.c:416 line = libraw_dcraw_clear_mem(processed);
+decoders/decoder_raw.c:417 line = libraw_close(raw);
+decoders/decoder_raw.c:418 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_raw.c:419 line = }
 
 # ===== decoders/decoder_nanosvg.c =====
 reason: a rule is appended only while style_pos + rule_len < 4095, so style_pos never reaches 4095
@@ -683,63 +685,63 @@ decoders/decoder_heif.c:354 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to al
 decoders/decoder_heif.c:355 line = return img2_decode_fail(st, IMG2_E_NOMEM);
 decoders/decoder_heif.c:356 line = }
 reason: the metadata IDs come from the same handle's list: the item type always exists
-decoders/decoder_heif.c:437 region 24 = if (type == NULL) {
-decoders/decoder_heif.c:437 branch-true 10 = if (type == NULL) {
-decoders/decoder_heif.c:438 line = continue;
-decoders/decoder_heif.c:439 line = }
+decoders/decoder_heif.c:445 region 24 = if (type == NULL) {
+decoders/decoder_heif.c:445 branch-true 10 = if (type == NULL) {
+decoders/decoder_heif.c:446 line = continue;
+decoders/decoder_heif.c:447 line = }
 reason: heif_image_handle_get_metadata() after get_metadata_size() > 0: the data is already loaded, the copy cannot fail
-decoders/decoder_heif.c:448 branch-false 13 = if (err.code == heif_error_Ok) {
+decoders/decoder_heif.c:456 branch-false 13 = if (err.code == heif_error_Ok) {
 reason: libheif returns std::string::c_str() for an existing item's content type
-decoders/decoder_heif.c:493 branch-false 11 = if (content_type != NULL && strcmp(content_type, "application/rdf+xml") == 0) {
+decoders/decoder_heif.c:501 branch-false 11 = if (content_type != NULL && strcmp(content_type, "application/rdf+xml") == 0) {
 reason: heif_image_handle_get_metadata() after get_metadata_size() > 0: the data is already loaded, the copy cannot fail
-decoders/decoder_heif.c:499 branch-false 14 = if (err.code == heif_error_Ok) {
+decoders/decoder_heif.c:507 branch-false 14 = if (err.code == heif_error_Ok) {
 reason: decode_heif_animated() runs only for IMG2_HEIF_LAYOUT_LIST: arguments checked by the caller
-decoders/decoder_heif.c:615 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_heif.c:615 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_heif.c:615 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_heif.c:615 branch-true 6 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_heif.c:616 line = img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_heif_animated");
-decoders/decoder_heif.c:617 line = return img2_decode_fail(st, IMG2_E_ARG);
-decoders/decoder_heif.c:618 line = }
-reason: heif_context_alloc() uses new (throws, never returns NULL)
-decoders/decoder_heif.c:625 region 19 = if (ctx == NULL) {
-decoders/decoder_heif.c:625 branch-true 6 = if (ctx == NULL) {
-decoders/decoder_heif.c:626 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
-decoders/decoder_heif.c:627 line = return img2_decode_fail(st, IMG2_E_NOMEM);
+decoders/decoder_heif.c:625 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_heif.c:625 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_heif.c:625 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_heif.c:625 branch-true 6 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_heif.c:626 line = img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_heif_animated");
+decoders/decoder_heif.c:627 line = return img2_decode_fail(st, IMG2_E_ARG);
 decoders/decoder_heif.c:628 line = }
+reason: heif_context_alloc() uses new (throws, never returns NULL)
+decoders/decoder_heif.c:635 region 19 = if (ctx == NULL) {
+decoders/decoder_heif.c:635 branch-true 6 = if (ctx == NULL) {
+decoders/decoder_heif.c:636 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
+decoders/decoder_heif.c:637 line = return img2_decode_fail(st, IMG2_E_NOMEM);
+decoders/decoder_heif.c:638 line = }
 reason: the same bytes were read by img2_heif_layout(), which found more than one top-level image
-decoders/decoder_heif.c:632 region 33 = if (err.code != heif_error_Ok) {
-decoders/decoder_heif.c:632 branch-true 6 = if (err.code != heif_error_Ok) {
-decoders/decoder_heif.c:633 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read HEIF data: %s", err.message);
-decoders/decoder_heif.c:634 line = heif_context_free(ctx);
-decoders/decoder_heif.c:635 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_heif.c:636 line = }
-decoders/decoder_heif.c:640 region 23 = if (num_images == 0) {
-decoders/decoder_heif.c:640 branch-true 6 = if (num_images == 0) {
-decoders/decoder_heif.c:641 line = img2_log(IMG2_LOG_ERROR, "Error: HEIF image sequence has no images");
-decoders/decoder_heif.c:642 line = heif_context_free(ctx);
-decoders/decoder_heif.c:643 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_heif.c:644 line = }
+decoders/decoder_heif.c:642 region 33 = if (err.code != heif_error_Ok) {
+decoders/decoder_heif.c:642 branch-true 6 = if (err.code != heif_error_Ok) {
+decoders/decoder_heif.c:643 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read HEIF data: %s", err.message);
+decoders/decoder_heif.c:644 line = heif_context_free(ctx);
+decoders/decoder_heif.c:645 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_heif.c:646 line = }
+decoders/decoder_heif.c:650 region 23 = if (num_images == 0) {
+decoders/decoder_heif.c:650 branch-true 6 = if (num_images == 0) {
+decoders/decoder_heif.c:651 line = img2_log(IMG2_LOG_ERROR, "Error: HEIF image sequence has no images");
+decoders/decoder_heif.c:652 line = heif_context_free(ctx);
+decoders/decoder_heif.c:653 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_heif.c:654 line = }
 reason: heif_context_get_list_of_top_level_image_IDs() returns min(count, #images) and count == #images
-decoders/decoder_heif.c:661 region 34 = if (actual_count != num_images) {
-decoders/decoder_heif.c:661 branch-true 6 = if (actual_count != num_images) {
-decoders/decoder_heif.c:662 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get image ID list");
-decoders/decoder_heif.c:663 line = free(image_ids);
-decoders/decoder_heif.c:664 line = heif_context_free(ctx);
-decoders/decoder_heif.c:665 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_heif.c:666 line = }
+decoders/decoder_heif.c:671 region 34 = if (actual_count != num_images) {
+decoders/decoder_heif.c:671 branch-true 6 = if (actual_count != num_images) {
+decoders/decoder_heif.c:672 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get image ID list");
+decoders/decoder_heif.c:673 line = free(image_ids);
+decoders/decoder_heif.c:674 line = heif_context_free(ctx);
+decoders/decoder_heif.c:675 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_heif.c:676 line = }
 reason: the pre-check (heif_check_total_pixels) opened every one of these handles successfully just before
-decoders/decoder_heif.c:696 region 34 = if (err.code != heif_error_Ok) {
-decoders/decoder_heif.c:696 branch-true 7 = if (err.code != heif_error_Ok) {
-decoders/decoder_heif.c:697 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get image handle %d: %s", i, err.message);
-decoders/decoder_heif.c:698 line = *st = IMG2_E_CODEC;
-decoders/decoder_heif.c:699 line = goto cleanup_error;
-decoders/decoder_heif.c:700 line = }
+decoders/decoder_heif.c:706 region 34 = if (err.code != heif_error_Ok) {
+decoders/decoder_heif.c:706 branch-true 7 = if (err.code != heif_error_Ok) {
+decoders/decoder_heif.c:707 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get image handle %d: %s", i, err.message);
+decoders/decoder_heif.c:708 line = *st = IMG2_E_CODEC;
+decoders/decoder_heif.c:709 line = goto cleanup_error;
+decoders/decoder_heif.c:710 line = }
 reason: static helper argument check: the only caller passes locals
-decoders/decoder_heif.c:794 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
-decoders/decoder_heif.c:794 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
+decoders/decoder_heif.c:804 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
+decoders/decoder_heif.c:804 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 reason: img2_heif_layout() returns one of the three enum values
-decoders/decoder_heif.c:810 branch-true 2 = default:
+decoders/decoder_heif.c:820 branch-true 2 = default:
 
 # ===== decoders/decoder_avif.c =====
 reason: static helper argument check: decode_avif_frames() checked the same arguments and passes a local
@@ -757,63 +759,63 @@ decoders/decoder_avif.c:57 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to all
 decoders/decoder_avif.c:58 line = return img2_decode_fail(st, IMG2_E_NOMEM);
 decoders/decoder_avif.c:59 line = }
 reason: the metadata IDs come from the same handle's list: the item type always exists
-decoders/decoder_avif.c:140 region 24 = if (type == NULL) {
-decoders/decoder_avif.c:140 branch-true 10 = if (type == NULL) {
-decoders/decoder_avif.c:141 line = continue;
-decoders/decoder_avif.c:142 line = }
+decoders/decoder_avif.c:148 region 24 = if (type == NULL) {
+decoders/decoder_avif.c:148 branch-true 10 = if (type == NULL) {
+decoders/decoder_avif.c:149 line = continue;
+decoders/decoder_avif.c:150 line = }
 reason: heif_image_handle_get_metadata() after get_metadata_size() > 0: the data is already loaded, the copy cannot fail
-decoders/decoder_avif.c:151 branch-false 13 = if (err.code == heif_error_Ok) {
+decoders/decoder_avif.c:159 branch-false 13 = if (err.code == heif_error_Ok) {
 reason: libheif returns std::string::c_str() for an existing item's content type
-decoders/decoder_avif.c:196 branch-false 11 = if (content_type != NULL && strcmp(content_type, "application/rdf+xml") == 0) {
+decoders/decoder_avif.c:204 branch-false 11 = if (content_type != NULL && strcmp(content_type, "application/rdf+xml") == 0) {
 reason: heif_image_handle_get_metadata() after get_metadata_size() > 0: the data is already loaded, the copy cannot fail
-decoders/decoder_avif.c:202 branch-false 14 = if (err.code == heif_error_Ok) {
+decoders/decoder_avif.c:210 branch-false 14 = if (err.code == heif_error_Ok) {
 reason: decode_avif_animated() runs only for IMG2_HEIF_LAYOUT_LIST: arguments checked by the caller
-decoders/decoder_avif.c:318 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_avif.c:318 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_avif.c:318 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_avif.c:318 branch-true 6 = if (data == NULL || len == 0 || frame_count == NULL) {
-decoders/decoder_avif.c:319 line = img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_avif_animated");
-decoders/decoder_avif.c:320 line = return img2_decode_fail(st, IMG2_E_ARG);
-decoders/decoder_avif.c:321 line = }
-reason: heif_context_alloc() uses new (throws, never returns NULL)
-decoders/decoder_avif.c:328 region 19 = if (ctx == NULL) {
-decoders/decoder_avif.c:328 branch-true 6 = if (ctx == NULL) {
-decoders/decoder_avif.c:329 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context for AVIF");
-decoders/decoder_avif.c:330 line = return img2_decode_fail(st, IMG2_E_NOMEM);
+decoders/decoder_avif.c:328 region 55 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_avif.c:328 branch-true 22 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_avif.c:328 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_avif.c:328 branch-true 6 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_avif.c:329 line = img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to decode_avif_animated");
+decoders/decoder_avif.c:330 line = return img2_decode_fail(st, IMG2_E_ARG);
 decoders/decoder_avif.c:331 line = }
+reason: heif_context_alloc() uses new (throws, never returns NULL)
+decoders/decoder_avif.c:338 region 19 = if (ctx == NULL) {
+decoders/decoder_avif.c:338 branch-true 6 = if (ctx == NULL) {
+decoders/decoder_avif.c:339 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context for AVIF");
+decoders/decoder_avif.c:340 line = return img2_decode_fail(st, IMG2_E_NOMEM);
+decoders/decoder_avif.c:341 line = }
 reason: the same bytes were read by img2_heif_layout(), which found more than one top-level image
-decoders/decoder_avif.c:335 region 33 = if (err.code != heif_error_Ok) {
-decoders/decoder_avif.c:335 branch-true 6 = if (err.code != heif_error_Ok) {
-decoders/decoder_avif.c:336 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read AVIF data: %s", err.message);
-decoders/decoder_avif.c:337 line = heif_context_free(ctx);
-decoders/decoder_avif.c:338 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_avif.c:339 line = }
-decoders/decoder_avif.c:343 region 23 = if (num_images == 0) {
-decoders/decoder_avif.c:343 branch-true 6 = if (num_images == 0) {
-decoders/decoder_avif.c:344 line = img2_log(IMG2_LOG_ERROR, "Error: AVIF image sequence has no images");
-decoders/decoder_avif.c:345 line = heif_context_free(ctx);
-decoders/decoder_avif.c:346 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_avif.c:347 line = }
+decoders/decoder_avif.c:345 region 33 = if (err.code != heif_error_Ok) {
+decoders/decoder_avif.c:345 branch-true 6 = if (err.code != heif_error_Ok) {
+decoders/decoder_avif.c:346 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to read AVIF data: %s", err.message);
+decoders/decoder_avif.c:347 line = heif_context_free(ctx);
+decoders/decoder_avif.c:348 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_avif.c:349 line = }
+decoders/decoder_avif.c:353 region 23 = if (num_images == 0) {
+decoders/decoder_avif.c:353 branch-true 6 = if (num_images == 0) {
+decoders/decoder_avif.c:354 line = img2_log(IMG2_LOG_ERROR, "Error: AVIF image sequence has no images");
+decoders/decoder_avif.c:355 line = heif_context_free(ctx);
+decoders/decoder_avif.c:356 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_avif.c:357 line = }
 reason: heif_context_get_list_of_top_level_image_IDs() returns min(count, #images) and count == #images
-decoders/decoder_avif.c:364 region 34 = if (actual_count != num_images) {
-decoders/decoder_avif.c:364 branch-true 6 = if (actual_count != num_images) {
-decoders/decoder_avif.c:365 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get image ID list");
-decoders/decoder_avif.c:366 line = free(image_ids);
-decoders/decoder_avif.c:367 line = heif_context_free(ctx);
-decoders/decoder_avif.c:368 line = return img2_decode_fail(st, IMG2_E_CODEC);
-decoders/decoder_avif.c:369 line = }
+decoders/decoder_avif.c:374 region 34 = if (actual_count != num_images) {
+decoders/decoder_avif.c:374 branch-true 6 = if (actual_count != num_images) {
+decoders/decoder_avif.c:375 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get image ID list");
+decoders/decoder_avif.c:376 line = free(image_ids);
+decoders/decoder_avif.c:377 line = heif_context_free(ctx);
+decoders/decoder_avif.c:378 line = return img2_decode_fail(st, IMG2_E_CODEC);
+decoders/decoder_avif.c:379 line = }
 reason: the pre-check (avif_check_total_pixels) opened every one of these handles successfully just before
-decoders/decoder_avif.c:399 region 34 = if (err.code != heif_error_Ok) {
-decoders/decoder_avif.c:399 branch-true 7 = if (err.code != heif_error_Ok) {
-decoders/decoder_avif.c:400 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get image handle %d: %s", i, err.message);
-decoders/decoder_avif.c:401 line = *st = IMG2_E_CODEC;
-decoders/decoder_avif.c:402 line = goto cleanup_error;
-decoders/decoder_avif.c:403 line = }
+decoders/decoder_avif.c:409 region 34 = if (err.code != heif_error_Ok) {
+decoders/decoder_avif.c:409 branch-true 7 = if (err.code != heif_error_Ok) {
+decoders/decoder_avif.c:410 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get image handle %d: %s", i, err.message);
+decoders/decoder_avif.c:411 line = *st = IMG2_E_CODEC;
+decoders/decoder_avif.c:412 line = goto cleanup_error;
+decoders/decoder_avif.c:413 line = }
 reason: static helper argument check: the only caller passes locals
-decoders/decoder_avif.c:497 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
-decoders/decoder_avif.c:497 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
+decoders/decoder_avif.c:507 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
+decoders/decoder_avif.c:507 branch-true 57 = if (data == NULL || len == 0 || frame_count == NULL || loop_count == NULL) {
 reason: img2_heif_layout() returns one of the three enum values
-decoders/decoder_avif.c:513 branch-true 2 = default:
+decoders/decoder_avif.c:523 branch-true 2 = default:
 
 # ===== decoders/decoder_jxl.c =====
 reason: jxl_get_info() arguments: only called from decode_jxl_frames(), which checked data/len and passes locals

@@ -50,6 +50,16 @@ static img2_image_t **decode_stb_frames(const uint8_t *data, size_t len, int *fr
 	// Initialize output
 	*frame_count = 0;
 
+	// [P33] stb_image allocates (and for BMP / TGA / PSD fills) the whole image, up to 2 GB, before the size
+	// could be checked: check the header size first (stbi_info parses the headers only)
+	int info_w = 0, info_h = 0, info_c = 0;
+	if (stbi_info_from_memory(data, (int)len, &info_w, &info_h, &info_c)) {
+		img2_status_t pre_st = img2_decode_check_header_size("stb_image", info_w, info_h);
+		if (pre_st != IMG2_OK) {
+			return img2_decode_fail(st, pre_st);
+		}
+	}
+
 	// Decode with stb_image
 	int width, height, channels;
 	uint8_t *pixels = stbi_load_from_memory(data, (int)len, &width, &height, &channels, 4);
