@@ -180,8 +180,39 @@ CTEST(sec_fix_limits, qoi_header_beyond_max_pixels)
 	cb_put(&b, "\0\0\0\0\0\0\0\1", 8);
 	ASSERT_EQUAL(22, (int)b.n);
 	sl_expect_limit(img2_decode_qoi, b.d, b.n, NULL);
+
+	/* 1 x 65537: only the height is over IMG2_MAX_DIMENSION */
+	b.d[7] = 1;
+	b.d[4] = b.d[5] = b.d[6] = 0;
+	b.d[8] = 0;
+	b.d[9] = 1;
+	b.d[10] = 0;
+	b.d[11] = 1;
+	sl_expect_limit(img2_decode_qoi, b.d, b.n, NULL);
+
+	/* no QOI header (too short / other magic): no pre-check, qoi_decode() reports the file as before */
+	img2_frames_t fr = { 0 };
+	img2_set_log_callback(cb_log_sink, NULL);
+	ASSERT_EQUAL(IMG2_E_FORMAT, img2_decode_qoi(b.d, 13, NULL, &fr));
+	b.d[0] = 'x';
+	ASSERT_EQUAL(IMG2_E_FORMAT, img2_decode_qoi(b.d, b.n, NULL, &fr));
+	img2_set_log_callback(NULL, NULL);
 	cb_free(&b);
 	sl_check();
+}
+
+/* ===== img2_decode_add_frame_pixels(): one frame alone over the total (every caller pre-checks the frame size
+ * against IMG2_MAX_PIXELS now, so only a direct call reaches it) ===== */
+
+CTEST(sec_fix_limits, add_frame_pixels_single_frame_over_total)
+{
+	uint64_t total = 0;
+	img2_set_log_callback(cb_log_sink, NULL);
+	ASSERT_EQUAL(IMG2_E_LIMIT, img2_decode_add_frame_pixels(&total, 65536, 65536));
+	img2_set_log_callback(NULL, NULL);
+	ASSERT_EQUAL(0, (int)total);
+	ASSERT_EQUAL(IMG2_OK, img2_decode_add_frame_pixels(&total, 2, 3));
+	ASSERT_EQUAL(6, (int)total);
 }
 
 /* ===== stb_image: BMP, TGA (RLE), PSD (RLE) 20000 x 20000; HDR 16000 x 16000 ===== */
@@ -347,13 +378,13 @@ static void sl_be32_at(uint8_t *p, uint32_t v)
 	p[3] = (uint8_t)v;
 }
 
-/* every 'ispe' box: 20000 x 20000 (4e8 pixels: above IMG2_MAX_PIXELS, a list of two stays below 2^30) */
-static int sl_patch_ispe(uint8_t *d, size_t len)
+/* every 'ispe' box: side x side */
+static int sl_patch_ispe(uint8_t *d, size_t len, uint32_t side)
 {
 	int n = 0;
 	for (long p = sl_find4(d, len, "ispe", 0); p >= 0; p = sl_find4(d, len, "ispe", (size_t)p + 4)) {
-		sl_be32_at(d + p + 8, 20000);
-		sl_be32_at(d + p + 12, 20000);
+		sl_be32_at(d + p + 8, side);
+		sl_be32_at(d + p + 12, side);
 		n++;
 	}
 	return n;
@@ -366,12 +397,22 @@ CTEST(sec_fix_limits, heif_ispe_beyond_max_pixels)
 		size_t len = 0;
 		uint8_t *d = hb_list(heif_compression_uncompressed, count, 16, 16, NULL, 0, &len);
 		ASSERT_NOT_NULL(d);
-		ASSERT_TRUE(sl_patch_ispe(d, len) > 0);
+		/* 20000 x 20000 = 4e8 pixels: above IMG2_MAX_PIXELS, a list of two stays below 2^30 */
+		ASSERT_TRUE(sl_patch_ispe(d, len, 20000) > 0);
 		ASSERT_EQUAL(count == 1 ? IMG2_HEIF_LAYOUT_SINGLE : IMG2_HEIF_LAYOUT_LIST, img2_heif_layout(d, len, NULL));
 		sl_expect_limit(img2_decode_heif, d, len, NULL);
 		sl_expect_limit(img2_decode_avif, d, len, NULL);
 		free(d);
 	}
+
+	/* six images of 14000 x 14000 (1.96e8 each, within IMG2_MAX_PIXELS): the list total (1.18e9 > 2^30) */
+	size_t len = 0;
+	uint8_t *d = hb_list(heif_compression_uncompressed, 6, 16, 16, NULL, 0, &len);
+	ASSERT_NOT_NULL(d);
+	ASSERT_TRUE(sl_patch_ispe(d, len, 14000) > 0);
+	sl_expect_limit(img2_decode_heif, d, len, NULL);
+	sl_expect_limit(img2_decode_avif, d, len, NULL);
+	free(d);
 	heif_deinit();
 	sl_check();
 }
