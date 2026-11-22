@@ -157,7 +157,7 @@ static img2_image_t **decode_avif_static(const uint8_t *data, size_t len, int *f
 									// Check if it starts with 4-byte offset + "Exif" marker
 									if (exif_size > 10 && exif_data[4] == 'E' && exif_data[5] == 'x' && exif_data[6] == 'i' && exif_data[7] == 'f') {
 										// Get offset from first 4 bytes (big-endian)
-										uint32_t offset = (exif_data[0] << 24) | (exif_data[1] << 16) | (exif_data[2] << 8) | exif_data[3];
+										uint32_t offset = ((uint32_t)exif_data[0] << 24) | ((uint32_t)exif_data[1] << 16) | ((uint32_t)exif_data[2] << 8) | (uint32_t)exif_data[3];
 
 										// Skip 4-byte prefix + offset (usually "Exif\0\0" = 6 bytes)
 										size_t skip = 4 + offset;
