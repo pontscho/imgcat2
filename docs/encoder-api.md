@@ -1,7 +1,8 @@
 # Encoder API v2: AVIF output and encoder options
 
 Status: phase 1 (AVIF output) implemented (img2/s24, default AVIF quality 80 at aom speed 6, see
-[Measurements](#measurements)); phases 2 and 3 open. Branch base: feature/split (img2/s23).
+[Measurements](#measurements)); phase 2 (encoder options) implemented (img2/s25, see
+[Phase 2 results](#phase-2-results)); phase 3 open. Branch base: feature/split (img2/s23).
 
 ## Goals
 
@@ -84,7 +85,7 @@ Out-of-range values: `IMG2_E_ARG`. A valid option the chosen format cannot honou
 | Option | JPEG | PNG | WebP | JXL | HEIF (kvazaar) | AVIF (aom) |
 |---|---|---|---|---|---|---|
 | quality | as today | zlib level q/10 | as today | as today | as today | aom `quality` |
-| lossless | warn | always lossless | `config.lossless` (q=100 still selects it) | `SetFrameLossless` (q>=95 still selects it) | warn (kvazaar lossless is 4:2:0 YCbCr, not RGB-lossless) | aom `lossless` + 4:4:4, identity matrix (to verify) |
+| lossless | warn | always lossless | `config.lossless` (q=100 still selects it) | `SetFrameLossless` (q>=95 still selects it) | warn (kvazaar lossless is 4:2:0 YCbCr, not RGB-lossless) | aom `lossless` + 4:4:4, identity matrix (verified bit-exact) |
 | effort 1..10 | >= 6: `optimize_coding` | zlib level e-1 when quality is default (decision 3), else warn | `method` = round((e-1)*6/9) | `EFFORT` = e | warn (no preset parameter) | aom `speed` = 10 - e (clamped 0..9) |
 | chroma | comp_info sampling factors | warn | 420 only: warn otherwise | warn (XYB) | 420 only: warn otherwise | aom `chroma` "420"/"422"/"444" |
 | alpha_quality | warn | warn | `alpha_quality` | extra channel distance from quality | warn | aom `alpha-quality` |
@@ -225,6 +226,52 @@ differs at `threads = 1` (libheif enables aom row-MT only when threads > 1; e.g.
 >= 2 threads, 278907 with 1). The default thread count is `std::thread::hardware_concurrency()` (the number of
 online CPUs, not the affinity mask: `taskset -c 0` gives the same bytes). So the golden AVIF cases use the default
 options: they are stable on any host with at least 2 CPUs; phase 2's `--threads 1` would change their bytes.
+
+## Phase 2 results
+
+Implemented as in the mapping table, with these facts and refinements (2026-11-23, vendored libraries):
+
+- **Internal API.** `img2_encode_fn` takes `(img, native_quality, opts, ...)`; `img2_encode()` validates `opts` and
+  resolves the native quality as before, the encoder reads the other fields (`opts->quality < 0` tells PNG that
+  the level is the registry default, decision 3). The 4-argument `img2_encode_<x>()` / `img2_encoder_dispatch()`
+  entry points stay (default options) next to the `_opts` / `img2_encoder_dispatch_opts()` forms.
+- **Warnings.** One `IMG2_LOG_WARN` per unhonoured option, `encode: <option> has no effect for <format> (<why>)`;
+  `chroma 420` is never warned for the 4:2:0-only formats (it is what they do). Beyond the table: with lossless
+  WebP, JXL or AVIF, `alpha_quality` warns (alpha is lossless), and lossless AVIF warns for chroma 420/422
+  (always 4:4:4). PNG `lossless` and explicit `chroma 420` on JPEG/WebP/HEIF/AVIF are silent no-ops.
+- **Metadata (phase 3).** The `IMG2_META_*` bits are defined and validated (unknown bits: `IMG2_E_ARG`); a nonzero
+  `metadata` logs one WARN `encode: metadata is not supported yet (ignored)` and the encode proceeds.
+- **WebP config equivalence.** `WebPConfig` + `WebPEncode` set up as libwebp's simple API does
+  (`picture_enc.c`: `WEBP_PRESET_DEFAULT` with the quality, `use_argb = lossless`; lossless with quality factor
+  70) gives the same bytes: golden 0 mismatches on the WebP cases, and `test_encode_options` compares against
+  `WebPEncodeRGBA` (q 0/50/80/99) and `WebPEncodeLosslessRGBA` directly. `lossless` keeps that quality factor 70
+  (so `{ .lossless = true }` equals `quality = 100`); `effort` only changes `method`. `exact` stays 0 as before,
+  so lossless WebP may still rewrite the RGB of fully transparent pixels (alpha 0).
+- **AVIF lossless.** aom lossless + `chroma` "444" + an output NCLX profile with `matrix_coefficients` 0 (GBR,
+  identity), BT.709 primaries, sRGB transfer, full range (written as a `colr` nclx box) round-trips RGB and alpha
+  bit-exactly (`memcmp` after `img2_decode()`, alpha included). libheif's aom plugin switches `tune=auto` from
+  `iq` to `ssim` for lossless by itself (aom rejects `iq` with lossless), so no tune parameter is set.
+- **AVIF effort.** speed = 10 - effort, so effort 4 equals the default speed 6 (same bytes); effort 1..10 maps to
+  speed 9..0 without clamping. `threads` sets aom `threads`; as measured in phase 1, `threads = 1` (row-MT off)
+  gives different (deterministic) bytes than any count >= 2, which all equal the default.
+- **JXL threads.** `threads >= 2` installs a `JxlThreadParallelRunner` with that many workers; 0 and 1 stay
+  single-threaded without a runner (default bytes unchanged). The output does not depend on the thread count:
+  goldhill (720x576, 9 groups) at quality 80 and 100, effort 3, 6 and 9, threads 0/1/2/3/4/8/16/32/64, twice
+  each: one byte stream per (quality, effort). `jxl_threads` is linked (vendored archive in the fat archive and
+  the manifest note; the host path requires `libjxl_threads` next to `libjxl`).
+- **JPEG.** `chroma` sets the luma sampling factors (420: 2x2, 422: 2x1, 444: 1x1; Cb/Cr 1x1); `progressive`
+  calls `jpeg_simple_progression()`; effort >= 6 sets `optimize_coding` (effort 1..5 leave the default).
+- **PNG.** `progressive` = Adam7 (libpng's `png_write_image()` runs the passes). Through the CLI `--png N` always
+  sets the quality, so `--effort` there only logs the warning (decision 3).
+- **CLI.** `--lossless`, `--effort N`, `--chroma 420|422|444`, `--alpha-quality N`, `--progressive`,
+  `--threads N`: ranges checked while parsing ("Error: --effort must be 1-10 (got '11')"); outside conversion
+  mode `validate_options()` rejects them ("Error: --effort can only be used with --jpeg, --png, --heif, --webp,
+  --jxl or --avif"). `--keep-metadata` is phase 3.
+- **Golden.** Existing cases: 0 mismatches in every output file; the only text change is `meta:--help` (seven new
+  lines under "Conversion Options"). New cases (S25): progressive 4:4:4 JPEG, interlaced PNG with the effort
+  warning, lossless WebP, JXL effort 3, JXL `--threads 4` (same bytes as the single-threaded `--jxl 100` case),
+  AVIF 4:4:4 effort 4 and lossless (default thread count), the HEIF chroma/threads warnings, and the two CLI
+  errors (conversion-only flag, out-of-range effort).
 
 ## Decisions (2026-11-23)
 

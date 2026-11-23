@@ -444,6 +444,13 @@ Conversion Options:
       --webp <quality>      Convert to WebP (quality: 0-100, default: 80, 100=lossless)
       --jxl <quality>       Convert to JXL (quality: 0-100, default: 80, >=95=lossless)
       --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)
+      --lossless            Lossless output (WebP, JXL, AVIF; PNG is always lossless)
+      --effort <1-10>       Encoder effort: 1 = fastest .. 10 = smallest file
+      --chroma <420|422|444>  Chroma subsampling (JPEG, AVIF; default: 420)
+      --alpha-quality <1-100>  Alpha channel quality (WebP, JXL, AVIF)
+      --progressive         Progressive JPEG / interlaced (Adam7) PNG
+      --threads <1-64>      Encoder threads (WebP, JXL, AVIF)
+                            An option the format cannot use is ignored with a warning
   -o, --output <file>       Output file (stdout if not specified)
   -n, --frame <index>       Select frame for animated images (default: 0)
       --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)
@@ -638,6 +645,25 @@ imgcat2 --avif 99 image.jpg > output.avif
 imgcat2 --avif 80 --output output.avif image.png
 ```
 
+### Encoder Options
+```bash
+# Progressive JPEG without chroma subsampling, optimised Huffman tables
+imgcat2 --jpeg 85 --progressive --chroma 444 --effort 7 --output out.jpg image.png
+
+# Interlaced (Adam7) PNG
+imgcat2 --png 9 --progressive --output out.png image.png
+
+# Lossless WebP / JXL / AVIF (AVIF: 4:4:4 with the identity matrix, bit-exact RGB and alpha)
+imgcat2 --webp 80 --lossless --output out.webp image.png
+imgcat2 --avif 80 --lossless --output out.avif image.png
+
+# Faster AVIF (effort 1 = aom speed 9; the default corresponds to effort 4 = speed 6), 4:4:4
+imgcat2 --avif 60 --effort 2 --chroma 444 --output out.avif image.jpg
+
+# JXL with 8 encoder threads (same bytes as single-threaded) and a lower alpha quality
+imgcat2 --jxl 80 --threads 8 --alpha-quality 70 --output out.jxl image.png
+```
+
 ### Animated Images
 ```bash
 # Convert first frame of animated GIF
@@ -661,7 +687,17 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
   - Quality >= 95 = lossless mode (preserves transparency)
   - Quality 0-94 = lossy mode with distance-based quality
 - `--avif <quality>` - Convert to AVIF format (AV1 via libheif/aom; quality: 0-100, default: 80)
-  - Always lossy 4:2:0; higher quality = better image quality but larger file size
+  - Lossy 4:2:0 by default (see `--lossless`, `--chroma`); higher quality = better image quality but larger file size
+- `--lossless` - Lossless WebP, JXL or AVIF (PNG is always lossless; JPEG and HEIF warn and stay lossy)
+- `--effort <1-10>` - Encoder effort, 1 = fastest .. 10 = smallest: JPEG >= 6 optimises the Huffman tables, WebP
+  method round((e-1)*6/9), JXL effort e, AVIF aom speed 10-e. PNG: `--png N` sets the level, so it only warns
+- `--chroma <420|422|444>` - Chroma subsampling of JPEG and AVIF (default 420); WebP and HEIF are always 4:2:0
+- `--alpha-quality <1-100>` - Alpha channel quality of lossy WebP, JXL and AVIF
+- `--progressive` - Progressive JPEG / Adam7-interlaced PNG
+- `--threads <1-64>` - Encoder threads of WebP (on/off), JXL (thread pool; output independent of the count) and
+  AVIF (`--threads 1` gives different bytes than any count >= 2, the default)
+  - These options need a conversion (`--jpeg` ... `--avif`); out of range is an error. An option the chosen format
+    cannot honour is ignored with one warning, e.g. `encode: chroma 444 has no effect for HEIF (always 4:2:0)`
 - `--output <file>` or `-o <file>` - Output file path (stdout if not specified)
 - `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
 - `-w N` / `-H N` - Scale the converted image (up to 16384 pixels; not limited by the terminal size)

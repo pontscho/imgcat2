@@ -20,7 +20,7 @@ library is vendored (`vendor/`) and built from source, so one archive carries ev
 - [Threading model](#threading-model)
 - [Limits](#limits)
 - [Font discovery](#font-discovery)
-- [Encode quality](#encode-quality)
+- [Encode quality](#encode-quality) and [options](#encode-options)
 - [Orientation](#orientation)
 - [Deviations from locked decisions](#deviations-from-locked-decisions)
 - [Known limitations / CLI deltas](#known-limitations--cli-deltas)
@@ -81,7 +81,7 @@ With `IMG2_FAT_ARCHIVE` (default for top-level builds) the `img2_fat` target mer
 vendored archives, in the former static link order, into `build/fat/libimg2.a` with a GNU `ar -M` MRI script
 (`cmake/scripts/img2_fat_archive.cmake`; macOS `libtool -static`, best effort and untested). Merged: zlib-ng,
 libpng (+APNG patch), jpeg-quantsmooth, libjpeg-turbo, giflib, libwebp (webp, webpdemux, sharpyuv), libheif,
-libde265, aom, OpenJPEG, kvazaar, libtiff, LibRaw, libjxl (+jxl_cms), highway, lcms2 and brotli. Host libraries
+libde265, aom, OpenJPEG, kvazaar, libtiff, LibRaw, libjxl (+jxl_cms, jxl_threads), highway, lcms2 and brotli. Host libraries
 (`IMG2_USE_SYSTEM_*`, resvg) are not merged: they become link dependencies of the package, and configure warns
 about it. The imgcat2 executable, every test and the installed package use this one archive, so the shipped
 artefact is the tested one.
@@ -444,13 +444,35 @@ imgcat2 1.0 for byte-identical output):
 | HEIF | 0..100 (never lossless) | 80 |
 | WebP | 0..99 lossy, 100 lossless | 80 |
 | JPEG XL | 0..94 lossy (distance (100 - q) / 10), >= 95 lossless | 80 |
-| AVIF | aom quality 0..100, 4:2:0 (never lossless) | 80 (see [encoder-api.md](encoder-api.md#measurements)) |
+| AVIF | aom quality 0..100, 4:2:0 (lossless only with `lossless`, below) | 80 (see [encoder-api.md](encoder-api.md#measurements)) |
 
-This deviates from the locked decision "100 = lossless where supported": PNG is always lossless, JPEG/HEIF/AVIF
-are never lossless, and JPEG XL is already lossless from 95 (see below). Only `in->frames[0]` is encoded.
+This deviates from the locked decision "100 = lossless where supported": PNG is always lossless, JPEG/HEIF are
+never lossless, AVIF only with the `lossless` option, and JPEG XL is already lossless from 95 (see below). Only
+`in->frames[0]` is encoded.
+
+### Encode options
+
+The other fields of `img2_encode_opts_t` use 0 / `false` for "format default", so a zero-initialised struct
+(with `quality = -1`) and `{ .quality = q }` keep their meaning, and the defaults give byte-identical output to
+earlier releases. (A positional initialiser such as `{ 90 }` still compiles, but `-Wextra` now warns about the
+missing fields; use `IMG2_ENCODE_OPTS_INIT` or designated initialisers.)
+
+| Field | Range (else `IMG2_E_ARG`) | JPEG | PNG | WebP | JPEG XL | HEIF (kvazaar) | AVIF (aom) |
+|---|---|---|---|---|---|---|---|
+| `lossless` | bool | warn | no-op (always lossless) | lossless mode (quality factor 70, as `WebPEncodeLosslessRGBA`) | `JxlEncoderSetFrameLossless` | warn | aom lossless, 4:4:4, identity matrix: RGB and alpha bit-exact |
+| `effort` | 0, 1..10 | >= 6: optimised Huffman tables | zlib level e-1 if `quality` is -1, else warn | `method` round((e-1)*6/9) (7 = default 4) | libjxl effort e (7 = default) | warn | aom speed 10-e (4 = default speed 6) |
+| `chroma` | `IMG2_CHROMA_*` | luma sampling factors (default 4:2:0) | warn | 4:2:0 only, else warn | warn | 4:2:0 only, else warn | aom `chroma` 420/422/444; lossless: 444 only, else warn |
+| `alpha_quality` | 0, 1..100 | warn | warn | `alpha_quality` (lossless: warn) | alpha distance, quality mapping (lossless: warn) | warn | aom `alpha-quality` (lossless: warn) |
+| `progressive` | bool | `jpeg_simple_progression` | Adam7 interlace | warn | warn | warn | warn |
+| `threads` | 0, 1..64 | warn | warn | `thread_level` 1 when > 1 | thread pool when >= 2 (output identical for every count) | warn | aom `threads` (1 gives other bytes than >= 2) |
+| `metadata` | `IMG2_META_*` bits | not written yet: one WARN, ignored (phase 3 of [encoder-api.md](encoder-api.md)) | | | | | |
+
+"warn": the option is valid but the format cannot honour it; the encode proceeds and logs one `IMG2_LOG_WARN`
+naming option and format, e.g. `encode: chroma 444 has no effect for WebP (always 4:2:0)`. Details and the
+measurements behind them: [encoder-api.md](encoder-api.md).
 
 HEIF and AVIF are encoded through one libheif path (HEVC via kvazaar, AV1 via aom, each with the plugin's default
-parameters). `img2_can_encode(IMG2_FORMAT_HEIF / _AVIF)` asks libheif at runtime
+parameters unless an option sets one). `img2_can_encode(IMG2_FORMAT_HEIF / _AVIF)` asks libheif at runtime
 (`heif_have_encoder_for_format`), so a host libheif without an HEVC or AV1 encoder reports false and
 `img2_encode` returns `IMG2_E_UNSUPPORTED`, although the encoder table still lists the row.
 
@@ -603,7 +625,9 @@ residual list into its log.
 5. A new `IMG2_MIME_<X>` **appended** at the end of `img2_mime_t` in `include/img2/mime.h` (values are ABI).
    Detection goes in `decoders/magic.c`, names in `img2_mime_name`/`img2_mime_string`. An encoder also
    **appends** an `IMG2_FORMAT_<X>` to `img2_format_t` (`include/img2/encode.h`), its name to
-   `img2_encoder_log_missing` and, for the CLI, a long option, a quality field with its default in `main.c`, the
+   `img2_encoder_log_missing`; its registry function has the `img2_encode_fn` signature (native quality plus the
+   `img2_encode_opts_t`, NULL = defaults) and logs one `img2_encode_warn_ignored()` WARN per option it cannot
+   honour (see [Encode options](#encode-options)); for the CLI, a long option, a quality field with its default in `main.c`, the
    range check in `validate_options`, the quality switch in `terminal/file.c` and the format lists in the help
    text and the "requires --jpeg, ..." messages (`cli.c`, `terminal/file.c`, `test_cli_fix.c`).
 6. An `if(IMG2_HAVE_<X>)` source block in `src/libimg2/CMakeLists.txt`.
