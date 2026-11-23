@@ -4,6 +4,7 @@
  */
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -50,17 +51,15 @@ static void text_field(const char *label, const char *value)
 }
 
 /**
- * @brief [P38] The GPS reference character of the file and the newline (it was "%c": an ESC went out raw)
+ * @brief One GPS coordinate line "<label><value><ref>\n"
  *
- * An absent reference ('\0') is still written as the NUL byte "%c" wrote, so the output of existing files is
- * unchanged; any other control character is escaped.
+ * With a reference (N/S/E/W) the absolute value and the letter ("121.314136W": the sign is the letter's); without
+ * one the signed value alone. [P38] A control character as the reference is escaped (it was "%c": an ESC went out raw).
  */
-static void gps_ref_field(char ref)
+static void gps_coord_field(const char *label, double value, char ref)
 {
 	const char s[2] = { ref, '\0' };
-	if (ref == '\0') {
-		putchar('\0');
-	}
+	printf("%s%.6f", label, ref != '\0' ? fabs(value) : value);
 	text_field("", s);
 }
 
@@ -149,10 +148,8 @@ void output_exif_text(const struct img2_exif *exif)
 	// GPS information
 	if (exif->has_gps) {
 		printf("\nGPS:\n");
-		printf("  Latitude: %.6f", exif->gps_latitude);
-		gps_ref_field(exif->gps_latitude_ref);
-		printf("  Longitude: %.6f", exif->gps_longitude);
-		gps_ref_field(exif->gps_longitude_ref);
+		gps_coord_field("  Latitude: ", exif->gps_latitude, exif->gps_latitude_ref);
+		gps_coord_field("  Longitude: ", exif->gps_longitude, exif->gps_longitude_ref);
 		if (exif->gps_altitude != 0.0) {
 			printf("  Altitude: %.1f m\n", exif->gps_altitude);
 		}

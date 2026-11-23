@@ -5,6 +5,7 @@
  * -F / -b: the short forms of --fps / --version did not match their long options (-F read a missing argument:
  *          `imgcat2 -F` crashed; -b took an argument --version does not have).
  * JSON:    --info --json escaped every byte >= 0x80 as \u00XX (signed char): UTF-8 text came out as mojibake.
+ * GPS:     --info printed the signed value with the letter ("-121.314136W") and a NUL byte for no reference.
  */
 
 #include <fcntl.h>
@@ -214,5 +215,46 @@ CTEST(cli_fix, json_string_utf8)
 		ASSERT_STR(expect, out);
 		free(out);
 	}
+}
+
+/* ---- --info GPS lines: the hemisphere letter with the absolute value ---- */
+
+CTEST(cli_fix, info_text_gps_hemisphere)
+{
+	img2_exif_t e;
+	img2_exif_init(&e);
+	e.has_gps = true;
+	e.gps_latitude = -33.5;
+	e.gps_latitude_ref = 'S';
+	e.gps_longitude = -121.314136;
+	e.gps_longitude_ref = 'W';
+	cap_t c;
+	cap_begin(&c, STDOUT_FILENO, "gps");
+	output_exif_text(&e);
+	e.gps_latitude = 47.5;
+	e.gps_latitude_ref = 'N';
+	e.gps_longitude = 19.04;
+	e.gps_longitude_ref = 'E';
+	output_exif_text(&e);
+	size_t n = 0;
+	char *out = cap_end(&c, &n);
+	ASSERT_NOT_NULL(out);
+	static const char expect[] = "\n\nGPS:\n  Latitude: 33.500000S\n  Longitude: 121.314136W\n"
+	                             "\n\nGPS:\n  Latitude: 47.500000N\n  Longitude: 19.040000E\n";
+	if (strcmp(out, expect) != 0) {
+		fprintf(stderr, "  stdout: %s\n", out);
+	}
+	ASSERT_STR(expect, out);
+	free(out);
+
+	/* JSON keeps the signed numbers */
+	e.gps_latitude = -33.5;
+	e.gps_longitude = -121.314136;
+	cap_begin(&c, STDOUT_FILENO, "gps_json");
+	output_exif_json(&e, true);
+	out = cap_end(&c, &n);
+	ASSERT_STR("\"exif\":{\"gps\":{\"latitude\":-33.500000,\"longitude\":-121.314136}}", out);
+	free(out);
+	img2_exif_clear(&e);
 }
 #endif /* IMG2_HAVE_EXIF_READER */

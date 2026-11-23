@@ -374,20 +374,21 @@ CTEST(sec_fix_cli, info_text_every_field_escaped)
 	img2_exif_clear(&e);
 }
 
-CTEST(sec_fix_cli, info_text_gps_absent_reference_unchanged)
+CTEST(sec_fix_cli, info_text_gps_absent_reference)
 {
-	/* an absent GPS reference ('\0') is still the NUL byte "%c" wrote (existing output unchanged) */
+	/* an absent GPS reference ('\0'): the signed value, no letter and no NUL byte (it was "%c" of '\0') */
 	img2_exif_t e;
 	img2_exif_init(&e);
 	e.has_gps = true;
 	e.gps_latitude = 1.5;
+	e.gps_longitude = -2.25;
 	cap_t c;
 	cap_begin(&c, STDOUT_FILENO, "gps");
 	output_exif_text(&e);
 	size_t n = 0;
 	char *out = cap_end(&c, &n);
 	ASSERT_NOT_NULL(out);
-	static const char expect[] = "\n\nGPS:\n  Latitude: 1.500000\0\n  Longitude: 0.000000\0\n";
+	static const char expect[] = "\n\nGPS:\n  Latitude: 1.500000\n  Longitude: -2.250000\n";
 	ASSERT_EQUAL((int)sizeof(expect) - 1, (int)n);
 	ASSERT_TRUE(memcmp(out, expect, n) == 0);
 	free(out);
