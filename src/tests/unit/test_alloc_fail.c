@@ -386,6 +386,100 @@ CTEST(alloc_fail, encode_every_format)
 	img2_image_destroy(img);
 }
 
+/* ===== metadata passthrough (docs/encoder-api.md phase 3) ===== */
+
+static const uint8_t k_af_tiff[26] = { 'I', 'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0 };
+static const char k_af_xmp[] = "<rdf:RDF><rdf:Description><dc:title>t</dc:title></rdf:Description></rdf:RDF>";
+
+/* the setter fails as a whole: on error the image keeps its old blocks */
+static void op_set_metadata(void *ctx)
+{
+	img2_image_t *img = ctx;
+	const uint8_t *old_exif = img->exif_raw;
+	const char *old_xmp = img->xmp_raw;
+	img2_status_t st = img2_image_set_metadata(img, k_af_tiff, sizeof(k_af_tiff), k_af_xmp, sizeof(k_af_xmp) - 1);
+	if (st == IMG2_OK) {
+		if (img->exif_raw_len != sizeof(k_af_tiff) || img->xmp_raw_len != sizeof(k_af_xmp) - 1) {
+			s_bad++;
+		}
+	} else if (st != IMG2_E_NOMEM || img->exif_raw != old_exif || img->xmp_raw != old_xmp) {
+		s_bad++;
+	}
+}
+
+/* img2_apply_orientation: a failed transform keeps the image and its orientation field */
+static void op_apply_orientation(void *ctx)
+{
+	(void)ctx;
+	img2_image_t *img = af_pattern(3, 2);
+	if (img == NULL) {
+		return;
+	}
+	img->orientation = 6;
+	img2_status_t st = img2_apply_orientation(&img);
+	if (st == IMG2_OK ? (img->orientation != 1 || img->width != 2) : (st != IMG2_E_NOMEM || img->orientation != 6 || img->width != 3)) {
+		s_bad++;
+	}
+	img2_image_destroy(img);
+}
+
+static void op_encode_meta(void *ctx)
+{
+	af_enc_ctx_t *c = ctx;
+	img2_encode_opts_t eo = IMG2_ENCODE_OPTS_INIT;
+	eo.metadata = IMG2_META_EXIF | IMG2_META_XMP;
+	uint8_t *buf = NULL;
+	size_t len = 0;
+	img2_status_t st = img2_encode(&c->in, c->fmt, &eo, &buf, &len);
+	if ((st == IMG2_OK) != (buf != NULL)) {
+		s_bad++;
+	}
+	img2_free(buf);
+}
+
+CTEST(alloc_fail, metadata_passthrough)
+{
+	img2_image_t *img = af_pattern(6, 5);
+	ASSERT_NOT_NULL(img);
+	ASSERT_EQUAL(IMG2_OK, img2_image_set_metadata(img, k_af_tiff, 8, "<a>", 3));
+	ASSERT_EQUAL(2, af_for_each_failure(op_set_metadata, img, AF_MAX_RUNS));
+	ASSERT_EQUAL(0, s_bad);
+	ASSERT_TRUE(af_for_each_failure(op_apply_orientation, NULL, AF_MAX_RUNS) >= 3);
+	ASSERT_EQUAL(0, s_bad);
+
+	/* scaling copies the blocks (the copy's allocations fail too) */
+	ASSERT_EQUAL(IMG2_OK, img2_image_set_metadata(img, k_af_tiff, sizeof(k_af_tiff), k_af_xmp, sizeof(k_af_xmp) - 1));
+	img->orientation = 6;
+	af_img_ctx_t sc = { img, IMG2_FILTER_BOX, 1 };
+	if (!AF_ASAN) { /* alloc_fail.h: stb_image_resize2's ASan-only allocation mode */
+		ASSERT_TRUE(af_for_each_failure(op_scale, &sc, AF_MAX_RUNS) >= 5);
+		ASSERT_EQUAL(0, s_bad);
+	}
+
+	/* every writer with both blocks, and their output decoded back (the decoders keep the blocks) */
+	img2_image_t *arr[1] = { img };
+	for (size_t i = 0; i < img2_encoder_count(); i++) {
+		af_enc_ctx_t c = { img2_encoder_info(i)->format, { arr, 1, 0 } };
+		if (c.fmt == IMG2_FORMAT_HEIF) {
+			continue; /* vendored libheif's kvazaar plugin dereferences a failed kvz_config_alloc() */
+		}
+		ASSERT_TRUE(af_for_each_failure(op_encode_meta, &c, AF_MAX_RUNS) >= 2);
+		ASSERT_EQUAL(0, s_bad);
+		if (c.fmt == IMG2_FORMAT_AVIF) {
+			continue; /* not exercised here: the HEIF/AVIF decoders (file comment) */
+		}
+		img2_encode_opts_t eo = IMG2_ENCODE_OPTS_INIT;
+		eo.metadata = IMG2_META_EXIF | IMG2_META_XMP;
+		uint8_t *buf = NULL;
+		size_t len = 0;
+		ASSERT_EQUAL(IMG2_OK, img2_encode(&c.in, c.fmt, &eo, &buf, &len));
+		ASSERT_TRUE(af_decode_all(buf, len, IMG2_MIME_UNKNOWN, AF_MAX_RUNS) >= 2);
+		ASSERT_EQUAL(0, s_bad);
+		img2_free(buf);
+	}
+	img2_image_destroy(img);
+}
+
 /* ===== metadata ===== */
 
 static void op_xml(void *ctx)
