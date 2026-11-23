@@ -281,7 +281,7 @@ static int parse_dimension_arg(const char *arg, const char *what, int *out)
  * @param argv Argument vector from main()
  * @param opts Output parameter for parsed options
  *
- * @return 0 on success, -1 on error, 1 if help/version was
+ * @return 0 on success, -1 on error, 1 if help/version was printed (the program exits with success)
  *
  * @note Caller must initialize opts with default values before calling
  * @note Sets opts->input_file to NULL for stdin or argv[optind] for file

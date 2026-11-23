@@ -33,16 +33,15 @@ int terminal_get_size(int *rows, int *cols)
 	*cols = DEFAULT_TERM_COLS;
 
 	/* Get console handle */
+	/* Failures keep the defaults; the caller reports them (with -v only) */
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (hConsole == INVALID_HANDLE_VALUE) {
-		fprintf(stderr, "Warning: Failed to get console handle (using defaults %dx%d)\n", DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
 		return -1;
 	}
 
 	/* Get console screen buffer info */
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	if (!GetConsoleScreenBufferInfo(hConsole, &csbi)) {
-		fprintf(stderr, "Warning: Failed to get console info (using defaults %dx%d)\n", DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
 		return -1;
 	}
 
@@ -52,7 +51,6 @@ int terminal_get_size(int *rows, int *cols)
 
 	/* Validate dimensions */
 	if (width <= 0 || height <= 0) {
-		fprintf(stderr, "Warning: Invalid console size %dx%d (using defaults %dx%d)\n", width, height, DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
 		return -1;
 	}
 

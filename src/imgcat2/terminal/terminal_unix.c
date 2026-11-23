@@ -57,15 +57,8 @@ int terminal_get_size(int *rows, int *cols)
 		}
 	}
 
-	if (fd == -1) {
-		/* All ioctl attempts failed, use defaults */
-		fprintf(stderr, "Warning: Failed to get terminal size: %s (using defaults %dx%d)\n", strerror(errno), DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
-		return -1;
-	}
-
-	/* Validate dimensions */
-	if (ws.ws_row <= 0 || ws.ws_col <= 0) {
-		fprintf(stderr, "Warning: Invalid terminal size %ux%u (using defaults %dx%d)\n", ws.ws_col, ws.ws_row, DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
+	/* All ioctl attempts failed or zero dimensions: the defaults (the caller reports it, with -v only) */
+	if (fd == -1 || ws.ws_row <= 0 || ws.ws_col <= 0) {
 		return -1;
 	}
 
@@ -103,15 +96,8 @@ int terminal_get_pixels(int *width, int *height)
 		}
 	}
 
-	if (fd == -1) {
-		/* All ioctl attempts failed */
-		fprintf(stderr, "Warning: Failed to get terminal size: %s (using defaults %dx%d)\n", strerror(errno), DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
-		return -1;
-	}
-
-	/* Validate dimensions */
-	if (ws.ws_row <= 0 || ws.ws_col <= 0) {
-		fprintf(stderr, "Warning: Invalid terminal size %ux%u (using defaults %dx%d)\n", ws.ws_col, ws.ws_row, DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS);
+	/* All ioctl attempts failed or zero dimensions (silent: terminal_get_size() of the same terminal fails too) */
+	if (fd == -1 || ws.ws_row <= 0 || ws.ws_col <= 0) {
 		return -1;
 	}
 

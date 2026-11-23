@@ -75,15 +75,20 @@ int main(int argc, char **argv)
 		},
 	};
 
+	/* No terminal (output piped, no /dev/tty): the defaults, reported once below with -v only */
 	terminal_get_pixels(&opts.terminal.width, &opts.terminal.height);
-	if (terminal_get_size(&opts.terminal.rows, &opts.terminal.cols) < 0) {
-		fprintf(stderr, "Warning: Failed to get terminal size, using defaults\n");
+	const bool terminal_size_failed = terminal_get_size(&opts.terminal.rows, &opts.terminal.cols) < 0;
+	if (terminal_size_failed) {
 		opts.terminal.rows = DEFAULT_TERM_ROWS;
 		opts.terminal.cols = DEFAULT_TERM_COLS;
 	}
 
-	/* Parse command-line arguments */
-	if (parse_arguments(argc, argv, &opts) != 0) {
+	/* Parse command-line arguments (1: --help / --version printed, a success) */
+	const int parsed = parse_arguments(argc, argv, &opts);
+	if (parsed > 0) {
+		return EXIT_SUCCESS;
+
+	} else if (parsed < 0) {
 		return EXIT_FAILURE;
 
 		/* Validate options */
@@ -100,6 +105,9 @@ int main(int argc, char **argv)
 
 	if (!opts.silent) {
 		img2_set_log_level(IMG2_LOG_INFO);
+		if (terminal_size_failed) {
+			fprintf(stderr, "Warning: Failed to get terminal size, using defaults\n");
+		}
 	}
 
 	if (!opts.silent) {

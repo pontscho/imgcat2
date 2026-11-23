@@ -44,7 +44,7 @@
  *
  * @return 0 on success, -1 on failure (sets defaults)
  *
- * @note On failure, *rows and *cols are set to DEFAULT_TERM_ROWS/COLS
+ * @note On failure, *rows and *cols are set to DEFAULT_TERM_ROWS/COLS; nothing is printed (the caller decides)
  */
 int terminal_get_size(int *rows, int *cols);
 
@@ -59,7 +59,7 @@ int terminal_get_size(int *rows, int *cols);
  * @param width Output parameter for terminal width in pixels
  * @param height Output parameter for terminal height in pixels
  *
- * @return 0 on success, -1 on failure
+ * @return 0 on success, -1 on failure (nothing is printed)
  */
 int terminal_get_pixels(int *width, int *height);
 

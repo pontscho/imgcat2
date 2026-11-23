@@ -9,7 +9,12 @@
  * -w / -H: checked against the terminal size even when converting to a file (--jpeg/--png/--heif/--webp/--jxl).
  * Errors:  "-w or -h" (-h is --help) and "requires --jpeg or --png" (HEIF / WebP / JXL missing).
  * Frames:  converting an animated image printed "Animated image with N frames, converting frame K" without -v.
+ * Exit:    --help / --version exited with status 1; with no terminal "Failed to get terminal size" was printed
+ *          three times, without -v and even for --help / --version.
  */
+
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include <fcntl.h>
 #include <getopt.h>
@@ -309,6 +314,129 @@ CTEST(cli_fix, animated_frame_note_verbose_only)
 	ASSERT_NOT_NULL(strstr(err, "Animated image with 2 frames, converting frame 1\n"));
 	free(err);
 }
+
+#ifdef IMGCAT2_BIN
+/* ---- the imgcat2 binary: exit status of --help / --version, the terminal size warning ---- */
+
+typedef struct {
+	int rc;    /* exit status, -1 if it did not exit normally */
+	char *out; /* stdout (free()) */
+	char *err; /* stderr (free()) */
+} run_t;
+
+/* read and unlink a capture file; NUL-terminated, free() */
+static char *slurp(const char *path)
+{
+	FILE *f = fopen(path, "rb");
+	char *buf = calloc(1, 65536);
+	ASSERT_NOT_NULL(f);
+	ASSERT_NOT_NULL(buf);
+	size_t n = fread(buf, 1, 65535, f);
+	buf[n] = '\0';
+	fclose(f);
+	unlink(path);
+	return buf;
+}
+
+/* run IMGCAT2_BIN with argv[1..] in a new session (no controlling terminal), stdin /dev/null, stdout / stderr
+ * into files: terminal_get_size() fails, as when the output is piped */
+static run_t run_imgcat2(char *const argv[])
+{
+	const char *dir = getenv("TMPDIR");
+	if (dir == NULL || dir[0] == '\0') {
+		dir = IMGCAT2_TEST_TMPDIR;
+	}
+	char out_path[512];
+	char err_path[512];
+	snprintf(out_path, sizeof(out_path), "%s/cli_fix_run_out_%ld.txt", dir, (long)getpid());
+	snprintf(err_path, sizeof(err_path), "%s/cli_fix_run_err_%ld.txt", dir, (long)getpid());
+	fflush(stdout);
+	fflush(stderr);
+	pid_t pid = fork();
+	ASSERT_TRUE(pid >= 0);
+	if (pid == 0) {
+		int in = open("/dev/null", O_RDONLY);
+		int out = open(out_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+		int err = open(err_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+		if (in < 0 || out < 0 || err < 0 || setsid() < 0 || dup2(in, STDIN_FILENO) < 0 || dup2(out, STDOUT_FILENO) < 0 || dup2(err, STDERR_FILENO) < 0) {
+			_exit(126);
+		}
+		execv(IMGCAT2_BIN, argv);
+		_exit(127);
+	}
+	int status = 0;
+	ASSERT_EQUAL(pid, waitpid(pid, &status, 0));
+	run_t r = { WIFEXITED(status) ? WEXITSTATUS(status) : -1, slurp(out_path), slurp(err_path) };
+	return r;
+}
+
+static int count_str(const char *s, const char *needle)
+{
+	int n = 0;
+	for (const char *p = strstr(s, needle); p != NULL; p = strstr(p + 1, needle)) {
+		n++;
+	}
+	return n;
+}
+
+CTEST(cli_fix, help_version_exit_success)
+{
+	char *help[] = { (char *)"imgcat2", (char *)"--help", NULL };
+	run_t r = run_imgcat2(help);
+	ASSERT_EQUAL(0, r.rc);
+	ASSERT_NOT_NULL(strstr(r.out, "Usage: imgcat2 "));
+	ASSERT_STR("", r.err); /* no terminal size warning */
+	free(r.out);
+	free(r.err);
+
+	char *version[] = { (char *)"imgcat2", (char *)"--version", NULL };
+	r = run_imgcat2(version);
+	ASSERT_EQUAL(0, r.rc);
+	ASSERT_NOT_NULL(strstr(r.out, "imgcat2 version "));
+	ASSERT_STR("", r.err);
+	free(r.out);
+	free(r.err);
+
+	/* argument errors stay failures */
+	char *bad[] = { (char *)"imgcat2", (char *)"-i", (char *)"bogus", (char *)"x.png", NULL };
+	r = run_imgcat2(bad);
+	ASSERT_EQUAL(1, r.rc);
+	ASSERT_NOT_NULL(strstr(r.err, "Error: Invalid interpolation method 'bogus'"));
+	free(r.out);
+	free(r.err);
+
+	char *unknown[] = { (char *)"imgcat2", (char *)"--no-such-option", NULL };
+	r = run_imgcat2(unknown);
+	ASSERT_EQUAL(1, r.rc);
+	free(r.out);
+	free(r.err);
+}
+
+CTEST(cli_fix, terminal_size_warning_verbose_once)
+{
+	char *quiet[] = { (char *)"imgcat2", (char *)"--info", (char *)IMG2_TEST_SRC_DIR "/data/png/rgb8_srgb.png", NULL };
+	run_t r = run_imgcat2(quiet);
+	ASSERT_EQUAL(0, r.rc);
+	ASSERT_NOT_NULL(strstr(r.out, "PNG image/png "));
+	if (r.err[0] != '\0') {
+		fprintf(stderr, "  stderr: %s\n", r.err);
+	}
+	ASSERT_STR("", r.err);
+	free(r.out);
+	free(r.err);
+
+	char *verbose[] = { (char *)"imgcat2", (char *)"-v", (char *)"--info", (char *)IMG2_TEST_SRC_DIR "/data/png/rgb8_srgb.png", NULL };
+	r = run_imgcat2(verbose);
+	ASSERT_EQUAL(0, r.rc);
+	if (count_str(r.err, "terminal size") != 1) {
+		fprintf(stderr, "  stderr: %s\n", r.err);
+	}
+	ASSERT_EQUAL(1, count_str(r.err, "terminal size"));
+	ASSERT_NOT_NULL(strstr(r.err, "Warning: Failed to get terminal size, using defaults\n"));
+	free(r.out);
+	free(r.err);
+}
+#endif /* IMGCAT2_BIN */
 
 #ifdef IMG2_HAVE_EXIF_READER
 /* ---- --info --json strings: UTF-8 passed through, controls escaped ---- */
