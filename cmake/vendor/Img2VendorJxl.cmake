@@ -47,7 +47,7 @@ if(IMG2_ENABLE_JXL AND NOT IMG2_USE_SYSTEM_JXL)
 		set(IMGCAT2_VENDORED_LCMS2_VERSION "${LCMS2_VERSION}")
 	endif()
 
-	# --- libjxl: libraries only (jxl, jxl_cms; jxl_threads is built but unused)
+	# --- libjxl: libraries only (jxl, jxl_cms, jxl_threads: the thread pool of img2_encode_opts_t.threads)
 	set(JPEGXL_FORCE_SYSTEM_HWY ON)       # top-level vendored highway
 	set(JPEGXL_FORCE_SYSTEM_BROTLI ON)    # top-level vendored brotli
 	set(JPEGXL_FORCE_SYSTEM_LCMS2 ON)     # top-level vendored lcms2
@@ -76,19 +76,20 @@ if(IMG2_ENABLE_JXL AND NOT IMG2_USE_SYSTEM_JXL)
 	endforeach()
 
 	set(JXL_FOUND TRUE)
-	set(JXL_LIBRARIES jxl jxl_cms)
+	set(JXL_LIBRARIES jxl jxl_cms jxl_threads)
 	set(JXL_CUSTOM_LIBS ${JXL_LIBRARIES})
 	set(JXL_INCLUDE_DIRS "${PROJECT_BINARY_DIR}/vendor/libjxl/lib/include")
 	set(JXL_VERSION "0.13.0")
 	set(JXL_LIB_TYPE "vendored libjxl ${JXL_VERSION}; highway ${IMGCAT2_VENDORED_HWY_VERSION}, ${BROTLI_LIB_TYPE}, lcms2: ${LCMS2_LIB_TYPE}")
 	# highway is only used by libjxl, so its archive is registered here (brotli/lcms2: Img2LinkOrder)
 	img2_feature(JXL LIBS ${JXL_LIBRARIES} INCLUDE_DIRS ${JXL_INCLUDE_DIRS}
-		ARCHIVES "$<TARGET_FILE:jxl>" "$<TARGET_FILE:jxl_cms>" "$<TARGET_FILE:hwy>"
-		ARCHIVE_TARGETS jxl jxl_cms hwy)
+		ARCHIVES "$<TARGET_FILE:jxl>" "$<TARGET_FILE:jxl_cms>" "$<TARGET_FILE:jxl_threads>" "$<TARGET_FILE:hwy>"
+		ARCHIVE_TARGETS jxl jxl_cms jxl_threads hwy)
 
 elseif(IMG2_ENABLE_JXL)
 	set(JXL_LIB_TYPE "host")
-	pkg_check_modules(JXL libjxl)
+	# libjxl_threads: the encoder's thread pool (img2_encode_opts_t.threads); shipped with libjxl
+	pkg_check_modules(JXL libjxl libjxl_threads)
 	if(JXL_FOUND)
 		if(UNIX AND NOT APPLE)
 			# Host -lhwy/-lbrotli*/-llcms2 next to vendored copies: see imgcat2_strip_vendored_ldflags
@@ -112,7 +113,14 @@ elseif(IMG2_ENABLE_JXL)
 				find_library(JXL_CMS_STATIC NAMES jxl_cms)
 				set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_SUFFIXES})
 			endif()
-			set(JXL_CUSTOM_LIBS ${JXL_STATIC_LIB})
+			find_library(JXL_THREADS_STATIC NAMES libjxl_threads.a)
+			if(NOT JXL_THREADS_STATIC)
+				set(_OLD_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+				set(CMAKE_FIND_LIBRARY_SUFFIXES ".dylib")
+				find_library(JXL_THREADS_STATIC NAMES jxl_threads REQUIRED)
+				set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_SUFFIXES})
+			endif()
+			set(JXL_CUSTOM_LIBS ${JXL_STATIC_LIB} ${JXL_THREADS_STATIC})
 			if(JXL_CMS_STATIC)
 				list(APPEND JXL_CUSTOM_LIBS ${JXL_CMS_STATIC})
 			endif()
