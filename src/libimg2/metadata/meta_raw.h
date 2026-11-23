@@ -31,13 +31,15 @@ bool img2_meta_is_tiff(const uint8_t *p, size_t len);
  *
  * A block over IMG2_META_RAW_CAP is dropped with one WARN naming @p fmt; a block that is not in TIFF-header form is
  * dropped silently, as is a block whose copy cannot be allocated (metadata is best-effort: the decode succeeds).
+ * img must not be NULL.
  */
 void img2_meta_keep_exif(img2_image_t *img, const char *fmt, const uint8_t *tiff, size_t len);
 
-/** @brief Decoder side: keep a NUL-terminated copy of an XMP packet in img->xmp_raw (same cap / WARN rules; empty: dropped) */
+/** @brief Decoder side: keep a NUL-terminated copy of an XMP packet in img->xmp_raw (same cap / WARN rules; empty: dropped;
+ *         img must not be NULL) */
 void img2_meta_keep_xmp(img2_image_t *img, const char *fmt, const uint8_t *xml, size_t len);
 
-/** @brief Free the raw blocks of img and set them to NULL / 0 (orientation untouched) */
+/** @brief Free the raw blocks of img (not NULL) and set them to NULL / 0 (orientation untouched) */
 void img2_meta_clear(img2_image_t *img);
 
 /** @brief EXIF orientation 1..8 of a parsed struct; 1 when exif is NULL or the value is outside 1..8 */

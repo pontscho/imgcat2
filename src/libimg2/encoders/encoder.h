@@ -107,7 +107,7 @@ typedef struct img2_encode_meta {
 /** @brief Fill @p m for @p img and @p o (zeroed first). @return IMG2_OK or IMG2_E_NOMEM (m empty) */
 img2_status_t img2_encode_meta_prepare(const img2_image_t *img, const img2_encode_opts_t *o, img2_encode_meta_t *m);
 
-/** @brief Free what img2_encode_meta_prepare() allocated (NULL-safe, idempotent) */
+/** @brief Free what img2_encode_meta_prepare() allocated (m not NULL; idempotent) */
 void img2_encode_meta_release(img2_encode_meta_t *m);
 
 /* [R10] Direct encoder entry points (encoder_<x>.c), declared unconditionally. The 4-argument forms encode with

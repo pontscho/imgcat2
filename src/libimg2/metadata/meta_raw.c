@@ -22,7 +22,7 @@ bool img2_meta_is_tiff(const uint8_t *p, size_t len)
 
 void img2_meta_keep_exif(img2_image_t *img, const char *fmt, const uint8_t *tiff, size_t len)
 {
-	if (img == NULL || !img2_meta_is_tiff(tiff, len)) {
+	if (!img2_meta_is_tiff(tiff, len)) {
 		return;
 	}
 	if (len > IMG2_META_RAW_CAP) {
@@ -41,7 +41,7 @@ void img2_meta_keep_exif(img2_image_t *img, const char *fmt, const uint8_t *tiff
 
 void img2_meta_keep_xmp(img2_image_t *img, const char *fmt, const uint8_t *xml, size_t len)
 {
-	if (img == NULL || xml == NULL || len == 0) {
+	if (len == 0) {
 		return;
 	}
 	if (len > IMG2_META_RAW_CAP) {
@@ -61,9 +61,6 @@ void img2_meta_keep_xmp(img2_image_t *img, const char *fmt, const uint8_t *xml, 
 
 void img2_meta_clear(img2_image_t *img)
 {
-	if (img == NULL) {
-		return;
-	}
 	free(img->exif_raw);
 	img->exif_raw = NULL;
 	img->exif_raw_len = 0;

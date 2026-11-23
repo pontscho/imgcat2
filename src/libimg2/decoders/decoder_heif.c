@@ -485,10 +485,9 @@ static img2_image_t **decode_heif_static(const uint8_t *data, size_t len, int *f
 										}
 									}
 
-									// Raw block for the encoders (the first Exif item in TIFF-header form)
-									if (output->exif_raw == NULL) {
-										img2_meta_keep_exif(output, "HEIF", tiff_data, tiff_size);
-									}
+									// Raw block for the encoders (TIFF-header form; a later Exif item replaces it, as
+									// it overrides the parsed fields)
+									img2_meta_keep_exif(output, "HEIF", tiff_data, tiff_size);
 
 									// Parse EXIF from TIFF data
 									if (img2_exif_parse_tiff(exif, tiff_data, tiff_size) != 0) {
@@ -512,9 +511,7 @@ static img2_image_t **decode_heif_static(const uint8_t *data, size_t len, int *f
 									struct heif_error err = heif_image_handle_get_metadata(handle, metadata_ids[i], xmp_data);
 									if (err.code == heif_error_Ok) {
 										xmp_data[xmp_size] = '\0'; // Null-terminate XML string
-										if (output->xmp_raw == NULL) {
-											img2_meta_keep_xmp(output, "HEIF", (const uint8_t *)xmp_data, xmp_size);
-										}
+										img2_meta_keep_xmp(output, "HEIF", (const uint8_t *)xmp_data, xmp_size);
 										if (img2_xmp_parse_xml(xmp, xmp_data, xmp_size) != 0) {
 											img2_xmp_clear(xmp);
 											free(xmp);

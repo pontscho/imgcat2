@@ -145,9 +145,6 @@ img2_status_t img2_encode_meta_prepare(const img2_image_t *img, const img2_encod
 
 void img2_encode_meta_release(img2_encode_meta_t *m)
 {
-	if (m == NULL) {
-		return;
-	}
 	free(m->exif);
 	m->exif = NULL;
 	m->exif_len = 0;

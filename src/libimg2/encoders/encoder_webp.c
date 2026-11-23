@@ -48,7 +48,7 @@ img2_status_t img2_encode_webp(const img2_image_t *img, int quality, uint8_t **o
  * @brief Add the EXIF / XMP chunks of @p meta to an encoded WebP through WebPMux
  *
  * @param assembled Output: the new file (WebPMalloc'ed, free with WebPFree / WebPDataClear)
- * @return IMG2_OK, IMG2_E_NOMEM (WebPMux memory error), or IMG2_E_CODEC (any other WebPMux error)
+ * @return IMG2_OK, or IMG2_E_NOMEM (WebPMux can only fail on memory here)
  */
 static img2_status_t webp_add_metadata(const uint8_t *webp, size_t webp_size, const img2_encode_meta_t *meta, WebPData *assembled)
 {
@@ -72,9 +72,11 @@ static img2_status_t webp_add_metadata(const uint8_t *webp, size_t webp_size, co
 	}
 	WebPMuxDelete(mux);
 	if (err != WEBP_MUX_OK) {
+		/* the bitstream was just produced by WebPEncode and the fourccs / payloads are valid: the only error left
+		 * is WEBP_MUX_MEMORY_ERROR */
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to add the WebP metadata chunks (WebPMux error %d)", (int)err);
 		WebPDataClear(assembled);
-		return err == WEBP_MUX_MEMORY_ERROR ? IMG2_E_NOMEM : IMG2_E_CODEC;
+		return IMG2_E_NOMEM;
 	}
 	return IMG2_OK;
 }
