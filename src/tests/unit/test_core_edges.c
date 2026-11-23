@@ -320,7 +320,7 @@ CTEST(core_edges, log_sanitises_and_handles_errors)
 	img2_set_log_callback(edge_log_cb, &cap);
 
 	img2_log(IMG2_LOG_INFO, "a\x01" "b\tc\x7f" "d\ne\n");
-	ASSERT_STR("a?b\tc?d?e\n", cap.last);
+	ASSERT_STR("a\\x01b\tc\\x7fd\\x0ae\n", cap.last); /* [F22] lossless escape, final '\n' kept */
 
 	/* vsnprintf failure (unencodable wide character in the C locale) delivers an empty message */
 	wchar_t bad[2] = { (wchar_t)0xD800, 0 };

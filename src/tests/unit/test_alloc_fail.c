@@ -180,8 +180,57 @@ CTEST(alloc_fail, core_operations)
 	long runs = af_for_each_failure(op_log_long, NULL, AF_MAX_RUNS);
 	img2_set_log_callback(NULL, NULL);
 	img2_set_log_level(saved);
-	ASSERT_EQUAL(1, runs);
+	ASSERT_EQUAL(1, runs); /* nothing to escape: no copy */
 	ASSERT_EQUAL(2, s_log_calls);
+}
+
+static char s_log_last[2048];
+static void af_log_keep(img2_log_level_t level, const char *msg, void *user)
+{
+	(void)level;
+	(void)user;
+	snprintf(s_log_last, sizeof(s_log_last), "%s", msg);
+}
+
+static void op_log_escape_long(void *ctx)
+{
+	(void)ctx;
+	char big[700];
+	memset(big, '\x1b', sizeof(big) - 1);
+	big[sizeof(big) - 1] = '\0';
+	img2_log(IMG2_LOG_ERROR, "%s", big);
+	if (strchr(s_log_last, '\x1b') != NULL) {
+		s_bad++;
+	}
+}
+
+CTEST(alloc_fail, log_escape_fallback)
+{
+	img2_log_level_t saved = img2_get_log_level();
+	img2_set_log_level(IMG2_LOG_ERROR);
+	img2_set_log_callback(af_log_keep, NULL);
+
+	/* [F22] the escaped form (812 bytes) does not fit the stack buffer and its heap copy fails: every byte
+	 * that would be escaped becomes '?' in place, the rest (final '\n' included) is kept */
+	char raw[256], want[256];
+	memset(raw, '\x1b', 200);
+	memcpy(raw + 200, "\xc2\x9b" "ok\xc3\xa9\n", 8);
+	memset(want, '?', 202);
+	memcpy(want + 202, "ok\xc3\xa9\n", 6);
+	af_arm(0);
+	img2_log(IMG2_LOG_ERROR, "%s", raw);
+	bool fired = af_fired();
+	af_disarm();
+	ASSERT_TRUE(fired);
+	ASSERT_STR(want, s_log_last);
+
+	/* long message: the raw heap buffer (truncated text delivered) and the escape copy each fail once */
+	long runs = af_for_each_failure(op_log_escape_long, NULL, AF_MAX_RUNS);
+	ASSERT_EQUAL(2, runs);
+	ASSERT_EQUAL(0, s_bad);
+
+	img2_set_log_callback(NULL, NULL);
+	img2_set_log_level(saved);
 }
 
 /* ===== decoders ===== */

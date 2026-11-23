@@ -326,11 +326,15 @@ Every diagnostic goes through one process-global sink; the library never writes 
   previous `fn`/`user`; keep the previous `user` valid until those calls finish (or until `img2_shutdown()`).
 - **[SM4] Untrusted text warning:** messages can embed strings taken from the input file (EXIF/XMP fields,
   SVG text, vendor messages quoting file data), which may contain terminal control/escape bytes. Every message
-  is filtered before it reaches the default stderr sink or a callback (**[F22]**, `core/log.c`): C0 controls
-  other than tab (and a final newline) and DEL become `?`. Bytes from 0x80 up are passed through unchanged, so
-  UTF-8 C1 controls (U+0080-U+009F, e.g. CSI U+009B) and raw 0x80-0x9F bytes still reach the sink; hosts that
-  show messages on a terminal which interprets C1 controls should install a callback with
-  `img2_set_log_callback` and filter those there.
+  is escaped losslessly before it reaches the default stderr sink or a callback (**[F22]**, `core/log.c`),
+  with the byte policy of the CLI's `safe_text.c`: each byte of a C0 control other than tab, of DEL, of a
+  UTF-8 encoded C1 control (U+0080-U+009F, e.g. CSI U+009B = `C2 9B`) and every raw 0x80-0x9F byte outside a
+  valid UTF-8 sequence is written as `\xNN` (lowercase hex). A message is one line, so a newline is escaped
+  as `\x0a` too, except a single final newline. Printable ASCII, tab, valid UTF-8 and 0xA0-0xFF bytes outside
+  a sequence (Latin-1 etc.) are unchanged; a message with nothing to escape is delivered as formatted. Examples:
+  `"\x1b[31mred"` -> `\x1b[31mred`, `"a\nb"` -> `a\x0ab`, `"é\xc2\x9b"` -> `é\xc2\x9b`. A literal backslash is
+  not doubled, so the escaping is not reversible from the text alone. Only when the escaped copy cannot be
+  allocated (it is up to 4x the message) are those bytes replaced by `?` instead.
 
 ## Threading model
 
