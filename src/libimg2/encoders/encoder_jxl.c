@@ -63,8 +63,12 @@ static void jxl_encoder_destroy(JxlEncoder *encoder, void *runner)
  * alpha_quality: distance of the alpha extra channel (same mapping as quality); threads >= 2: a thread pool
  * runner with that many workers (default and threads 1: single-threaded, no runner); progressive: lossy
  * PROGRESSIVE_AC 1. chroma (XYB / RGB, no subsampling): one WARN; progressive or alpha_quality with lossless:
- * one WARN each.
+ * one WARN each. metadata: container with an "Exif" box (4-byte zero TIFF header offset + block) and an "xml "
+ * box, only when a block is written (otherwise the bare codestream, as before); with the EXIF bit an orientation
+ * 2..8 also goes into the codestream header (the authoritative JPEG XL orientation).
  */
+static img2_status_t encode_jxl_impl(const img2_image_t *img, int quality, const img2_encode_opts_t *o, const img2_encode_meta_t *meta, uint8_t **out_data, size_t *out_size);
+
 img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
@@ -76,6 +80,48 @@ img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const i
 	*out_data = NULL;
 	*out_size = 0;
 
+	const img2_encode_opts_t *o = img2_encode_opts_or_default(opts);
+	img2_encode_meta_t meta;
+	if (img2_encode_meta_prepare(img, o, &meta) != IMG2_OK) {
+		return IMG2_E_NOMEM;
+	}
+	img2_status_t st = encode_jxl_impl(img, quality, o, &meta, out_data, out_size);
+	img2_encode_meta_release(&meta);
+	return st;
+}
+
+/** @brief Container boxes of the metadata (JxlEncoderAddBox copies the payload) */
+static img2_status_t jxl_add_boxes(JxlEncoder *encoder, const img2_encode_meta_t *meta)
+{
+	if (JxlEncoderUseContainer(encoder, JXL_TRUE) != JXL_ENC_SUCCESS || JxlEncoderUseBoxes(encoder) != JXL_ENC_SUCCESS) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to enable the JXL container boxes");
+		return IMG2_E_CODEC;
+	}
+	if (meta->exif != NULL) {
+		uint8_t *box = (uint8_t *)malloc(meta->exif_len + 4);
+		if (box == NULL) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate the JXL Exif box");
+			return IMG2_E_NOMEM;
+		}
+		memset(box, 0, 4); /* offset of the TIFF header after these 4 bytes: 0 */
+		memcpy(box + 4, meta->exif, meta->exif_len);
+		JxlEncoderStatus s = JxlEncoderAddBox(encoder, "Exif", box, meta->exif_len + 4, JXL_FALSE);
+		free(box);
+		if (s != JXL_ENC_SUCCESS) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to add the JXL Exif box");
+			return IMG2_E_CODEC;
+		}
+	}
+	if (meta->xmp != NULL && JxlEncoderAddBox(encoder, "xml ", (const uint8_t *)meta->xmp, meta->xmp_len, JXL_FALSE) != JXL_ENC_SUCCESS) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to add the JXL xml box");
+		return IMG2_E_CODEC;
+	}
+	JxlEncoderCloseBoxes(encoder);
+	return IMG2_OK;
+}
+
+static img2_status_t encode_jxl_impl(const img2_image_t *img, int quality, const img2_encode_opts_t *o, const img2_encode_meta_t *meta, uint8_t **out_data, size_t *out_size)
+{
 	/* Clamp quality to valid range [0, 100] */
 	int jxl_quality = quality;
 	if (jxl_quality < 0) {
@@ -84,8 +130,6 @@ img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const i
 	if (jxl_quality > 100) {
 		jxl_quality = 100;
 	}
-
-	const img2_encode_opts_t *o = img2_encode_opts_or_default(opts);
 
 	/* Determine if lossless mode should be used */
 	int use_lossless = o->lossless || (jxl_quality >= 95);
@@ -151,6 +195,7 @@ img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const i
 	basic_info.alpha_bits = 8;
 	basic_info.alpha_exponent_bits = 0;
 	basic_info.alpha_premultiplied = JXL_FALSE;
+	basic_info.orientation = (JxlOrientation)meta->orientation; /* 1 unless the EXIF bit carries one (pixels as stored) */
 
 	if (JxlEncoderSetBasicInfo(encoder, &basic_info) != JXL_ENC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL basic info");
@@ -204,6 +249,15 @@ img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const i
 	format.data_type = JXL_TYPE_UINT8;
 	format.endianness = JXL_NATIVE_ENDIAN;
 	format.align = 0;
+
+	/* Metadata boxes, before the codestream (only when a block is written: the default stays a bare codestream) */
+	if (meta->exif != NULL || meta->xmp != NULL) {
+		img2_status_t bst = jxl_add_boxes(encoder, meta);
+		if (bst != IMG2_OK) {
+			jxl_encoder_destroy(encoder, runner);
+			return bst;
+		}
+	}
 
 	/* Add image frame */
 	size_t pixel_size = (size_t)img->width * (size_t)img->height * 4;

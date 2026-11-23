@@ -102,8 +102,24 @@ static void jpeg_memory_term(j_compress_ptr cinfo)
  * @return IMG2_OK, or IMG2_E_CODEC (libjpeg error, including a failed allocation inside libjpeg or a failed
  *         destination growth)
  */
-static img2_status_t encode_jpeg_rows(const img2_image_t *img, int quality, const img2_encode_opts_t *o, struct jpeg_compress_struct *cinfo,
-                                        struct jpeg_error_mgr_extended *jerr, jpeg_memory_dest *dest, uint8_t *row_buffer)
+/** @brief Payload of one APP1 segment: at most 65533 bytes (the 16-bit length counts itself) */
+#define JPEG_APP1_MAX 65533u
+
+/** @brief Write an APP1 segment: identifier + block (byte by byte: no concatenated copy) */
+static void jpeg_write_app1(j_compress_ptr cinfo, const char *id, size_t id_len, const uint8_t *block, size_t block_len)
+{
+	jpeg_write_m_header(cinfo, JPEG_APP0 + 1, (unsigned int)(id_len + block_len));
+	for (size_t i = 0; i < id_len; i++) {
+		jpeg_write_m_byte(cinfo, (int)(unsigned char)id[i]);
+	}
+	for (size_t i = 0; i < block_len; i++) {
+		jpeg_write_m_byte(cinfo, block[i]);
+	}
+}
+
+static img2_status_t encode_jpeg_rows(const img2_image_t *img, int quality, const img2_encode_opts_t *o, const img2_encode_meta_t *meta,
+                                        struct jpeg_compress_struct *cinfo, struct jpeg_error_mgr_extended *jerr, jpeg_memory_dest *dest,
+                                        uint8_t *row_buffer)
 {
 	/* Setup error handler with longjmp */
 	cinfo->err = jpeg_std_error(&jerr->pub);
@@ -148,8 +164,16 @@ static img2_status_t encode_jpeg_rows(const img2_image_t *img, int quality, cons
 		jpeg_simple_progression(cinfo);
 	}
 
-	/* Start compression */
+	/* Start compression (writes SOI and the JFIF APP0) */
 	jpeg_start_compress(cinfo, TRUE);
+
+	/* Metadata (opts->metadata): APP1 Exif, then APP1 XMP; blocks over the marker limit were dropped by the caller */
+	if (meta->exif != NULL) {
+		jpeg_write_app1(cinfo, "Exif\0\0", 6, meta->exif, meta->exif_len);
+	}
+	if (meta->xmp != NULL) {
+		jpeg_write_app1(cinfo, "http://ns.adobe.com/xap/1.0/\0", 29, (const uint8_t *)meta->xmp, meta->xmp_len);
+	}
 
 	/* Write scanlines */
 	JSAMPROW row_pointer[1];
@@ -242,6 +266,21 @@ img2_status_t img2_encode_jpeg_opts(const img2_image_t *img, int quality, const 
 		jpeg_quality = 100;
 	}
 
+	/* Metadata blocks; one APP1 segment each, no extended XMP: a block over the marker limit is not written */
+	img2_encode_meta_t meta;
+	if (img2_encode_meta_prepare(img, o, &meta) != IMG2_OK) {
+		return IMG2_E_NOMEM;
+	}
+	if (meta.exif != NULL && meta.exif_len > JPEG_APP1_MAX - 6) {
+		img2_log(IMG2_LOG_WARN, "encode: EXIF block of %zu bytes exceeds the JPEG APP1 limit (%u bytes with its identifier), not written", meta.exif_len, JPEG_APP1_MAX);
+		img2_encode_meta_release(&meta);
+	}
+	if (meta.xmp != NULL && meta.xmp_len > JPEG_APP1_MAX - 29) {
+		img2_log(IMG2_LOG_WARN, "encode: XMP packet of %zu bytes exceeds the JPEG APP1 limit (%u bytes with its identifier), not written", meta.xmp_len, JPEG_APP1_MAX);
+		meta.xmp = NULL;
+		meta.xmp_len = 0;
+	}
+
 	/* Output buffer (grown by libjpeg through jpeg_memory_grow) and temporary RGB row buffer (RGBA->RGB) */
 	jpeg_memory_dest dest;
 	memset(&dest, 0, sizeof(dest));
@@ -253,13 +292,15 @@ img2_status_t img2_encode_jpeg_opts(const img2_image_t *img, int quality, const 
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JPEG buffers");
 		free(dest.buffer);
 		free(row_buffer);
+		img2_encode_meta_release(&meta);
 		return IMG2_E_NOMEM;
 	}
 
 	struct jpeg_compress_struct cinfo;
 	struct jpeg_error_mgr_extended jerr;
-	img2_status_t st = encode_jpeg_rows(img, jpeg_quality, o, &cinfo, &jerr, &dest, row_buffer);
+	img2_status_t st = encode_jpeg_rows(img, jpeg_quality, o, &meta, &cinfo, &jerr, &dest, row_buffer);
 	free(row_buffer);
+	img2_encode_meta_release(&meta);
 	if (st != IMG2_OK) {
 		free(dest.buffer);
 		return st;

@@ -249,7 +249,8 @@ CTEST(encode_options, out_of_range_is_arg_error)
 	img2_image_destroy(img);
 }
 
-CTEST(encode_options, metadata_not_supported_yet)
+/* Phase 3: metadata is written (test_encode_metadata); requested blocks the image does not have are silently absent */
+CTEST(encode_options, metadata_absent_is_silent)
 {
 	img2_image_t *img = make_image(8, 8, false);
 	img2_encode_opts_t eo = IMG2_ENCODE_OPTS_INIT;
@@ -259,8 +260,7 @@ CTEST(encode_options, metadata_not_supported_yet)
 	capture_begin();
 	ASSERT_EQUAL(IMG2_OK, encode(img, IMG2_FORMAT_PNG, &eo, &a, &la));
 	capture_end();
-	ASSERT_EQUAL(1, s_warn_count);
-	assert_one_warn("encode: metadata is not supported yet (ignored)");
+	ASSERT_EQUAL(0, s_warn_count);
 
 	/* the output is the default output */
 	uint8_t *b = NULL;

@@ -9,6 +9,7 @@
 
 #include "encoder.h"
 #include "../core/log.h"
+#include "../metadata/meta_raw.h"
 
 /**
  * @brief Static encoder table
@@ -113,6 +114,43 @@ const char *img2_chroma_name(img2_chroma_t chroma)
 void img2_encode_warn_ignored(const char *option, const char *format, const char *reason)
 {
 	img2_log(IMG2_LOG_WARN, "encode: %s has no effect for %s (%s)", option, format, reason);
+}
+
+img2_status_t img2_encode_meta_prepare(const img2_image_t *img, const img2_encode_opts_t *o, img2_encode_meta_t *m)
+{
+	memset(m, 0, sizeof(*m));
+	m->orientation = 1;
+	if ((o->metadata & IMG2_META_EXIF) != 0) {
+		/* img2_image_set_metadata() validates; a block written straight into the public fields may not be */
+		if (img->exif_raw != NULL && (!img2_meta_is_tiff(img->exif_raw, img->exif_raw_len) || img->exif_raw_len > IMG2_META_RAW_CAP)) {
+			img2_log(IMG2_LOG_WARN, "encode: the image's EXIF block is not a TIFF-header block of at most 1 MiB (not written)");
+		} else if (img2_meta_exif_for_write(img, &m->exif, &m->exif_len) != IMG2_OK) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate the EXIF block");
+			return IMG2_E_NOMEM;
+		}
+		if (img->orientation >= 2 && img->orientation <= 8) {
+			m->orientation = img->orientation;
+		}
+	}
+	if ((o->metadata & IMG2_META_XMP) != 0 && img->xmp_raw != NULL && img->xmp_raw_len > 0) {
+		if (img->xmp_raw_len > IMG2_META_RAW_CAP) {
+			img2_log(IMG2_LOG_WARN, "encode: the image's XMP packet exceeds 1 MiB (not written)");
+		} else {
+			m->xmp = img->xmp_raw;
+			m->xmp_len = img->xmp_raw_len;
+		}
+	}
+	return IMG2_OK;
+}
+
+void img2_encode_meta_release(img2_encode_meta_t *m)
+{
+	if (m == NULL) {
+		return;
+	}
+	free(m->exif);
+	m->exif = NULL;
+	m->exif_len = 0;
 }
 
 img2_status_t img2_encoder_dispatch(const img2_image_t *img, img2_format_t format, int native_quality, uint8_t **out_data, size_t *out_size)

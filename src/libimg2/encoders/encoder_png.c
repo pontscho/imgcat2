@@ -128,7 +128,7 @@ static void png_warning_handler(png_structp png_ptr, png_const_charp warning_msg
  *
  * @return IMG2_OK, or IMG2_E_CODEC (libpng error, including a failed write-buffer allocation)
  */
-static img2_status_t encode_png_rows(const img2_image_t *img, int compression, bool interlace, png_bytep *row_pointers, png_memory_write_state *state)
+static img2_status_t encode_png_rows(const img2_image_t *img, int compression, bool interlace, const img2_encode_meta_t *meta, png_bytep *row_pointers, png_memory_write_state *state)
 {
 	/* Create PNG write structure */
 	jmp_buf jmpbuf;
@@ -170,6 +170,22 @@ static img2_status_t encode_png_rows(const img2_image_t *img, int compression, b
 	    interlace ? PNG_INTERLACE_ADAM7 : PNG_INTERLACE_NONE, /* png_write_image() runs the Adam7 passes */
 	    PNG_COMPRESSION_TYPE_DEFAULT,
 	    PNG_FILTER_TYPE_DEFAULT);
+
+	/* Metadata (opts->metadata): eXIf chunk (raw TIFF block), uncompressed iTXt "XML:com.adobe.xmp" (libpng copies
+	 * both into info_ptr; written by png_write_info before IDAT) */
+	if (meta->exif != NULL) {
+		png_set_eXIf_1(png_ptr, info_ptr, (png_uint_32)meta->exif_len, meta->exif);
+	}
+	if (meta->xmp != NULL) {
+		char key[] = "XML:com.adobe.xmp";
+		png_text text;
+		memset(&text, 0, sizeof(text));
+		text.compression = PNG_ITXT_COMPRESSION_NONE;
+		text.key = key;
+		text.text = (png_charp)meta->xmp;
+		text.itxt_length = meta->xmp_len;
+		png_set_text(png_ptr, info_ptr, &text, 1);
+	}
 
 	/* Write info, image data, end */
 	png_write_info(png_ptr, info_ptr);
@@ -248,10 +264,17 @@ img2_status_t img2_encode_png_opts(const img2_image_t *img, int quality, const i
 		png_compression = 9;
 	}
 
+	/* Metadata blocks (owned EXIF copy: freed after the encode) */
+	img2_encode_meta_t meta;
+	if (img2_encode_meta_prepare(img, o, &meta) != IMG2_OK) {
+		return IMG2_E_NOMEM;
+	}
+
 	/* Prepare row pointers (each row points to pixel data in img->pixels) */
 	png_bytep *row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * img->height);
 	if (row_pointers == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate row pointers");
+		img2_encode_meta_release(&meta);
 		return IMG2_E_NOMEM;
 	}
 	for (uint32_t y = 0; y < img->height; y++) {
@@ -263,8 +286,9 @@ img2_status_t img2_encode_png_opts(const img2_image_t *img, int quality, const i
 	write_state.buffer = NULL;
 	write_state.size = 0;
 	write_state.capacity = 0;
-	img2_status_t st = encode_png_rows(img, png_compression, o->progressive, row_pointers, &write_state);
+	img2_status_t st = encode_png_rows(img, png_compression, o->progressive, &meta, row_pointers, &write_state);
 	free(row_pointers);
+	img2_encode_meta_release(&meta);
 	if (st != IMG2_OK) {
 		free(write_state.buffer);
 		return st;

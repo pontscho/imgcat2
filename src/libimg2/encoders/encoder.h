@@ -87,6 +87,29 @@ const char *img2_chroma_name(img2_chroma_t chroma);
  */
 void img2_encode_warn_ignored(const char *option, const char *format, const char *reason);
 
+/**
+ * @brief The metadata an encoder writes (opts->metadata, docs/encoder-api.md "Metadata passthrough")
+ *
+ * exif: a copy of img->exif_raw with IFD0 Orientation set to img->orientation (img2_meta_exif_for_write), when
+ * the EXIF bit is set and the image has a block; xmp: img->xmp_raw (borrowed) when the XMP bit is set and the
+ * image has a packet. A requested block the image does not have is silently absent. orientation: img->orientation
+ * when the EXIF bit is set and it is 2..8, else 1 (JXL / HEIF / AVIF also carry it natively: codestream
+ * orientation, irot/imir).
+ */
+typedef struct img2_encode_meta {
+	uint8_t *exif;        /**< owned copy, NULL if not written */
+	size_t exif_len;
+	const char *xmp;      /**< borrowed from the image, NULL if not written */
+	size_t xmp_len;
+	uint8_t orientation;  /**< 1..8 */
+} img2_encode_meta_t;
+
+/** @brief Fill @p m for @p img and @p o (zeroed first). @return IMG2_OK or IMG2_E_NOMEM (m empty) */
+img2_status_t img2_encode_meta_prepare(const img2_image_t *img, const img2_encode_opts_t *o, img2_encode_meta_t *m);
+
+/** @brief Free what img2_encode_meta_prepare() allocated (NULL-safe, idempotent) */
+void img2_encode_meta_release(img2_encode_meta_t *m);
+
 /* [R10] Direct encoder entry points (encoder_<x>.c), declared unconditionally. The 4-argument forms encode with
  * default options; the _opts forms are the registry functions (img2_encode_fn). */
 img2_status_t img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);

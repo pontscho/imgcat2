@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <webp/encode.h>
+#include <webp/mux.h>
 /* clang-format on */
 
 #include "encoder.h"
@@ -42,6 +43,41 @@ img2_status_t img2_encode_webp(const img2_image_t *img, int quality, uint8_t **o
 
 /** Quality factor of libwebp's WebPEncodeLosslessRGBA() (LOSSLESS_DEFAULT_QUALITY in picture_enc.c) */
 #define WEBP_LOSSLESS_QUALITY 70.0f
+
+/**
+ * @brief Add the EXIF / XMP chunks of @p meta to an encoded WebP through WebPMux
+ *
+ * @param assembled Output: the new file (WebPMalloc'ed, free with WebPFree / WebPDataClear)
+ * @return IMG2_OK, IMG2_E_NOMEM (WebPMux memory error), or IMG2_E_CODEC (any other WebPMux error)
+ */
+static img2_status_t webp_add_metadata(const uint8_t *webp, size_t webp_size, const img2_encode_meta_t *meta, WebPData *assembled)
+{
+	WebPData image = { webp, webp_size };
+	WebPMux *mux = WebPMuxCreate(&image, 0); /* no copy: the bitstream outlives the mux */
+	if (mux == NULL) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to create the WebP muxer");
+		return IMG2_E_NOMEM; /* the input was just produced by WebPEncode: only an allocation can fail */
+	}
+	WebPMuxError err = WEBP_MUX_OK;
+	if (meta->exif != NULL) {
+		WebPData chunk = { meta->exif, meta->exif_len };
+		err = WebPMuxSetChunk(mux, "EXIF", &chunk, 0);
+	}
+	if (err == WEBP_MUX_OK && meta->xmp != NULL) {
+		WebPData chunk = { (const uint8_t *)meta->xmp, meta->xmp_len };
+		err = WebPMuxSetChunk(mux, "XMP ", &chunk, 0);
+	}
+	if (err == WEBP_MUX_OK) {
+		err = WebPMuxAssemble(mux, assembled); /* reads the chunks above: before WebPMuxDelete */
+	}
+	WebPMuxDelete(mux);
+	if (err != WEBP_MUX_OK) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to add the WebP metadata chunks (WebPMux error %d)", (int)err);
+		WebPDataClear(assembled);
+		return err == WEBP_MUX_MEMORY_ERROR ? IMG2_E_NOMEM : IMG2_E_CODEC;
+	}
+	return IMG2_OK;
+}
 
 /**
  * @brief img2_encode_webp() with encode options (NULL = defaults)
@@ -123,6 +159,26 @@ img2_status_t img2_encode_webp_opts(const img2_image_t *img, int quality, const 
 		return IMG2_E_CODEC;
 	}
 
+	/* Metadata (opts->metadata): EXIF / XMP chunks added by WebPMux (VP8X container); none requested or present:
+	 * the bitstream above as is */
+	img2_encode_meta_t meta;
+	if (img2_encode_meta_prepare(img, o, &meta) != IMG2_OK) {
+		WebPFree(webp_buffer);
+		return IMG2_E_NOMEM;
+	}
+	WebPData assembled;
+	WebPDataInit(&assembled);
+	if (meta.exif != NULL || meta.xmp != NULL) {
+		img2_status_t mst = webp_add_metadata(webp_buffer, webp_size, &meta, &assembled);
+		img2_encode_meta_release(&meta);
+		WebPFree(webp_buffer);
+		if (mst != IMG2_OK) {
+			return mst;
+		}
+		webp_buffer = (uint8_t *)assembled.bytes;
+		webp_size = assembled.size;
+	}
+
 	/* Allocate and copy output data */
 	*out_data = (uint8_t *)malloc(webp_size);
 	if (*out_data == NULL) {
@@ -134,7 +190,7 @@ img2_status_t img2_encode_webp_opts(const img2_image_t *img, int quality, const 
 	memcpy(*out_data, webp_buffer, webp_size);
 	*out_size = webp_size;
 
-	/* Free WebP internal buffer */
+	/* Free WebP internal buffer (or WebPMux's assembled copy, also WebPMalloc'ed) */
 	WebPFree(webp_buffer);
 
 	return IMG2_OK;

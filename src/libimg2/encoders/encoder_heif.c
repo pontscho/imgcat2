@@ -183,7 +183,13 @@ static struct heif_error avif_set_options(struct heif_encoder *encoder, const im
  * @param out_data Output parameter for encoded data (caller must free)
  * @param out_size Output parameter for encoded data size in bytes
  * @return IMG2_OK; IMG2_E_ARG, IMG2_E_NOMEM, IMG2_E_CODEC
+ *
+ * Metadata (opts->metadata): heif_context_add_exif_metadata / heif_context_add_XMP_metadata on the primary
+ * handle; with the EXIF bit an orientation 2..8 also becomes irot/imir (heif_encoding_options.image_orientation,
+ * libheif >= 1.14), the transformation HEIF readers apply.
  */
+static img2_status_t heif_encode_impl(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, const img2_encode_meta_t *meta, enum heif_compression_format compression, const char *label, const char *codec, uint8_t **out_data, size_t *out_size);
+
 static img2_status_t heif_encode_with(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, enum heif_compression_format compression, const char *label, const char *codec, const char *fn, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
@@ -195,6 +201,30 @@ static img2_status_t heif_encode_with(const img2_image_t *img, int quality, cons
 	*out_data = NULL;
 	*out_size = 0;
 
+	img2_encode_meta_t meta;
+	if (img2_encode_meta_prepare(img, opts, &meta) != IMG2_OK) {
+		return IMG2_E_NOMEM;
+	}
+	img2_status_t st = heif_encode_impl(img, quality, opts, &meta, compression, label, codec, out_data, out_size);
+	img2_encode_meta_release(&meta);
+	return st;
+}
+
+/** @brief Attach the metadata blocks to the primary image (libheif copies them); the first error or Ok */
+static struct heif_error heif_add_metadata(struct heif_context *ctx, const struct heif_image_handle *handle, const img2_encode_meta_t *meta)
+{
+	struct heif_error err = { heif_error_Ok, heif_suberror_Unspecified, "Success" };
+	if (meta->exif != NULL) {
+		err = heif_context_add_exif_metadata(ctx, handle, meta->exif, (int)meta->exif_len); /* <= 1 MiB: fits int */
+	}
+	if (err.code == heif_error_Ok && meta->xmp != NULL) {
+		err = heif_context_add_XMP_metadata(ctx, handle, meta->xmp, (int)meta->xmp_len);
+	}
+	return err;
+}
+
+static img2_status_t heif_encode_impl(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, const img2_encode_meta_t *meta, enum heif_compression_format compression, const char *label, const char *codec, uint8_t **out_data, size_t *out_size)
+{
 	const bool avif = compression == heif_compression_AV1;
 	if (!avif) {
 		heif_warn_options(opts);
@@ -292,6 +322,15 @@ static img2_status_t heif_encode_with(const img2_image_t *img, int quality, cons
 			enc_opts->output_nclx_profile = nclx;
 		}
 	}
+#if LIBHEIF_HAVE_VERSION(1, 14, 0)
+	/* orientation of the stored pixels (EXIF bit, 2..8): irot/imir; default encodes pass no options as before */
+	if (meta->orientation != 1) {
+		if (enc_opts == NULL) {
+			enc_opts = heif_encoding_options_alloc();
+		}
+		enc_opts->image_orientation = (enum heif_orientation)meta->orientation;
+	}
+#endif
 
 	/* Encode image */
 	struct heif_image_handle *handle = NULL;
@@ -308,6 +347,16 @@ static img2_status_t heif_encode_with(const img2_image_t *img, int quality, cons
 
 	/* Release encoder (no longer needed) */
 	heif_encoder_release(encoder);
+
+	/* Metadata items of the primary image */
+	err = heif_add_metadata(ctx, handle, meta);
+	if (err.code != heif_error_Ok) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to add %s metadata: %s", label, err.message);
+		heif_image_handle_release(handle);
+		heif_image_release(heif_img);
+		heif_context_free(ctx);
+		return IMG2_E_CODEC;
+	}
 
 	/* Initialize memory write state */
 	heif_memory_write_state write_state;

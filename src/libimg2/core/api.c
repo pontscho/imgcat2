@@ -114,11 +114,7 @@ img2_status_t img2_encode(const img2_frames_t *in, img2_format_t fmt, const img2
 		native = opts->quality;
 	}
 
-	/* Phase 3 of docs/encoder-api.md writes metadata; until then the request is ignored with one WARN */
-	if (opts != NULL && opts->metadata != 0) {
-		img2_log(IMG2_LOG_WARN, "encode: metadata is not supported yet (ignored)");
-	}
-
+	/* opts->metadata: the encoders write the image's raw EXIF / XMP blocks (img2_encode_meta_prepare) */
 	return img2_encoder_dispatch_opts(in->frames[0], fmt, native, opts, out_buf, out_len);
 }
 
