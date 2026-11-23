@@ -445,7 +445,7 @@ CTEST(file_render, avif_quality_option)
 	char path[4096];
 	test_tmp_path(path, sizeof(path), "imgcat2_test_render_def.avif");
 	img2_image_t *frames[] = { img };
-	opts.avif_quality = 99;
+	opts.avif_quality = 80;
 	opts.output_file = path;
 	opts.silent = true;
 	ASSERT_EQUAL(0, file_render(frames, 1, &opts));

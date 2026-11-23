@@ -96,7 +96,7 @@ static void opts_defaults(cli_options_t *opts)
 	opts->heif_quality = 80;
 	opts->webp_quality = 80;
 	opts->jxl_quality = 80;
-	opts->avif_quality = 99;
+	opts->avif_quality = 80;
 	opts->terminal.rows = 24;
 	opts->terminal.cols = 80;
 }
@@ -332,7 +332,7 @@ CTEST(cli_fix, avif_option)
 	opts_defaults(&opts);
 	char *argv4[] = { (char *)"imgcat2", (char *)"--help", NULL };
 	ASSERT_EQUAL(1, parse_captured(2, argv4, &opts, &out, &err));
-	ASSERT_NOT_NULL(strstr(out, "      --avif <quality>      Convert to AVIF (quality: 0-100, default: 99)\n"));
+	ASSERT_NOT_NULL(strstr(out, "      --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)\n"));
 	free(out);
 	free(err);
 }

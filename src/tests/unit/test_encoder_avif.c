@@ -88,7 +88,7 @@ CTEST(encoder_avif, can_encode_and_table_row)
 
 	const img2_encoder_entry_t *e = img2_encoder_find(IMG2_FORMAT_AVIF);
 	ASSERT_NOT_NULL(e);
-	ASSERT_EQUAL(99, e->default_quality);
+	ASSERT_EQUAL(80, e->default_quality);
 }
 
 CTEST(encoder_avif, null_inputs)

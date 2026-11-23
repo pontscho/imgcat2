@@ -39,7 +39,7 @@ static const img2_encoder_entry_t s_encoders[] = {
 #endif
 
 #ifdef IMG2_HAVE_HEIF
-	{ { IMG2_FORMAT_AVIF, "AVIF (libheif/aom)", ".avif" }, img2_encode_avif, 99, img2_encode_avif_available },
+	{ { IMG2_FORMAT_AVIF, "AVIF (libheif/aom)", ".avif" }, img2_encode_avif, 80, img2_encode_avif_available },
 #endif
 };
 

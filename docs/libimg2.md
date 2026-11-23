@@ -444,7 +444,7 @@ imgcat2 1.0 for byte-identical output):
 | HEIF | 0..100 (never lossless) | 80 |
 | WebP | 0..99 lossy, 100 lossless | 80 |
 | JPEG XL | 0..94 lossy (distance (100 - q) / 10), >= 95 lossless | 80 |
-| AVIF | aom quality 0..100, 4:2:0 (never lossless) | 99 (the PSNR of HEIF at 80, see [encoder-api.md](encoder-api.md#measurements)) |
+| AVIF | aom quality 0..100, 4:2:0 (never lossless) | 80 (see [encoder-api.md](encoder-api.md#measurements)) |
 
 This deviates from the locked decision "100 = lossless where supported": PNG is always lossless, JPEG/HEIF/AVIF
 are never lossless, and JPEG XL is already lossless from 95 (see below). Only `in->frames[0]` is encoded.

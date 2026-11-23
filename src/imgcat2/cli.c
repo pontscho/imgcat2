@@ -67,7 +67,7 @@ void print_usage(const char *program_name)
 	printf("      --heif <quality>      Convert to HEIF (quality: 0-100, default: 80)\n");
 	printf("      --webp <quality>      Convert to WebP (quality: 0-100, default: 80, 100=lossless)\n");
 	printf("      --jxl <quality>       Convert to JXL (quality: 0-100, default: 80, >=95=lossless)\n");
-	printf("      --avif <quality>      Convert to AVIF (quality: 0-100, default: 99)\n");
+	printf("      --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
 	printf("      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)\n");

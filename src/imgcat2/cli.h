@@ -52,7 +52,7 @@ typedef struct {
 	int heif_quality; /**< HEIF quality 0-100 (default: 80) */
 	int webp_quality; /**< WebP quality 0-100 (default: 80) */
 	int jxl_quality; /**< JXL quality 0-100 (default: 80) */
-	int avif_quality; /**< AVIF quality 0-100 (default: 99) */
+	int avif_quality; /**< AVIF quality 0-100 (default: 80) */
 	int frame_index; /**< Frame to convert for animated images (default: 0) */
 
 	/* Raw input options */

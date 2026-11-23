@@ -31,7 +31,7 @@ typedef enum img2_format {
  * JPEG 0..100 (default 90); PNG zlib level = quality/10 clamped 0..9 (default 6, always lossless);
  * HEIF 0..100 (default 80); WebP 0..99 lossy, 100 lossless (default 80);
  * JXL 0..94 lossy (distance (100-q)/10), >= 95 lossless (default 80);
- * AVIF 0..100 aom quality, lossy 4:2:0 (default 99: the PSNR of HEIF at 80).
+ * AVIF 0..100 aom quality, lossy 4:2:0 (default 80).
  */
 typedef struct img2_encode_opts {
 	int quality;    /**< -1 = default, else 0..100 (see above) */

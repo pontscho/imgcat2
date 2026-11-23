@@ -443,7 +443,7 @@ Conversion Options:
       --heif <quality>      Convert to HEIF (quality: 0-100, default: 80)
       --webp <quality>      Convert to WebP (quality: 0-100, default: 80, 100=lossless)
       --jxl <quality>       Convert to JXL (quality: 0-100, default: 80, >=95=lossless)
-      --avif <quality>      Convert to AVIF (quality: 0-100, default: 99)
+      --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)
   -o, --output <file>       Output file (stdout if not specified)
   -n, --frame <index>       Select frame for animated images (default: 0)
       --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)
@@ -625,11 +625,14 @@ imgcat2 --jxl 85 --output output.jxl image.jpg
 
 ### AVIF Conversion
 ```bash
-# Convert to AVIF with the default quality (99: the PSNR of --heif 80)
-imgcat2 --avif 99 image.png > output.avif
+# Convert to AVIF with the default quality (80)
+imgcat2 --avif 80 image.png > output.avif
 
 # Smaller file, lower quality (0-100)
 imgcat2 --avif 60 image.jpg > output.avif
+
+# Near the PSNR of --heif 80 (about the same file size as HEIF)
+imgcat2 --avif 99 image.jpg > output.avif
 
 # Save to file
 imgcat2 --avif 80 --output output.avif image.png
@@ -657,7 +660,7 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - `--jxl <quality>` - Convert to JXL format (quality: 0-100, default: 80)
   - Quality >= 95 = lossless mode (preserves transparency)
   - Quality 0-94 = lossy mode with distance-based quality
-- `--avif <quality>` - Convert to AVIF format (AV1 via libheif/aom; quality: 0-100, default: 99)
+- `--avif <quality>` - Convert to AVIF format (AV1 via libheif/aom; quality: 0-100, default: 80)
   - Always lossy 4:2:0; higher quality = better image quality but larger file size
 - `--output <file>` or `-o <file>` - Output file path (stdout if not specified)
 - `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
@@ -669,7 +672,7 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - **HEIF** supports transparency and offers better compression than JPEG
 - **WebP** preserves transparency in lossless mode (quality 100) and offers excellent compression
 - **JXL** preserves transparency in lossless mode (quality >= 95) and provides modern, high-efficiency compression with HDR support
-- **AVIF** supports transparency; the default quality 99 matches the PSNR of `--heif 80` at a similar file size, lower values give much smaller files
+- **AVIF** supports transparency; the default quality 80 gives about a third of the `--heif 80` file size at a lower PSNR; `--avif 99` matches the PSNR of `--heif 80` at a similar size
 - Output to stdout by default (use `>` to redirect or `--output` flag)
 - Quality and compression affect both file size and processing time
 - Out-of-range JPEG quality and PNG level values are clamped with a warning; HEIF, WebP, JXL and AVIF quality outside 0-100 is an error

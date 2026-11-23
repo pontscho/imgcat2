@@ -56,7 +56,7 @@ int main(int argc, char **argv)
 		.heif_quality = 80,
 		.webp_quality = 80,
 		.jxl_quality = 80,
-		.avif_quality = 99,
+		.avif_quality = 80,
 		.frame_index = 0,
 
 		.terminal = {
