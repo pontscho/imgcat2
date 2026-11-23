@@ -6,6 +6,7 @@
  *          `imgcat2 -F` crashed; -b took an argument --version does not have).
  * JSON:    --info --json escaped every byte >= 0x80 as \u00XX (signed char): UTF-8 text came out as mojibake.
  * GPS:     --info printed the signed value with the letter ("-121.314136W") and a NUL byte for no reference.
+ * -w / -H: checked against the terminal size even when converting to a file (--jpeg/--png/--heif/--webp/--jxl).
  */
 
 #include <fcntl.h>
@@ -173,6 +174,58 @@ CTEST(cli_fix, short_version_takes_no_argument)
 	ASSERT_EQUAL(1, parse_captured(3, argv2, &opts, &out, &err));
 	ASSERT_NOT_NULL(strstr(out, "imgcat2 version "));
 	free(out);
+	free(err);
+}
+
+/* ---- -w / -H in conversion mode: not limited by the terminal size ---- */
+
+/* validate_options() with stderr captured; returns its result, stderr in *err (free()) */
+static int validate_captured(cli_options_t *opts, char **err)
+{
+	cap_t c;
+	cap_begin(&c, STDERR_FILENO, "validate");
+	int rc = validate_options(opts);
+	size_t n = 0;
+	*err = cap_end(&c, &n);
+	ASSERT_NOT_NULL(*err);
+	return rc;
+}
+
+CTEST(cli_fix, convert_dimensions_not_terminal_bound)
+{
+	static const img2_format_t formats[] = { IMG2_FORMAT_JPEG, IMG2_FORMAT_PNG, IMG2_FORMAT_HEIF, IMG2_FORMAT_WEBP, IMG2_FORMAT_JXL };
+	cli_options_t opts;
+	char *err = NULL;
+	for (size_t i = 0; i < sizeof(formats) / sizeof(formats[0]); i++) {
+		/* 80 x 24 terminal: -w 1000 -H 600 is far beyond it, fine for a conversion */
+		opts_defaults(&opts);
+		opts.convert_mode = true;
+		opts.output_format = formats[i];
+		opts.has_custom_dimensions = true;
+		opts.target_width = 1000;
+		opts.target_height = 600;
+		ASSERT_EQUAL(0, validate_captured(&opts, &err));
+		ASSERT_STR("", err);
+		free(err);
+
+		/* at least one dimension must still be positive */
+		opts.target_width = 0;
+		opts.target_height = 0;
+		ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+		free(err);
+	}
+
+	/* terminal rendering: still limited by the terminal */
+	opts_defaults(&opts);
+	opts.has_custom_dimensions = true;
+	opts.target_width = 1000;
+	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+	ASSERT_NOT_NULL(strstr(err, "Error: Width must be between 1 and 80 pixels (got 1000)"));
+	free(err);
+	opts.target_width = -1;
+	opts.target_height = 600;
+	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+	ASSERT_NOT_NULL(strstr(err, "Error: Height must be between 1 and 48 pixels (got 600)"));
 	free(err);
 }
 

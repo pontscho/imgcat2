@@ -504,9 +504,13 @@ int validate_options(cli_options_t *opts)
 		int max_width = opts->terminal.cols * RESIZE_FACTOR_X;
 		int max_height = opts->terminal.rows * RESIZE_FACTOR_Y;
 
+		/* A conversion writes a file, not the terminal: only the IMGCAT2_MAX_CUSTOM_DIMENSION cap of
+		 * parse_dimension_arg() applies, not the terminal size */
+		const bool terminal_bound = !opts->convert_mode && !(opts->terminal.is_iterm2 || opts->terminal.has_kitty);
+
 		/* Check width bounds */
 		if (opts->target_width > 0) {
-			if ((opts->target_width < 1 || opts->target_width > max_width) && !(opts->terminal.is_iterm2 || opts->terminal.has_kitty)) {
+			if ((opts->target_width < 1 || opts->target_width > max_width) && terminal_bound) {
 				fprintf(stderr, "Error: Width must be between 1 and %d pixels (got %d)\n", max_width, opts->target_width);
 				return -1;
 			}
@@ -514,7 +518,7 @@ int validate_options(cli_options_t *opts)
 
 		/* Check height bounds */
 		if (opts->target_height > 0) {
-			if ((opts->target_height < 1 || opts->target_height > max_height) && !(opts->terminal.is_iterm2 || opts->terminal.has_kitty)) {
+			if ((opts->target_height < 1 || opts->target_height > max_height) && terminal_bound) {
 				fprintf(stderr, "Error: Height must be between 1 and %d pixels (got %d)\n", max_height, opts->target_height);
 				return -1;
 			}
