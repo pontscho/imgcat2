@@ -8,6 +8,7 @@
  * GPS:     --info printed the signed value with the letter ("-121.314136W") and a NUL byte for no reference.
  * -w / -H: checked against the terminal size even when converting to a file (--jpeg/--png/--heif/--webp/--jxl).
  * Errors:  "-w or -h" (-h is --help) and "requires --jpeg or --png" (HEIF / WebP / JXL missing).
+ * Frames:  converting an animated image printed "Animated image with N frames, converting frame K" without -v.
  */
 
 #include <fcntl.h>
@@ -265,6 +266,47 @@ CTEST(cli_fix, validate_messages)
 	img2_image_destroy(img);
 	ASSERT_EQUAL(-1, rc);
 	ASSERT_STR("Error: No output format specified (use --jpeg, --png, --heif, --webp or --jxl)\n", err);
+	free(err);
+}
+
+/* ---- --frame N of an animated image: the "converting frame" note only with -v ---- */
+
+/* file_render() of a 2-frame image to stdout (discarded); returns its stderr (free()) */
+static char *render_two_frames(bool silent)
+{
+	img2_image_t *imgs[2] = { NULL, NULL };
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(2, 2, &imgs[0]));
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(2, 2, &imgs[1]));
+	cli_options_t opts;
+	opts_defaults(&opts);
+	opts.convert_mode = true;
+	opts.output_format = IMG2_FORMAT_PNG;
+	opts.png_compression = 1;
+	opts.frame_index = 1;
+	opts.silent = silent;
+	cap_t co;
+	cap_t ce;
+	cap_begin(&co, STDOUT_FILENO, "frames_out");
+	cap_begin(&ce, STDERR_FILENO, "frames_err");
+	int rc = file_render(imgs, 2, &opts);
+	size_t n = 0;
+	char *err = cap_end(&ce, &n);
+	free(cap_end(&co, &n));
+	img2_image_destroy(imgs[0]);
+	img2_image_destroy(imgs[1]);
+	ASSERT_EQUAL(0, rc);
+	ASSERT_NOT_NULL(err);
+	return err;
+}
+
+CTEST(cli_fix, animated_frame_note_verbose_only)
+{
+	char *err = render_two_frames(true);
+	ASSERT_NULL(strstr(err, "Animated image"));
+	free(err);
+
+	err = render_two_frames(false);
+	ASSERT_NOT_NULL(strstr(err, "Animated image with 2 frames, converting frame 1\n"));
 	free(err);
 }
 

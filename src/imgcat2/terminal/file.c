@@ -124,7 +124,9 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	/* Handle animated images */
 	int frame_index = opts->frame_index;
 	if (frame_count > 1) {
-		fprintf(stderr, "Warning: Animated image with %d frames, converting frame %d\n", frame_count, frame_index);
+		if (!opts->silent) {
+			fprintf(stderr, "Warning: Animated image with %d frames, converting frame %d\n", frame_count, frame_index);
+		}
 
 		/* Validate frame index */
 		if (frame_index < 0 || frame_index >= frame_count) {
