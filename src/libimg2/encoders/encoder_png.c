@@ -178,10 +178,13 @@ static img2_status_t encode_png_rows(const img2_image_t *img, int compression, b
 	}
 	if (meta->xmp != NULL) {
 		char key[] = "XML:com.adobe.xmp";
+		char empty[] = ""; /* language tag and translated keyword: libpng memcpy()s them even when empty */
 		png_text text;
 		memset(&text, 0, sizeof(text));
 		text.compression = PNG_ITXT_COMPRESSION_NONE;
 		text.key = key;
+		text.lang = empty;
+		text.lang_key = empty;
 		text.text = (png_charp)meta->xmp;
 		text.itxt_length = meta->xmp_len;
 		png_set_text(png_ptr, info_ptr, &text, 1);

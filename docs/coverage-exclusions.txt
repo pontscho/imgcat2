@@ -1328,19 +1328,19 @@ encoders/encoder_png.c:86 line = }
 reason: the libpng error pointer is always the encoder's jmp_buf
 encoders/encoder_png.c:103 branch-false 6 = if (jmpbuf != NULL) {
 reason: a successful libpng write always produces the signature and IHDR
-encoders/encoder_png.c:298 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_png.c:298 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_png.c:298 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_png.c:299 line = img2_log(IMG2_LOG_ERROR, "Error: PNG encoder produced no output");
-encoders/encoder_png.c:300 line = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:300 region 35 = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:300 region 7 = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:300 branch-true 7 = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:300 branch-false 7 = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:301 line = free(write_state.buffer);
-encoders/encoder_png.c:302 line = }
-encoders/encoder_png.c:303 line = return IMG2_E_CODEC;
-encoders/encoder_png.c:304 line = }
+encoders/encoder_png.c:301 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_png.c:301 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_png.c:301 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_png.c:302 line = img2_log(IMG2_LOG_ERROR, "Error: PNG encoder produced no output");
+encoders/encoder_png.c:303 line = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:303 region 35 = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:303 region 7 = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:303 branch-true 7 = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:303 branch-false 7 = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:304 line = free(write_state.buffer);
+encoders/encoder_png.c:305 line = }
+encoders/encoder_png.c:306 line = return IMG2_E_CODEC;
+encoders/encoder_png.c:307 line = }
 
 # ===== encoders/encoder_webp.c =====
 reason: WebPConfigPreset() / WebPPictureInit() fail only on an ABI version mismatch between the libwebp headers and the linked library (both the vendored copy)
