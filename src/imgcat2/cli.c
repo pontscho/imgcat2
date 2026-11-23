@@ -327,7 +327,8 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 	char safe[CLI_SAFE_PATH_SIZE];  /* [P39] an argument echoed in an error message, control characters escaped */
 	char safe2[CLI_SAFE_PATH_SIZE]; /* a second one in the same message */
 
-	while ((opt = getopt_long(argc, argv, "hb:i:frvaFt:w:H:AIJELj:p:o:n:", long_options, &option_index)) != -1) {
+	/* Short forms take an argument exactly when their long option does (-b = --version: none; -F = --fps: one) */
+	while ((opt = getopt_long(argc, argv, "hbi:frvaF:t:w:H:AIJELj:p:o:n:", long_options, &option_index)) != -1) {
 		switch (opt) {
 			case 'h': print_usage(argv[0]); return 1;
 			case 'b': print_version(); return 1;

@@ -350,3 +350,7 @@ img2_add_test(test_f_residual SOURCES unit/test_f_residual.c LINK cli)
 # nanosvg.h dropped a <text> / <tspan> content run that did not fit the 4094-byte text buffer whole (an 8000-char run
 # rendered nothing): now truncated at a UTF-8 code point boundary, the budget shared by the runs of one <text>
 img2_add_test(test_svg_text_cap SOURCES unit/test_svg_text_cap.c TIMEOUT 60)
+
+# --- cli-fix ---
+# Command line fixes: -F / -b consistent with --fps / --version
+img2_add_test(test_cli_fix SOURCES unit/test_cli_fix.c LINK cli)
