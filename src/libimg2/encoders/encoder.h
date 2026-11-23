@@ -26,7 +26,9 @@
  * @brief Encoder function pointer type
  *
  * @param img Input image in RGBA8888 format
- * @param native_quality Quality/compression parameter (format-specific)
+ * @param native_quality Quality/compression parameter (format-specific), resolved by img2_encode()
+ * @param opts Encode options (validated by img2_encode(); quality < 0 = the native quality is the registry
+ *             default), or NULL for defaults. Options the format cannot honour log one IMG2_LOG_WARN each.
  * @param out_data Output parameter for encoded data (caller must free)
  * @param out_size Output parameter for encoded data size in bytes
  * @return IMG2_OK; IMG2_E_ARG for bad arguments, IMG2_E_NOMEM, IMG2_E_CODEC for library failures
@@ -39,7 +41,7 @@
  * @note For JXL: quality 0-100 (>=95 = lossless, 0-94 = lossy)
  * @note For AVIF: quality 0-100 (aom quality, higher = better quality, larger file)
  */
-typedef img2_status_t (*img2_encode_fn)(const img2_image_t *img, int native_quality, uint8_t **out_data, size_t *out_size);
+typedef img2_status_t (*img2_encode_fn)(const img2_image_t *img, int native_quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 
 /** @brief Runtime availability check of an encoder row (NULL = always available when built) */
 typedef bool (*img2_encoder_available_fn)(void);
@@ -71,13 +73,34 @@ void img2_encoder_registry_init(void);
  */
 img2_status_t img2_encoder_dispatch(const img2_image_t *img, img2_format_t format, int native_quality, uint8_t **out_data, size_t *out_size);
 
-/* [R10] Direct encoder entry points (encoder_<x>.c), declared unconditionally. */
+/** @brief img2_encoder_dispatch() with encode options (NULL = defaults; validated by the caller) */
+img2_status_t img2_encoder_dispatch_opts(const img2_image_t *img, img2_format_t format, int native_quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
+
+/** @brief The options of @p opts, or the defaults (IMG2_ENCODE_OPTS_INIT) if NULL */
+const img2_encode_opts_t *img2_encode_opts_or_default(const img2_encode_opts_t *opts);
+
+/** @brief "420" / "422" / "444" ("default" for IMG2_CHROMA_DEFAULT) */
+const char *img2_chroma_name(img2_chroma_t chroma);
+
+/**
+ * @brief Log the "option cannot be honoured" warning: "encode: <option> has no effect for <format> (<reason>)"
+ */
+void img2_encode_warn_ignored(const char *option, const char *format, const char *reason);
+
+/* [R10] Direct encoder entry points (encoder_<x>.c), declared unconditionally. The 4-argument forms encode with
+ * default options; the _opts forms are the registry functions (img2_encode_fn). */
 img2_status_t img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_webp(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_avif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+img2_status_t img2_encode_jpeg_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
+img2_status_t img2_encode_png_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
+img2_status_t img2_encode_webp_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
+img2_status_t img2_encode_heif_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
+img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
+img2_status_t img2_encode_avif_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 
 /* Runtime availability of the libheif codec plugin (encoder_heif.c): HEVC for HEIF, AV1 for AVIF */
 bool img2_encode_heif_available(void);

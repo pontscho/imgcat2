@@ -213,7 +213,7 @@ CTEST(core_edges, encode_argument_checks)
 	ASSERT_NULL(img2_encoder_info(img2_encoder_count()));
 
 	/* PNG quality 100 maps to zlib level 9 (capped); NULL opts = default */
-	img2_encode_opts_t q = { 100 };
+	img2_encode_opts_t q = { .quality = 100 };
 	ASSERT_EQUAL(IMG2_OK, img2_encode(&in, IMG2_FORMAT_PNG, &q, &buf, &len));
 	img2_free(buf);
 	ASSERT_EQUAL(IMG2_OK, img2_encode(&in, IMG2_FORMAT_PNG, NULL, &buf, &len));

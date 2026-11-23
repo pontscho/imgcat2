@@ -102,8 +102,8 @@ static void jpeg_memory_term(j_compress_ptr cinfo)
  * @return IMG2_OK, or IMG2_E_CODEC (libjpeg error, including a failed allocation inside libjpeg or a failed
  *         destination growth)
  */
-static img2_status_t encode_jpeg_rows(const img2_image_t *img, int quality, struct jpeg_compress_struct *cinfo, struct jpeg_error_mgr_extended *jerr,
-                                        jpeg_memory_dest *dest, uint8_t *row_buffer)
+static img2_status_t encode_jpeg_rows(const img2_image_t *img, int quality, const img2_encode_opts_t *o, struct jpeg_compress_struct *cinfo,
+                                        struct jpeg_error_mgr_extended *jerr, jpeg_memory_dest *dest, uint8_t *row_buffer)
 {
 	/* Setup error handler with longjmp */
 	cinfo->err = jpeg_std_error(&jerr->pub);
@@ -134,6 +134,19 @@ static img2_status_t encode_jpeg_rows(const img2_image_t *img, int quality, stru
 	/* Set default compression parameters and quality */
 	jpeg_set_defaults(cinfo);
 	jpeg_set_quality(cinfo, quality, TRUE);
+
+	/* Options (defaults: no Huffman optimisation, 4:2:0, baseline) */
+	if (o->effort >= 6) {
+		cinfo->optimize_coding = TRUE;
+	}
+	if (o->chroma != IMG2_CHROMA_DEFAULT) {
+		/* luma sampling factors; Cb/Cr stay 1x1 (jpeg_set_defaults gives luma 2x2 = 4:2:0) */
+		cinfo->comp_info[0].h_samp_factor = (o->chroma == IMG2_CHROMA_444) ? 1 : 2;
+		cinfo->comp_info[0].v_samp_factor = (o->chroma == IMG2_CHROMA_420) ? 2 : 1;
+	}
+	if (o->progressive) {
+		jpeg_simple_progression(cinfo);
+	}
 
 	/* Start compression */
 	jpeg_start_compress(cinfo, TRUE);
@@ -189,6 +202,17 @@ static img2_status_t encode_jpeg_rows(const img2_image_t *img, int quality, stru
  */
 img2_status_t img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
+	return img2_encode_jpeg_opts(img, quality, NULL, out_data, out_size);
+}
+
+/**
+ * @brief img2_encode_jpeg() with encode options (NULL = defaults)
+ *
+ * effort >= 6: optimised Huffman tables; chroma: luma sampling factors; progressive: jpeg_simple_progression().
+ * lossless, alpha_quality and threads have no JPEG equivalent (one WARN each).
+ */
+img2_status_t img2_encode_jpeg_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
+{
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_jpeg");
 		return IMG2_E_ARG;
@@ -197,6 +221,17 @@ img2_status_t img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **o
 	/* Initialize outputs */
 	*out_data = NULL;
 	*out_size = 0;
+
+	const img2_encode_opts_t *o = img2_encode_opts_or_default(opts);
+	if (o->lossless) {
+		img2_encode_warn_ignored("lossless", "JPEG", "always lossy");
+	}
+	if (o->alpha_quality > 0) {
+		img2_encode_warn_ignored("alpha_quality", "JPEG", "no alpha channel");
+	}
+	if (o->threads > 0) {
+		img2_encode_warn_ignored("threads", "JPEG", "single-threaded encoder");
+	}
 
 	/* Clamp quality to valid range [0, 100] */
 	int jpeg_quality = quality;
@@ -223,7 +258,7 @@ img2_status_t img2_encode_jpeg(const img2_image_t *img, int quality, uint8_t **o
 
 	struct jpeg_compress_struct cinfo;
 	struct jpeg_error_mgr_extended jerr;
-	img2_status_t st = encode_jpeg_rows(img, jpeg_quality, &cinfo, &jerr, &dest, row_buffer);
+	img2_status_t st = encode_jpeg_rows(img, jpeg_quality, o, &cinfo, &jerr, &dest, row_buffer);
 	free(row_buffer);
 	if (st != IMG2_OK) {
 		free(dest.buffer);

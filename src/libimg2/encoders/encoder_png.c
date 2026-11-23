@@ -128,7 +128,7 @@ static void png_warning_handler(png_structp png_ptr, png_const_charp warning_msg
  *
  * @return IMG2_OK, or IMG2_E_CODEC (libpng error, including a failed write-buffer allocation)
  */
-static img2_status_t encode_png_rows(const img2_image_t *img, int compression, png_bytep *row_pointers, png_memory_write_state *state)
+static img2_status_t encode_png_rows(const img2_image_t *img, int compression, bool interlace, png_bytep *row_pointers, png_memory_write_state *state)
 {
 	/* Create PNG write structure */
 	jmp_buf jmpbuf;
@@ -167,7 +167,7 @@ static img2_status_t encode_png_rows(const img2_image_t *img, int compression, p
 	    img->height,
 	    8, /* bit depth */
 	    PNG_COLOR_TYPE_RGBA, /* color type with alpha */
-	    PNG_INTERLACE_NONE,
+	    interlace ? PNG_INTERLACE_ADAM7 : PNG_INTERLACE_NONE, /* png_write_image() runs the Adam7 passes */
 	    PNG_COMPRESSION_TYPE_DEFAULT,
 	    PNG_FILTER_TYPE_DEFAULT);
 
@@ -198,6 +198,18 @@ static img2_status_t encode_png_rows(const img2_image_t *img, int compression, p
  */
 img2_status_t img2_encode_png(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
+	return img2_encode_png_opts(img, quality, NULL, out_data, out_size);
+}
+
+/**
+ * @brief img2_encode_png() with encode options (NULL = defaults)
+ *
+ * progressive: Adam7 interlace; effort e: zlib level e-1 when opts->quality is the default (-1), else a WARN
+ * (an explicit quality selects the level, docs/encoder-api.md decision 3); lossless: no-op (always lossless).
+ * chroma, alpha_quality and threads have no PNG equivalent (one WARN each).
+ */
+img2_status_t img2_encode_png_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
+{
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_png");
 		return IMG2_E_ARG;
@@ -206,6 +218,26 @@ img2_status_t img2_encode_png(const img2_image_t *img, int quality, uint8_t **ou
 	/* Initialize outputs */
 	*out_data = NULL;
 	*out_size = 0;
+
+	const img2_encode_opts_t *o = img2_encode_opts_or_default(opts);
+	if (o->effort > 0) {
+		if (o->quality < 0) {
+			quality = o->effort - 1;
+		} else {
+			img2_encode_warn_ignored("effort", "PNG", "an explicit quality selects the zlib level");
+		}
+	}
+	if (o->chroma != IMG2_CHROMA_DEFAULT) {
+		char option[16];
+		snprintf(option, sizeof(option), "chroma %s", img2_chroma_name(o->chroma));
+		img2_encode_warn_ignored(option, "PNG", "always RGB");
+	}
+	if (o->alpha_quality > 0) {
+		img2_encode_warn_ignored("alpha_quality", "PNG", "always lossless");
+	}
+	if (o->threads > 0) {
+		img2_encode_warn_ignored("threads", "PNG", "single-threaded encoder");
+	}
 
 	/* Clamp compression to valid range [0, 9] */
 	int png_compression = quality;
@@ -231,7 +263,7 @@ img2_status_t img2_encode_png(const img2_image_t *img, int quality, uint8_t **ou
 	write_state.buffer = NULL;
 	write_state.size = 0;
 	write_state.capacity = 0;
-	img2_status_t st = encode_png_rows(img, png_compression, row_pointers, &write_state);
+	img2_status_t st = encode_png_rows(img, png_compression, o->progressive, row_pointers, &write_state);
 	free(row_pointers);
 	if (st != IMG2_OK) {
 		free(write_state.buffer);

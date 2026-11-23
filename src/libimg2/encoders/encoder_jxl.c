@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <jxl/encode.h>
+#include <jxl/thread_parallel_runner.h>
 /* clang-format on */
 
 #include "encoder.h"
@@ -37,6 +38,34 @@
  */
 img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
+	return img2_encode_jxl_opts(img, quality, NULL, out_data, out_size);
+}
+
+/** @brief Quality 0..100 -> libjxl distance: >= 95 lossless (0), else (100 - q) / 10 */
+static float jxl_distance(int quality)
+{
+	return quality >= 95 ? 0.0f : (100.0f - (float)quality) / 10.0f;
+}
+
+/** @brief Destroy the encoder and, if one was created, the thread pool runner */
+static void jxl_encoder_destroy(JxlEncoder *encoder, void *runner)
+{
+	JxlEncoderDestroy(encoder);
+	if (runner != NULL) {
+		JxlThreadParallelRunnerDestroy(runner);
+	}
+}
+
+/**
+ * @brief img2_encode_jxl() with encode options (NULL = defaults)
+ *
+ * lossless (or quality >= 95): JxlEncoderSetFrameLossless; effort e: JXL_ENC_FRAME_SETTING_EFFORT e (default 7);
+ * alpha_quality: distance of the alpha extra channel (same mapping as quality); threads >= 2: a thread pool
+ * runner with that many workers (default and threads 1: single-threaded, no runner). chroma (XYB / RGB, no
+ * subsampling) and progressive: one WARN each; alpha_quality with lossless: one WARN.
+ */
+img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
+{
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_jxl");
 		return IMG2_E_ARG;
@@ -55,13 +84,27 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 		jxl_quality = 100;
 	}
 
+	const img2_encode_opts_t *o = img2_encode_opts_or_default(opts);
+
 	/* Determine if lossless mode should be used */
-	int use_lossless = (jxl_quality >= 95);
+	int use_lossless = o->lossless || (jxl_quality >= 95);
 
 	/* Map quality to distance for lossy mode */
 	float distance = 0.0f;
 	if (!use_lossless) {
-		distance = (100.0f - (float)jxl_quality) / 10.0f;
+		distance = jxl_distance(jxl_quality);
+	}
+
+	if (o->chroma != IMG2_CHROMA_DEFAULT) {
+		char option[16];
+		snprintf(option, sizeof(option), "chroma %s", img2_chroma_name(o->chroma));
+		img2_encode_warn_ignored(option, "JXL", "no chroma subsampling of RGB / XYB");
+	}
+	if (o->progressive) {
+		img2_encode_warn_ignored("progressive", "JXL", "not mapped");
+	}
+	if (use_lossless && o->alpha_quality > 0) {
+		img2_encode_warn_ignored("alpha_quality", "lossless JXL", "alpha is lossless");
 	}
 
 	/* Create encoder */
@@ -71,11 +114,22 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 		return IMG2_E_CODEC;
 	}
 
+	/* Thread pool (threads >= 2 only: the default stays single-threaded) */
+	void *runner = NULL;
+	if (o->threads >= 2) {
+		runner = JxlThreadParallelRunnerCreate(NULL, (size_t)o->threads);
+		if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to set up the JXL thread pool");
+			jxl_encoder_destroy(encoder, runner);
+			return IMG2_E_CODEC;
+		}
+	}
+
 	/* Get frame settings */
 	JxlEncoderFrameSettings *settings = JxlEncoderFrameSettingsCreate(encoder, NULL);
 	if (settings == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to create JXL frame settings");
-		JxlEncoderDestroy(encoder);
+		jxl_encoder_destroy(encoder, runner);
 		return IMG2_E_CODEC;
 	}
 
@@ -97,7 +151,7 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 
 	if (JxlEncoderSetBasicInfo(encoder, &basic_info) != JXL_ENC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL basic info");
-		JxlEncoderDestroy(encoder);
+		jxl_encoder_destroy(encoder, runner);
 		return IMG2_E_CODEC;
 	}
 
@@ -106,7 +160,7 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 	JxlColorEncodingSetToSRGB(&color_encoding, JXL_FALSE);
 	if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL color encoding");
-		JxlEncoderDestroy(encoder);
+		jxl_encoder_destroy(encoder, runner);
 		return IMG2_E_CODEC;
 	}
 
@@ -114,15 +168,25 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 	if (use_lossless) {
 		if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL lossless mode");
-			JxlEncoderDestroy(encoder);
+			jxl_encoder_destroy(encoder, runner);
 			return IMG2_E_CODEC;
 		}
 	} else {
 		if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
 			img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL frame distance");
-			JxlEncoderDestroy(encoder);
+			jxl_encoder_destroy(encoder, runner);
 			return IMG2_E_CODEC;
 		}
+		if (o->alpha_quality > 0 && JxlEncoderSetExtraChannelDistance(settings, 0, jxl_distance(o->alpha_quality)) != JXL_ENC_SUCCESS) {
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL alpha distance");
+			jxl_encoder_destroy(encoder, runner);
+			return IMG2_E_CODEC;
+		}
+	}
+	if (o->effort > 0 && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, o->effort) != JXL_ENC_SUCCESS) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL effort");
+		jxl_encoder_destroy(encoder, runner);
+		return IMG2_E_CODEC;
 	}
 
 	/* Setup pixel format */
@@ -136,7 +200,7 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 	size_t pixel_size = (size_t)img->width * (size_t)img->height * 4;
 	if (JxlEncoderAddImageFrame(settings, &format, img->pixels, pixel_size) != JXL_ENC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to add JXL image frame");
-		JxlEncoderDestroy(encoder);
+		jxl_encoder_destroy(encoder, runner);
 		return IMG2_E_CODEC;
 	}
 
@@ -148,7 +212,7 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 	uint8_t *buffer = (uint8_t *)malloc(buffer_capacity);
 	if (buffer == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate JXL output buffer");
-		JxlEncoderDestroy(encoder);
+		jxl_encoder_destroy(encoder, runner);
 		return IMG2_E_NOMEM;
 	}
 
@@ -169,7 +233,7 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 			if (new_buffer == NULL) {
 				img2_log(IMG2_LOG_ERROR, "Error: Failed to reallocate JXL output buffer");
 				free(buffer);
-				JxlEncoderDestroy(encoder);
+				jxl_encoder_destroy(encoder, runner);
 				return IMG2_E_NOMEM;
 			}
 
@@ -185,13 +249,13 @@ img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **ou
 			/* Error occurred */
 			img2_log(IMG2_LOG_ERROR, "Error: JXL encoder failed during processing");
 			free(buffer);
-			JxlEncoderDestroy(encoder);
+			jxl_encoder_destroy(encoder, runner);
 			return IMG2_E_CODEC;
 		}
 	}
 
 	/* Cleanup encoder */
-	JxlEncoderDestroy(encoder);
+	jxl_encoder_destroy(encoder, runner);
 
 	/* Allocate and copy output data */
 	if (buffer_size == 0) {

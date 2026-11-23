@@ -82,13 +82,100 @@ static struct heif_error heif_memory_write_func(struct heif_context *ctx, const 
 }
 
 /**
+ * @brief HEIF (kvazaar): every option except quality is reported as ignored (one WARN each)
+ */
+static void heif_warn_options(const img2_encode_opts_t *o)
+{
+	if (o->lossless) {
+		img2_encode_warn_ignored("lossless", "HEIF", "kvazaar lossless is 4:2:0 YCbCr, not RGB-lossless");
+	}
+	if (o->effort > 0) {
+		img2_encode_warn_ignored("effort", "HEIF", "no kvazaar preset parameter");
+	}
+	if (o->chroma == IMG2_CHROMA_422 || o->chroma == IMG2_CHROMA_444) {
+		char option[16];
+		snprintf(option, sizeof(option), "chroma %s", img2_chroma_name(o->chroma));
+		img2_encode_warn_ignored(option, "HEIF", "always 4:2:0");
+	}
+	if (o->alpha_quality > 0) {
+		img2_encode_warn_ignored("alpha_quality", "HEIF", "no kvazaar alpha quality parameter");
+	}
+	if (o->progressive) {
+		img2_encode_warn_ignored("progressive", "HEIF", "no progressive mode");
+	}
+	if (o->threads > 0) {
+		img2_encode_warn_ignored("threads", "HEIF", "kvazaar chooses the thread count");
+	}
+}
+
+/**
+ * @brief AVIF (aom): set the encoder parameters of the options (defaults: nothing set, libheif's aom defaults)
+ *
+ * lossless: aom lossless, chroma 444 and (through @p nclx) the identity matrix (GBR planes), so RGB survives
+ * bit-exactly; effort e: speed 10 - e clamped 0..9; chroma 420/422/444; alpha_quality; threads.
+ * progressive, and with lossless chroma other than 444 or alpha_quality: one WARN each.
+ *
+ * @param nclx Output: allocated identity-matrix profile for lossless (caller frees), else NULL
+ * @return heif_error of the first failing call
+ */
+static void avif_keep_first_error(struct heif_error *first, struct heif_error err)
+{
+	if (first->code == heif_error_Ok) {
+		*first = err;
+	}
+}
+
+static struct heif_error avif_set_options(struct heif_encoder *encoder, const img2_encode_opts_t *o, struct heif_color_profile_nclx **nclx)
+{
+	struct heif_error err = { heif_error_Ok, heif_suberror_Unspecified, "Success" };
+	*nclx = NULL;
+	if (o->progressive) {
+		img2_encode_warn_ignored("progressive", "AVIF", "no progressive mode");
+	}
+	if (o->lossless) {
+		if (o->chroma == IMG2_CHROMA_420 || o->chroma == IMG2_CHROMA_422) {
+			char option[16];
+			snprintf(option, sizeof(option), "chroma %s", img2_chroma_name(o->chroma));
+			img2_encode_warn_ignored(option, "lossless AVIF", "always 4:4:4");
+		}
+		if (o->alpha_quality > 0) {
+			img2_encode_warn_ignored("alpha_quality", "lossless AVIF", "alpha is lossless");
+		}
+		avif_keep_first_error(&err, heif_encoder_set_lossless(encoder, 1));
+		avif_keep_first_error(&err, heif_encoder_set_parameter_string(encoder, "chroma", "444"));
+		*nclx = heif_nclx_color_profile_alloc(); /* C++ new: throws, never NULL */
+		(*nclx)->color_primaries = heif_color_primaries_ITU_R_BT_709_5;
+		(*nclx)->transfer_characteristics = heif_transfer_characteristic_IEC_61966_2_1;
+		(*nclx)->matrix_coefficients = heif_matrix_coefficients_RGB_GBR;
+		(*nclx)->full_range_flag = 1;
+	} else {
+		if (o->chroma != IMG2_CHROMA_DEFAULT) {
+			avif_keep_first_error(&err, heif_encoder_set_parameter_string(encoder, "chroma", img2_chroma_name(o->chroma)));
+		}
+		if (o->alpha_quality > 0) {
+			avif_keep_first_error(&err, heif_encoder_set_parameter_integer(encoder, "alpha-quality", o->alpha_quality));
+		}
+	}
+	if (o->effort > 0) {
+		/* effort 1..10 (validated) -> speed 9..0, inside aom's 0..9 */
+		avif_keep_first_error(&err, heif_encoder_set_parameter_integer(encoder, "speed", 10 - o->effort));
+	}
+	if (o->threads > 0) {
+		avif_keep_first_error(&err, heif_encoder_set_parameter_integer(encoder, "threads", o->threads));
+	}
+	return err;
+}
+
+/**
  * @brief Encode an RGBA image into a HEIF container with the given libheif compression format
  *
  * Shared by the HEIF (HEVC, kvazaar) and AVIF (AV1, aom) encoders: the libheif encoder is taken with its
- * default parameters, only the lossy quality is set. Preserves the alpha channel.
+ * default parameters, the lossy quality is set, and for AVIF the options (avif_set_options()). Preserves the
+ * alpha channel.
  *
  * @param img Input image in RGBA8888 format
  * @param quality Quality level (0-100, higher = better quality, larger file)
+ * @param opts Encode options (resolved, not NULL)
  * @param compression heif_compression_HEVC or heif_compression_AV1
  * @param label Format name for messages ("HEIF" / "AVIF")
  * @param codec Codec name for messages ("HEVC" / "AV1")
@@ -97,7 +184,7 @@ static struct heif_error heif_memory_write_func(struct heif_context *ctx, const 
  * @param out_size Output parameter for encoded data size in bytes
  * @return IMG2_OK; IMG2_E_ARG, IMG2_E_NOMEM, IMG2_E_CODEC
  */
-static img2_status_t heif_encode_with(const img2_image_t *img, int quality, enum heif_compression_format compression, const char *label, const char *codec, const char *fn, uint8_t **out_data, size_t *out_size)
+static img2_status_t heif_encode_with(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, enum heif_compression_format compression, const char *label, const char *codec, const char *fn, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
 		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to %s", fn);
@@ -107,6 +194,11 @@ static img2_status_t heif_encode_with(const img2_image_t *img, int quality, enum
 	/* Initialize outputs */
 	*out_data = NULL;
 	*out_size = 0;
+
+	const bool avif = compression == heif_compression_AV1;
+	if (!avif) {
+		heif_warn_options(opts);
+	}
 
 	/* Clamp quality to valid range [0, 100] */
 	int heif_quality = quality;
@@ -181,9 +273,31 @@ static img2_status_t heif_encode_with(const img2_image_t *img, int quality, enum
 		return IMG2_E_CODEC;
 	}
 
+	/* AVIF options (lossless: an identity-matrix NCLX in the encoding options) */
+	struct heif_color_profile_nclx *nclx = NULL;
+	struct heif_encoding_options *enc_opts = NULL;
+	if (avif) {
+		err = avif_set_options(encoder, opts, &nclx);
+		if (err.code != heif_error_Ok) {
+			/* aom accepts every value set here; another AV1 plugin of a host libheif may not */
+			img2_log(IMG2_LOG_ERROR, "Error: Failed to set %s options: %s", label, err.message);
+			heif_nclx_color_profile_free(nclx);
+			heif_encoder_release(encoder);
+			heif_image_release(heif_img);
+			heif_context_free(ctx);
+			return IMG2_E_CODEC;
+		}
+		if (nclx != NULL) {
+			enc_opts = heif_encoding_options_alloc(); /* C++ new: throws, never NULL */
+			enc_opts->output_nclx_profile = nclx;
+		}
+	}
+
 	/* Encode image */
 	struct heif_image_handle *handle = NULL;
-	err = heif_context_encode_image(ctx, heif_img, encoder, NULL, &handle);
+	err = heif_context_encode_image(ctx, heif_img, encoder, enc_opts, &handle);
+	heif_encoding_options_free(enc_opts);
+	heif_nclx_color_profile_free(nclx);
 	if (err.code != heif_error_Ok) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to encode %s image: %s", label, err.message);
 		heif_encoder_release(encoder);
@@ -255,7 +369,13 @@ static img2_status_t heif_encode_with(const img2_image_t *img, int quality, enum
  */
 img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
-	return heif_encode_with(img, quality, heif_compression_HEVC, "HEIF", "HEVC", "encode_heif", out_data, out_size);
+	return img2_encode_heif_opts(img, quality, NULL, out_data, out_size);
+}
+
+/** @brief img2_encode_heif() with encode options (NULL = defaults; kvazaar honours none of them: one WARN each) */
+img2_status_t img2_encode_heif_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
+{
+	return heif_encode_with(img, quality, img2_encode_opts_or_default(opts), heif_compression_HEVC, "HEIF", "HEVC", "encode_heif", out_data, out_size);
 }
 
 /**
@@ -263,7 +383,13 @@ img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **o
  */
 img2_status_t img2_encode_avif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
 {
-	return heif_encode_with(img, quality, heif_compression_AV1, "AVIF", "AV1", "encode_avif", out_data, out_size);
+	return img2_encode_avif_opts(img, quality, NULL, out_data, out_size);
+}
+
+/** @brief img2_encode_avif() with encode options (NULL = defaults; mapping: avif_set_options()) */
+img2_status_t img2_encode_avif_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
+{
+	return heif_encode_with(img, quality, img2_encode_opts_or_default(opts), heif_compression_AV1, "AVIF", "AV1", "encode_avif", out_data, out_size);
 }
 
 bool img2_encode_heif_available(void)

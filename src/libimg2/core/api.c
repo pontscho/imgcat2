@@ -73,6 +73,28 @@ img2_status_t img2_encode(const img2_frames_t *in, img2_format_t fmt, const img2
 		img2_log(IMG2_LOG_DEBUG, "img2_encode: IMG2_FORMAT_NONE");
 		return IMG2_E_ARG;
 	}
+	if (opts != NULL) {
+		if (opts->effort < 0 || opts->effort > 10) {
+			img2_log(IMG2_LOG_DEBUG, "img2_encode: effort %d is not 0..10", opts->effort);
+			return IMG2_E_ARG;
+		}
+		if (opts->alpha_quality < 0 || opts->alpha_quality > 100) {
+			img2_log(IMG2_LOG_DEBUG, "img2_encode: alpha_quality %d is not 0..100", opts->alpha_quality);
+			return IMG2_E_ARG;
+		}
+		if (opts->threads < 0 || opts->threads > 64) {
+			img2_log(IMG2_LOG_DEBUG, "img2_encode: threads %d is not 0..64", opts->threads);
+			return IMG2_E_ARG;
+		}
+		if ((unsigned)opts->chroma > (unsigned)IMG2_CHROMA_444) {
+			img2_log(IMG2_LOG_DEBUG, "img2_encode: chroma %d is not an img2_chroma_t", (int)opts->chroma);
+			return IMG2_E_ARG;
+		}
+		if ((opts->metadata & ~(unsigned)(IMG2_META_EXIF | IMG2_META_XMP)) != 0) {
+			img2_log(IMG2_LOG_DEBUG, "img2_encode: unknown metadata bits 0x%x", opts->metadata);
+			return IMG2_E_ARG;
+		}
+	}
 	const img2_encoder_entry_t *entry = img2_encoder_find(fmt);
 	if (entry == NULL) {
 		img2_encoder_log_missing(fmt); /* [P9] same lines as the dispatcher's miss path */
@@ -92,7 +114,12 @@ img2_status_t img2_encode(const img2_frames_t *in, img2_format_t fmt, const img2
 		native = opts->quality;
 	}
 
-	return img2_encoder_dispatch(in->frames[0], fmt, native, out_buf, out_len);
+	/* Phase 3 of docs/encoder-api.md writes metadata; until then the request is ignored with one WARN */
+	if (opts != NULL && opts->metadata != 0) {
+		img2_log(IMG2_LOG_WARN, "encode: metadata is not supported yet (ignored)");
+	}
+
+	return img2_encoder_dispatch_opts(in->frames[0], fmt, native, opts, out_buf, out_len);
 }
 
 img2_status_t img2_apply_orientation(img2_image_t **img)

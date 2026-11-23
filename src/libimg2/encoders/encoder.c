@@ -19,27 +19,27 @@
  */
 static const img2_encoder_entry_t s_encoders[] = {
 #ifdef IMG2_HAVE_LIBJPEG
-	{ { IMG2_FORMAT_JPEG, "JPEG (libjpeg)",    ".jpg"  }, img2_encode_jpeg, 90, NULL                        },
+	{ { IMG2_FORMAT_JPEG, "JPEG (libjpeg)",    ".jpg"  }, img2_encode_jpeg_opts, 90, NULL                        },
 #endif
 
 #ifdef IMG2_HAVE_LIBPNG
-	{ { IMG2_FORMAT_PNG,  "PNG (libpng)",      ".png"  }, img2_encode_png,  6,  NULL                        },
+	{ { IMG2_FORMAT_PNG,  "PNG (libpng)",      ".png"  }, img2_encode_png_opts,  6,  NULL                        },
 #endif
 
 #ifdef IMG2_HAVE_HEIF
-	{ { IMG2_FORMAT_HEIF, "HEIF (libheif)",    ".heif" }, img2_encode_heif, 80, img2_encode_heif_available },
+	{ { IMG2_FORMAT_HEIF, "HEIF (libheif)",    ".heif" }, img2_encode_heif_opts, 80, img2_encode_heif_available },
 #endif
 
 #ifdef IMG2_HAVE_WEBP
-	{ { IMG2_FORMAT_WEBP, "WebP (libwebp)",    ".webp" }, img2_encode_webp, 80, NULL                        },
+	{ { IMG2_FORMAT_WEBP, "WebP (libwebp)",    ".webp" }, img2_encode_webp_opts, 80, NULL                        },
 #endif
 
 #ifdef IMG2_HAVE_JXL
-	{ { IMG2_FORMAT_JXL,  "JXL (libjxl)",      ".jxl"  }, img2_encode_jxl,  80, NULL                        },
+	{ { IMG2_FORMAT_JXL,  "JXL (libjxl)",      ".jxl"  }, img2_encode_jxl_opts,  80, NULL                        },
 #endif
 
 #ifdef IMG2_HAVE_HEIF
-	{ { IMG2_FORMAT_AVIF, "AVIF (libheif/aom)", ".avif" }, img2_encode_avif, 80, img2_encode_avif_available },
+	{ { IMG2_FORMAT_AVIF, "AVIF (libheif/aom)", ".avif" }, img2_encode_avif_opts, 80, img2_encode_avif_available },
 #endif
 };
 
@@ -94,12 +94,38 @@ void img2_encoder_log_missing(img2_format_t format)
 	img2_log(IMG2_LOG_ERROR, "Error: No encoder available for format");
 }
 
+const img2_encode_opts_t *img2_encode_opts_or_default(const img2_encode_opts_t *opts)
+{
+	static const img2_encode_opts_t s_default = IMG2_ENCODE_OPTS_INIT;
+	return opts != NULL ? opts : &s_default;
+}
+
+const char *img2_chroma_name(img2_chroma_t chroma)
+{
+	switch (chroma) {
+		case IMG2_CHROMA_420: return "420";
+		case IMG2_CHROMA_422: return "422";
+		case IMG2_CHROMA_444: return "444";
+		default: return "default";
+	}
+}
+
+void img2_encode_warn_ignored(const char *option, const char *format, const char *reason)
+{
+	img2_log(IMG2_LOG_WARN, "encode: %s has no effect for %s (%s)", option, format, reason);
+}
+
+img2_status_t img2_encoder_dispatch(const img2_image_t *img, img2_format_t format, int native_quality, uint8_t **out_data, size_t *out_size)
+{
+	return img2_encoder_dispatch_opts(img, format, native_quality, NULL, out_data, out_size);
+}
+
 /**
- * @brief Encode image data with specified format
+ * @brief Encode image data with specified format and options
  *
  * Main encoding dispatcher with comprehensive error checking and validation.
  */
-img2_status_t img2_encoder_dispatch(const img2_image_t *img, img2_format_t format, int native_quality, uint8_t **out_data, size_t *out_size)
+img2_status_t img2_encoder_dispatch_opts(const img2_image_t *img, img2_format_t format, int native_quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
 {
 	/* Validate inputs */
 	if (img == NULL || out_data == NULL || out_size == NULL) {
@@ -125,7 +151,7 @@ img2_status_t img2_encoder_dispatch(const img2_image_t *img, img2_format_t forma
 	}
 
 	/* Call encoder function */
-	img2_status_t result = encoder->encode(img, native_quality, out_data, out_size);
+	img2_status_t result = encoder->encode(img, native_quality, opts, out_data, out_size);
 	if (result != IMG2_OK) {
 		img2_log(IMG2_LOG_ERROR, "Error: Encoder '%s' failed to encode image", encoder->info.name);
 		return result;
