@@ -174,6 +174,8 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	eo.alpha_quality = opts->enc_alpha_quality;
 	eo.progressive = opts->enc_progressive;
 	eo.threads = opts->enc_threads;
+	/* --keep-metadata: the decoded raw EXIF / XMP (pipeline_decode oriented the pixels: Orientation is written as 1) */
+	eo.metadata = opts->enc_keep_metadata ? (IMG2_META_EXIF | IMG2_META_XMP) : 0u;
 	if (img2_encode(&one, opts->output_format, &eo, &encoded_data, &encoded_size) != IMG2_OK) {
 		fprintf(stderr, "Error: Failed to encode image\n");
 		return -1;

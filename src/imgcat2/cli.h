@@ -62,6 +62,7 @@ typedef struct {
 	int enc_alpha_quality; /**< --alpha-quality 1..100 */
 	bool enc_progressive; /**< --progressive */
 	int enc_threads; /**< --threads 1..64 */
+	bool enc_keep_metadata; /**< --keep-metadata: metadata = IMG2_META_EXIF | IMG2_META_XMP */
 
 	/* Raw input options */
 	bool yuv_input; /**< true = input is raw YUV described by yuv (bypasses magic detection) */

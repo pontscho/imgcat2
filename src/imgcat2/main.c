@@ -64,6 +64,7 @@ int main(int argc, char **argv)
 		.enc_alpha_quality = 0,
 		.enc_progressive = false,
 		.enc_threads = 0,
+		.enc_keep_metadata = false,
 
 		.terminal = {
 			.rows = 0,

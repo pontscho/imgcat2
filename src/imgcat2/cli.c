@@ -75,6 +75,7 @@ void print_usage(const char *program_name)
 	printf("      --progressive         Progressive JPEG / JXL, interlaced (Adam7) PNG\n");
 	printf("      --threads <1-64>      Encoder threads (WebP, JXL, AVIF)\n");
 	printf("                            An option the format cannot use is ignored with a warning\n");
+	printf("      --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
 	printf("      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)\n");
@@ -353,6 +354,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "alpha-quality", required_argument, 0, 1008 },
 		{ "progressive",   no_argument,       0, 1009 },
 		{ "threads",       required_argument, 0, 1010 },
+		{ "keep-metadata", no_argument,       0, 1011 },
 		{ 0,		       0,		         0, 0    },
 	};
 
@@ -463,6 +465,8 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 					return -1;
 				}
 				break;
+
+			case 1011: opts->enc_keep_metadata = true; break; /* --keep-metadata */
 
 			case 1003: /* --yuv */
 			{
@@ -615,7 +619,7 @@ int validate_options(cli_options_t *opts)
 
 	/* Validate that the encoder options are only used with a conversion */
 	if (!opts->convert_mode) {
-		const char *flag = opts->enc_lossless ? "--lossless" : opts->enc_effort > 0 ? "--effort" : opts->enc_chroma != IMG2_CHROMA_DEFAULT ? "--chroma" : opts->enc_alpha_quality > 0 ? "--alpha-quality" : opts->enc_progressive ? "--progressive" : opts->enc_threads > 0 ? "--threads" : NULL;
+		const char *flag = opts->enc_lossless ? "--lossless" : opts->enc_effort > 0 ? "--effort" : opts->enc_chroma != IMG2_CHROMA_DEFAULT ? "--chroma" : opts->enc_alpha_quality > 0 ? "--alpha-quality" : opts->enc_progressive ? "--progressive" : opts->enc_threads > 0 ? "--threads" : opts->enc_keep_metadata ? "--keep-metadata" : NULL;
 		if (flag != NULL) {
 			fprintf(stderr, "Error: %s can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n", flag);
 			return -1;
