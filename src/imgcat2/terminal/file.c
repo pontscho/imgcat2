@@ -145,6 +145,15 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		return -1;
 	}
 
+	/* --keep-metadata: the metadata describes the file, and decoders attach it to frame 0 only; a later frame
+	 * without blocks of its own gets copies of frame 0's (its orientation field stays its own) */
+	if (opts->enc_keep_metadata && frame_index > 0 && img->exif_raw == NULL && img->xmp_raw == NULL && (frames[0]->exif_raw != NULL || frames[0]->xmp_raw != NULL)) {
+		if (img2_image_set_metadata(img, frames[0]->exif_raw, frames[0]->exif_raw_len, frames[0]->xmp_raw, frames[0]->xmp_raw_len) != IMG2_OK) {
+			fprintf(stderr, "Error: Failed to copy the metadata of frame 0\n");
+			return -1;
+		}
+	}
+
 	/* Determine quality parameter based on format */
 	int quality = 0;
 	if (opts->output_format == IMG2_FORMAT_JPEG) {

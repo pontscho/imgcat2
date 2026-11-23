@@ -20,6 +20,9 @@
 #include <string.h>
 
 #include <img2/img2.h>
+#ifdef IMG2_HAVE_JXL
+#include <jxl/encode.h>
+#endif
 #ifdef IMG2_HAVE_WEBP
 #include <webp/encode.h>
 #include <webp/mux.h>
@@ -409,6 +412,139 @@ CTEST(encode_metadata, cli_keep_metadata)
 	ASSERT_EQUAL(frames[0]->xmp_raw_len, dec.frames[0]->xmp_raw_len);
 	img2_frames_free(&dec);
 	img2_frames_free(&fr);
+}
+
+static size_t tiff_one_entry(uint8_t *t, bool be, uint16_t tag, uint16_t type, uint32_t count, uint16_t value);
+
+/* file_render() of frame `index` to a PNG in the test temp dir, decoded back */
+static img2_frames_t render_frame(img2_image_t **frames, int count, int index)
+{
+	cli_options_t co;
+	memset(&co, 0, sizeof(co));
+	co.silent = true;
+	co.convert_mode = true;
+	co.output_format = IMG2_FORMAT_PNG;
+	co.png_compression = 1;
+	co.enc_keep_metadata = true;
+	co.frame_index = index;
+	char out[512];
+	co.output_file = test_tmp_path(out, sizeof(out), "encode_metadata_frame.png");
+	ASSERT_EQUAL(0, file_render(frames, count, &co));
+	FILE *f = fopen(out, "rb");
+	ASSERT_NOT_NULL(f);
+	fseek(f, 0, SEEK_END);
+	long n = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	uint8_t *png = malloc((size_t)n);
+	ASSERT_NOT_NULL(png);
+	ASSERT_EQUAL((intmax_t)n, (intmax_t)fread(png, 1, (size_t)n, f));
+	fclose(f);
+	remove(out);
+	img2_frames_t dec = decode_buf(png, (size_t)n);
+	free(png);
+	return dec;
+}
+
+/* --keep-metadata --frame N (N > 0): the file's metadata (on frame 0) is written; frame N keeps its own orientation */
+CTEST(encode_metadata, cli_keep_metadata_later_frame)
+{
+	uint8_t t[32];
+	const size_t n = tiff_one_entry(t, false, 0x0112, 3, 1, 1);
+	img2_image_t *fr[2] = { NULL, NULL };
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(6, 4, &fr[0]));
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(6, 4, &fr[1]));
+	ASSERT_EQUAL(IMG2_OK, img2_image_set_metadata(fr[0], t, n, k_xmp, sizeof(k_xmp) - 1));
+	fr[1]->orientation = 6; /* this frame's pixels still need the rotation: the written tag says so */
+
+	img2_frames_t dec = render_frame(fr, 2, 1);
+	ASSERT_NOT_NULL(dec.frames[0]->exif_raw);
+	ASSERT_EQUAL(6, dec.frames[0]->exif->orientation);
+	assert_same_block(k_xmp, sizeof(k_xmp) - 1, dec.frames[0]->xmp_raw, dec.frames[0]->xmp_raw_len);
+	img2_frames_free(&dec);
+	ASSERT_EQUAL(6, fr[1]->orientation);
+	ASSERT_EQUAL(1, fr[0]->orientation);
+
+	/* a frame with blocks of its own keeps them */
+	const size_t n2 = tiff_one_entry(t, true, 0x0112, 3, 1, 1);
+	ASSERT_EQUAL(IMG2_OK, img2_image_set_metadata(fr[1], t, n2, NULL, 0));
+	dec = render_frame(fr, 2, 1);
+	ASSERT_EQUAL('M', dec.frames[0]->exif_raw[0]);
+	ASSERT_NULL(dec.frames[0]->xmp_raw);
+	img2_frames_free(&dec);
+
+	/* frame 0 without metadata: nothing to copy */
+	ASSERT_EQUAL(IMG2_OK, img2_image_set_metadata(fr[0], NULL, 0, NULL, 0));
+	ASSERT_EQUAL(IMG2_OK, img2_image_set_metadata(fr[1], NULL, 0, NULL, 0));
+	dec = render_frame(fr, 2, 1);
+	ASSERT_NULL(dec.frames[0]->exif_raw);
+	ASSERT_NULL(dec.frames[0]->xmp_raw);
+	img2_frames_free(&dec);
+	img2_image_destroy(fr[0]);
+	img2_image_destroy(fr[1]);
+
+#ifdef IMG2_HAVE_JXL
+	/* end to end: an animated JPEG XL with Exif and xml boxes (decoded metadata on frame 0 only), --frame 1 */
+	JxlEncoder *enc = JxlEncoderCreate(NULL);
+	ASSERT_NOT_NULL(enc);
+	ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderUseBoxes(enc));
+	JxlBasicInfo bi;
+	JxlEncoderInitBasicInfo(&bi);
+	bi.xsize = 8;
+	bi.ysize = 4;
+	bi.bits_per_sample = 8;
+	bi.num_color_channels = 3;
+	bi.uses_original_profile = JXL_TRUE;
+	bi.have_animation = JXL_TRUE;
+	bi.animation.tps_numerator = 10;
+	bi.animation.tps_denominator = 1;
+	ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderSetBasicInfo(enc, &bi));
+	JxlColorEncoding ce;
+	JxlColorEncodingSetToSRGB(&ce, JXL_FALSE);
+	ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderSetColorEncoding(enc, &ce));
+	uint8_t box[4 + 26] = { 0 };
+	tiff_one_entry(box + 4, false, 0x0112, 3, 1, 1);
+	ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderAddBox(enc, "Exif", box, sizeof(box), JXL_FALSE));
+	ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderAddBox(enc, "xml ", (const uint8_t *)k_xmp, sizeof(k_xmp) - 1, JXL_FALSE));
+	JxlEncoderCloseBoxes(enc);
+	JxlEncoderFrameSettings *fs = JxlEncoderFrameSettingsCreate(enc, NULL);
+	ASSERT_NOT_NULL(fs);
+	ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderSetFrameLossless(fs, JXL_TRUE));
+	uint8_t pix[8 * 4 * 3];
+	JxlPixelFormat pf = { 3, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
+	for (int i = 0; i < 2; i++) {
+		JxlFrameHeader fh;
+		JxlEncoderInitFrameHeader(&fh);
+		fh.duration = 1;
+		ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderSetFrameHeader(fs, &fh));
+		memset(pix, 40 + 100 * i, sizeof(pix));
+		ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderAddImageFrame(fs, &pf, pix, sizeof(pix)));
+	}
+	JxlEncoderCloseInput(enc);
+	uint8_t *jxl = malloc(65536);
+	ASSERT_NOT_NULL(jxl);
+	uint8_t *next = jxl;
+	size_t avail = 65536;
+	ASSERT_EQUAL(JXL_ENC_SUCCESS, JxlEncoderProcessOutput(enc, &next, &avail));
+	JxlEncoderDestroy(enc);
+
+	cli_options_t co;
+	memset(&co, 0, sizeof(co));
+	co.silent = true;
+	img2_image_t **frames = NULL;
+	int count = 0;
+	ASSERT_EQUAL(0, pipeline_decode(&co, jxl, (size_t)(next - jxl), &frames, &count));
+	free(jxl);
+	ASSERT_EQUAL(2, count);
+	ASSERT_NOT_NULL(frames[0]->exif_raw);
+	ASSERT_NULL(frames[1]->exif_raw); /* the decoder attaches the metadata to frame 0 */
+	dec = render_frame(frames, count, 1);
+	assert_same_block(box + 4, 26, dec.frames[0]->exif_raw, dec.frames[0]->exif_raw_len);
+	assert_same_block(k_xmp, sizeof(k_xmp) - 1, dec.frames[0]->xmp_raw, dec.frames[0]->xmp_raw_len);
+	ASSERT_EQUAL(140, dec.frames[0]->pixels[0]); /* frame 1's pixels */
+	img2_frames_free(&dec);
+	img2_frames_t all = { .frames = frames, .count = count };
+	img2_frames_free(&all);
+#endif
 }
 
 /* ---- the IFD0 orientation patch ------------------------------------------------------------------------- */
