@@ -419,13 +419,14 @@ Options:
   -i, --interpolation TYPE  Interpolation method (default: lanczos)
                             Available: lanczos, bilinear, nearest, cubic, box, mitchell
                             (lanczos = stb_image_resize2 default; stb has no Lanczos filter)
-  -f, --fit                 Fit image to terminal (maintain aspect ratio, default)
+  -f, --fit                 Fit image to the terminal (scale up or down, keep aspect ratio)
   -r, --resize              Resize to exact terminal dimensions (may distort)
   -w, --width N             Target width in pixels
   -H, --height N            Target height in pixels
                             If both: exact dimensions
                             If one: aspect ratio preserved
-                            If neither: fit to terminal (default)
+                            If neither: original size, shrunk to fit the terminal
+                            (Kitty/iTerm2: at most half its height); -f fits to it
   -v, --verbose             Verbose mode (show non-error messages)
       --fps N               Animation FPS (1-15, default: 15)
   -a, --animate             Animate GIF frames
@@ -475,9 +476,14 @@ Examples:
 
 <summary>Examples</summary>
 
-**Fit image to terminal (default):**
+**Display an image (default: original size, shrunk to fit the terminal; Kitty/iTerm2: at most half its height):**
 ```bash
 imgcat2 photo.jpg
+```
+
+**Fit image to the terminal (scaled up or down):**
+```bash
+imgcat2 -f photo.jpg
 ```
 
 **Display with nearest-neighbor scaling (for pixel art):**

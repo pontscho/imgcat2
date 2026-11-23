@@ -11,6 +11,7 @@
  * Frames:  converting an animated image printed "Animated image with N frames, converting frame K" without -v.
  * Exit:    --help / --version exited with status 1; with no terminal "Failed to get terminal size" was printed
  *          three times, without -v and even for --help / --version.
+ * --help:  called -f/--fit the default; the default is the original size, only shrunk to the terminal.
  */
 
 #include <sys/types.h>
@@ -313,6 +314,24 @@ CTEST(cli_fix, animated_frame_note_verbose_only)
 	err = render_two_frames(false);
 	ASSERT_NOT_NULL(strstr(err, "Animated image with 2 frames, converting frame 1\n"));
 	free(err);
+}
+
+/* ---- --help: fit to the terminal is -f, not the default ---- */
+
+CTEST(cli_fix, help_fit_not_default)
+{
+	cap_t c;
+	cap_begin(&c, STDOUT_FILENO, "help");
+	print_usage("imgcat2");
+	size_t n = 0;
+	char *out = cap_end(&c, &n);
+	ASSERT_NOT_NULL(out);
+	/* main.c starts with fit_mode = false: the original size, only shrunk to the terminal */
+	ASSERT_NULL(strstr(out, "maintain aspect ratio, default"));
+	ASSERT_NULL(strstr(out, "If neither: fit to terminal (default)"));
+	ASSERT_NOT_NULL(strstr(out, "  -f, --fit                 Fit image to the terminal (scale up or down, keep aspect ratio)\n"));
+	ASSERT_NOT_NULL(strstr(out, "If neither: original size, shrunk to fit the terminal\n"));
+	free(out);
 }
 
 #ifdef IMGCAT2_BIN

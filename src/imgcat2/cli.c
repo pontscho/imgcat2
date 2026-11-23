@@ -43,13 +43,14 @@ void print_usage(const char *program_name)
 	printf("  -i, --interpolation TYPE  Interpolation method (default: lanczos)\n");
 	printf("                            Available: lanczos, bilinear, nearest, cubic, box, mitchell\n");
 	printf("                            (lanczos = stb_image_resize2 default; stb has no Lanczos filter)\n");
-	printf("  -f, --fit                 Fit image to terminal (maintain aspect ratio, default)\n");
+	printf("  -f, --fit                 Fit image to the terminal (scale up or down, keep aspect ratio)\n");
 	printf("  -r, --resize              Resize to exact terminal dimensions (may distort)\n");
 	printf("  -w, --width N             Target width in pixels\n");
 	printf("  -H, --height N            Target height in pixels\n");
 	printf("                            If both: exact dimensions\n");
 	printf("                            If one: aspect ratio preserved\n");
-	printf("                            If neither: fit to terminal (default)\n");
+	printf("                            If neither: original size, shrunk to fit the terminal\n");
+	printf("                            (Kitty/iTerm2: at most half its height); -f fits to it\n");
 	printf("  -v, --verbose             Verbose mode (show non-error messages)\n");
 	printf("      --fps N               Animation FPS (1-15, default: 15)\n");
 	printf("  -a, --animate             Animate GIF frames\n");

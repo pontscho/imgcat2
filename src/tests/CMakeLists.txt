@@ -355,7 +355,7 @@ img2_add_test(test_svg_text_cap SOURCES unit/test_svg_text_cap.c TIMEOUT 60)
 # Command line fixes: -F / -b consistent with --fps / --version; --info --json strings keep UTF-8; --info GPS
 # lines (absolute value + hemisphere letter, no NUL byte without a reference); -w / -H of a conversion not
 # limited by the terminal size; error messages name -H and every conversion format; the --frame note only with -v;
-# --help / --version exit 0, the terminal size warning once and only with -v
+# --help / --version exit 0, the terminal size warning once and only with -v; --help does not call -f the default
 img2_add_test(test_cli_fix SOURCES unit/test_cli_fix.c LINK cli)
 if(TARGET test_cli_fix AND TARGET imgcat2 AND UNIX)
 	# exit status of --help / --version and the terminal size warning: the binary run without a terminal
