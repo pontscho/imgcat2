@@ -70,7 +70,8 @@ All of `src/libimg2/` except (`-ignore-filename-regex` in `scripts/coverage.sh`,
 
 * `vendor/`, `src/tests/`, `src/imgcat2/`, build trees, the generated `embedded_fonts.c` (data only);
 * `src/libimg2/decoders/nanosvg.h` and `nanosvgrast.h`: third-party nanosvg sources copied into the library
-  tree (they differ from `vendor/nanosvg`); they are vendored code, not libimg2 logic.
+  tree (they differ from `vendor/nanosvg`, see [nanosvg-fork.md](nanosvg-fork.md)); they are vendored code, not
+  libimg2 logic.
 
 `decoders/decoder_resvg.c` is not built in the measured configuration (all optional codecs except resvg).
 

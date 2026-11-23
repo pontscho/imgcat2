@@ -563,7 +563,8 @@ residual list into its log.
 
 - Every non-static symbol of libimg2 starts with `img2_` (internal ones too; never `img2__`); types are
   `img2_*_t`; macros and enum constants `IMG2_*`. Header-only vendors are TU-local; nanosvg reaches glyph data
-  only through the internal `img2_font_face_*` wrappers.
+  only through the internal `img2_font_face_*` wrappers. The nanosvg fork lives in `src/libimg2/decoders`;
+  `vendor/nanosvg` is only its upstream baseline ([nanosvg-fork.md](nanosvg-fork.md)).
 - Layout: `include/img2/` (public), `src/libimg2/{core,decoders,encoders,metadata,text,font}` (library),
   `src/imgcat2/` (CLI, public API only), `src/tests/` (unit, integration, consumer), `cmake/` (modules),
   `cmake/vendor/` (one module per vendor stack), `cmake/scripts/` (guards, fat archive, consumer driver).
