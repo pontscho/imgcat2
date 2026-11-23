@@ -1234,55 +1234,62 @@ encoders/encoder_jpeg.c:274 line = }
 
 # ===== encoders/encoder_jxl.c =====
 reason: RESOURCE-BOUND: JxlThreadParallelRunnerCreate() fails only when its allocation or std::thread fails; JxlEncoderSetParallelRunner() on a fresh encoder fails only when its small allocation fails (the second-runner error cannot happen)
-encoders/encoder_jxl.c:121 region 115 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:121 branch-true 25 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:121 branch-true 7 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:122 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set up the JXL thread pool");
-encoders/encoder_jxl.c:123 line = jxl_encoder_destroy(encoder, runner);
-encoders/encoder_jxl.c:124 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:125 line = }
+encoders/encoder_jxl.c:124 region 115 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:124 branch-true 25 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:124 branch-true 7 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:125 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set up the JXL thread pool");
+encoders/encoder_jxl.c:126 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:127 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:128 line = }
 reason: JxlEncoderSetColorEncoding(sRGB) right after a successful JxlEncoderSetBasicInfo() cannot fail
-encoders/encoder_jxl.c:161 region 79 = if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:161 branch-true 6 = if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:162 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL color encoding");
-encoders/encoder_jxl.c:163 line = jxl_encoder_destroy(encoder, runner);
-encoders/encoder_jxl.c:164 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:165 line = }
+encoders/encoder_jxl.c:164 region 79 = if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:164 branch-true 6 = if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:165 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL color encoding");
+encoders/encoder_jxl.c:166 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:167 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:168 line = }
 reason: JxlEncoderSetFrameLossless() fails only without uses_original_profile, which is set whenever lossless is used
-encoders/encoder_jxl.c:169 region 74 = if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:169 branch-true 7 = if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:170 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL lossless mode");
-encoders/encoder_jxl.c:171 line = jxl_encoder_destroy(encoder, runner);
-encoders/encoder_jxl.c:172 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:173 line = }
+encoders/encoder_jxl.c:172 region 74 = if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:172 branch-true 7 = if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:173 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL lossless mode");
+encoders/encoder_jxl.c:174 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:175 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:176 line = }
 reason: the distance is 0.6..10, inside libjxl's [0, 25]
-encoders/encoder_jxl.c:175 region 74 = if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:175 branch-true 7 = if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:176 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL frame distance");
-encoders/encoder_jxl.c:177 line = jxl_encoder_destroy(encoder, runner);
-encoders/encoder_jxl.c:178 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:179 line = }
+encoders/encoder_jxl.c:178 region 74 = if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:178 branch-true 7 = if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:179 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL frame distance");
+encoders/encoder_jxl.c:180 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:181 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:182 line = }
 reason: the alpha distance is 0..9.9, inside libjxl's [0, 25], for the existing extra channel 0
-encoders/encoder_jxl.c:180 region 130 = if (o->alpha_quality > 0 && JxlEncoderSetExtraChannelDistance(settings, 0, jxl_distance(o->alpha_quality)) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:180 branch-true 31 = if (o->alpha_quality > 0 && JxlEncoderSetExtraChannelDistance(settings, 0, jxl_distance(o->alpha_quality)) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:181 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL alpha distance");
-encoders/encoder_jxl.c:182 line = jxl_encoder_destroy(encoder, runner);
-encoders/encoder_jxl.c:183 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:184 line = }
+encoders/encoder_jxl.c:183 region 130 = if (o->alpha_quality > 0 && JxlEncoderSetExtraChannelDistance(settings, 0, jxl_distance(o->alpha_quality)) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:183 branch-true 31 = if (o->alpha_quality > 0 && JxlEncoderSetExtraChannelDistance(settings, 0, jxl_distance(o->alpha_quality)) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:184 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL alpha distance");
+encoders/encoder_jxl.c:185 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:186 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:187 line = }
 reason: effort 1..10 (validated by img2_encode()) is inside libjxl's [1, 10]
-encoders/encoder_jxl.c:186 region 127 = if (o->effort > 0 && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, o->effort) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:186 branch-true 23 = if (o->effort > 0 && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, o->effort) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:187 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL effort");
-encoders/encoder_jxl.c:188 line = jxl_encoder_destroy(encoder, runner);
-encoders/encoder_jxl.c:189 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:190 line = }
+encoders/encoder_jxl.c:189 region 127 = if (o->effort > 0 && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, o->effort) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:189 branch-true 23 = if (o->effort > 0 && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, o->effort) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:190 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL effort");
+encoders/encoder_jxl.c:191 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:192 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:193 line = }
+reason: PROGRESSIVE_AC = 1 is a valid value of a known frame setting (libjxl accepts -1..1)
+encoders/encoder_jxl.c:195 region 145 = if (o->progressive && !use_lossless && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_PROGRESSIVE_AC, 1) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:195 branch-true 41 = if (o->progressive && !use_lossless && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_PROGRESSIVE_AC, 1) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:196 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL progressive mode");
+encoders/encoder_jxl.c:197 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:198 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:199 line = }
 reason: a successful JXL encode always writes the signature and headers
-encoders/encoder_jxl.c:261 region 24 = if (buffer_size == 0) {
-encoders/encoder_jxl.c:261 branch-true 6 = if (buffer_size == 0) {
-encoders/encoder_jxl.c:262 line = img2_log(IMG2_LOG_ERROR, "Error: JXL encoder produced no output");
-encoders/encoder_jxl.c:263 line = free(buffer);
-encoders/encoder_jxl.c:264 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:265 line = }
+encoders/encoder_jxl.c:270 region 24 = if (buffer_size == 0) {
+encoders/encoder_jxl.c:270 branch-true 6 = if (buffer_size == 0) {
+encoders/encoder_jxl.c:271 line = img2_log(IMG2_LOG_ERROR, "Error: JXL encoder produced no output");
+encoders/encoder_jxl.c:272 line = free(buffer);
+encoders/encoder_jxl.c:273 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:274 line = }
 
 # ===== encoders/encoder_png.c =====
 reason: the write callback's state is always the encoder's own write state; return after png_error() (longjmp)
@@ -1320,12 +1327,12 @@ encoders/encoder_png.c:280 line = }
 
 # ===== encoders/encoder_webp.c =====
 reason: WebPConfigPreset() / WebPPictureInit() fail only on an ABI version mismatch between the libwebp headers and the linked library (both the vendored copy)
-encoders/encoder_webp.c:90 region 137 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
-encoders/encoder_webp.c:90 branch-true 113 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
-encoders/encoder_webp.c:90 branch-true 6 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
-encoders/encoder_webp.c:91 line = img2_log(IMG2_LOG_ERROR, "Error: libwebp version mismatch");
-encoders/encoder_webp.c:92 line = return IMG2_E_CODEC;
-encoders/encoder_webp.c:93 line = }
+encoders/encoder_webp.c:91 region 137 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
+encoders/encoder_webp.c:91 branch-true 113 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
+encoders/encoder_webp.c:91 branch-true 6 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
+encoders/encoder_webp.c:92 line = img2_log(IMG2_LOG_ERROR, "Error: libwebp version mismatch");
+encoders/encoder_webp.c:93 line = return IMG2_E_CODEC;
+encoders/encoder_webp.c:94 line = }
 
 # ===== metadata/xml_parser.c =====
 reason: arena_destroy(NULL): the arena always exists (img2_xml_document_create() fails without it)

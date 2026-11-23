@@ -446,10 +446,10 @@ CTEST(cli_fix, encoder_option_flags)
 	ASSERT_EQUAL(1, parse_captured(2, argv4, &opts, &out, &err));
 	ASSERT_NOT_NULL(strstr(out, "      --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)\n"
 	                            "      --lossless            Lossless output (WebP, JXL, AVIF; PNG is always lossless)\n"
-	                            "      --effort <1-10>       Encoder effort: 1 = fastest .. 10 = smallest file\n"
+	                            "      --effort <1-10>       Encoder effort: 1 = fastest .. 10 = smallest file (not with --png)\n"
 	                            "      --chroma <420|422|444>  Chroma subsampling (JPEG, AVIF; default: 420)\n"
 	                            "      --alpha-quality <1-100>  Alpha channel quality (WebP, JXL, AVIF)\n"
-	                            "      --progressive         Progressive JPEG / interlaced (Adam7) PNG\n"
+	                            "      --progressive         Progressive JPEG / JXL, interlaced (Adam7) PNG\n"
 	                            "      --threads <1-64>      Encoder threads (WebP, JXL, AVIF)\n"));
 	free(out);
 	free(err);
@@ -483,6 +483,32 @@ CTEST(cli_fix, encoder_options_need_conversion)
 		ASSERT_STR(flags[i][2], err);
 		free(err);
 	}
+}
+
+/* --png N already is the zlib level --effort would pick: the combination is an error (other formats accept it) */
+CTEST(cli_fix, png_level_with_effort_is_error)
+{
+	cli_options_t opts;
+	char *out = NULL;
+	char *err = NULL;
+	opts_defaults(&opts);
+	char *argv[] = { (char *)"imgcat2", (char *)"--png", (char *)"9", (char *)"--effort", (char *)"10", (char *)"in.png", NULL };
+	ASSERT_EQUAL(0, parse_captured(6, argv, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+	ASSERT_STR("Error: --effort has no effect with --png N (N is already the zlib level)\n", err);
+	free(err);
+
+	/* a later format option replaces --png: --effort is fine again */
+	opts_defaults(&opts);
+	char *argv2[] = { (char *)"imgcat2", (char *)"--png", (char *)"9", (char *)"--effort", (char *)"10", (char *)"--webp", (char *)"80", (char *)"in.png", NULL };
+	ASSERT_EQUAL(0, parse_captured(8, argv2, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
 }
 
 /* file_render() hands the options to img2_encode(): --progressive with --png gives an Adam7 PNG */

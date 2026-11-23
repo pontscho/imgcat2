@@ -6,8 +6,9 @@
  * round trips by memcmp (PNG, WebP, JXL, AVIF), chroma read back from the file (JPEG comp_info sampling factors,
  * AVIF libheif chroma), progressive JPEG (jpeg_has_multiple_scans) and interlaced PNG (IHDR), effort / threads
  * as "valid and decodable" (plus the mappings that must equal a default: WebP effort 7 = method 4, JXL effort 7,
- * AVIF effort 4 = speed 6, PNG effort e = zlib level e-1), the WebPConfig path against libwebp's simple API, and
- * every "has no effect" WARN exactly once.
+ * AVIF effort 4 = speed 6, PNG effort e = zlib level e-1), the lossy WebPConfig path against libwebp's simple API,
+ * lossless WebP keeping the RGB under alpha 0 (`exact`), lossy JXL progressive (more decoder progression steps),
+ * and every "has no effect" WARN exactly once.
  */
 
 #include <stdbool.h>
@@ -21,6 +22,9 @@
 #include <libheif/heif.h>
 #ifdef IMG2_HAVE_WEBP
 #include <webp/encode.h>
+#endif
+#ifdef IMG2_HAVE_JXL
+#include <jxl/decode.h>
 #endif
 /* clang-format on */
 
@@ -80,7 +84,7 @@ static void assert_one_warn(const char *text)
 
 /* ---- helpers -------------------------------------------------------------------------------------------- */
 
-/* gradient + checker; alpha 1..255 (never 0: lossless WebP may rewrite the RGB of fully transparent pixels) */
+/* gradient + checker; alpha 1..255 (alpha 0: make_image_transparent()) */
 static img2_image_t *make_image(uint32_t w, uint32_t h, bool with_alpha)
 {
 	img2_image_t *img = img2_image_alloc(w, h);
@@ -92,6 +96,18 @@ static img2_image_t *make_image(uint32_t w, uint32_t h, bool with_alpha)
 			p[1] = (uint8_t)(y * 255 / h);
 			p[2] = ((x / 8 + y / 8) % 2) ? 200 : (uint8_t)(x * 7 + y * 13);
 			p[3] = with_alpha ? (uint8_t)(1 + (x * 254 / w)) : 255;
+		}
+	}
+	return img;
+}
+
+/* make_image() with a fully transparent block (alpha 0) whose RGB is not black: "lossless" must keep it */
+static img2_image_t *make_image_transparent(uint32_t w, uint32_t h)
+{
+	img2_image_t *img = make_image(w, h, true);
+	for (uint32_t y = 0; y < h / 2; y++) {
+		for (uint32_t x = 0; x < w / 2; x++) {
+			img2_image_get_pixel(img, x, y)[3] = 0;
 		}
 	}
 	return img;
@@ -426,16 +442,15 @@ CTEST(encode_options, png_warnings)
 /* ---- WebP ----------------------------------------------------------------------------------------------- */
 
 #ifdef IMG2_HAVE_WEBP
-CTEST(encode_options, webp_config_matches_simple_api)
+CTEST(encode_options, webp_config_lossy_simple_api_lossless_exact)
 {
-	/* the WebPConfig path with default options must give the bytes of WebPEncodeRGBA / WebPEncodeLosslessRGBA */
-	img2_image_t *img = make_image(40, 28, true);
-	const int qualities[] = { 0, 50, 80, 99, 100 };
+	/* lossy: the WebPConfig path with default options gives the bytes of WebPEncodeRGBA */
+	img2_image_t *img = make_image_transparent(40, 28);
+	const int qualities[] = { 0, 50, 80, 99 };
 	for (size_t i = 0; i < sizeof(qualities) / sizeof(qualities[0]); i++) {
 		int q = qualities[i];
 		uint8_t *ref = NULL;
-		size_t ref_len = q == 100 ? WebPEncodeLosslessRGBA(img->pixels, (int)img->width, (int)img->height, (int)img->stride, &ref)
-		                          : WebPEncodeRGBA(img->pixels, (int)img->width, (int)img->height, (int)img->stride, (float)q, &ref);
+		size_t ref_len = WebPEncodeRGBA(img->pixels, (int)img->width, (int)img->height, (int)img->stride, (float)q, &ref);
 		ASSERT_TRUE(ref_len > 0);
 		uint8_t *buf = NULL;
 		size_t len = 0;
@@ -444,6 +459,16 @@ CTEST(encode_options, webp_config_matches_simple_api)
 		free(buf);
 		WebPFree(ref);
 	}
+
+	/* lossless (quality 100 or the option) sets `exact`: unlike WebPEncodeLosslessRGBA, the RGB under alpha 0
+	 * survives, every RGBA byte round-trips */
+	img2_encode_opts_t q100 = IMG2_ENCODE_OPTS_INIT;
+	q100.quality = 100;
+	assert_lossless(img, IMG2_FORMAT_WEBP, &q100);
+	img2_encode_opts_t ll = IMG2_ENCODE_OPTS_INIT;
+	ll.lossless = true;
+	assert_lossless(img, IMG2_FORMAT_WEBP, &ll);
+	assert_same_bytes(img, IMG2_FORMAT_WEBP, &ll, &q100);
 	img2_image_destroy(img);
 }
 
@@ -569,7 +594,7 @@ CTEST(encode_options, jxl_warnings)
 	img2_image_t *img = make_image(16, 16, true);
 	img2_encode_opts_t eo = IMG2_ENCODE_OPTS_INIT;
 	eo.chroma = IMG2_CHROMA_420;
-	eo.progressive = true;
+	eo.progressive = true; /* lossy only (decision 7) */
 	eo.lossless = true;
 	eo.alpha_quality = 50;
 	capture_begin();
@@ -577,8 +602,98 @@ CTEST(encode_options, jxl_warnings)
 	capture_end();
 	ASSERT_EQUAL(3, s_warn_count);
 	assert_one_warn("encode: chroma 420 has no effect for JXL (no chroma subsampling of RGB / XYB)");
-	assert_one_warn("encode: progressive has no effect for JXL (not mapped)");
+	assert_one_warn("encode: progressive has no effect for lossless JXL (no VarDCT passes)");
 	assert_one_warn("encode: alpha_quality has no effect for lossless JXL (alpha is lossless)");
+	img2_image_destroy(img);
+}
+
+/** JXL_DEC_FRAME_PROGRESSION events (kPasses detail) while the file arrives in 64 chunks (a progressive file can
+ *  be shown after each complete pass; with the whole file at once the decoder reports no intermediate step) */
+static int jxl_progression_events(const uint8_t *buf, size_t len)
+{
+	JxlDecoder *dec = JxlDecoderCreate(NULL);
+	ASSERT_NOT_NULL(dec);
+	ASSERT_EQUAL(JXL_DEC_SUCCESS, JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_FRAME_PROGRESSION | JXL_DEC_FULL_IMAGE));
+	ASSERT_EQUAL(JXL_DEC_SUCCESS, JxlDecoderSetProgressiveDetail(dec, kPasses));
+	size_t chunk = len / 64 + 1;
+	size_t avail = chunk < len ? chunk : len;
+	ASSERT_EQUAL(JXL_DEC_SUCCESS, JxlDecoderSetInput(dec, buf, avail));
+	if (avail == len) {
+		JxlDecoderCloseInput(dec);
+	}
+	JxlPixelFormat fmt = { 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
+	uint8_t *pixels = NULL;
+	int events = 0;
+	for (;;) {
+		JxlDecoderStatus st = JxlDecoderProcessInput(dec);
+		if (st == JXL_DEC_NEED_MORE_INPUT) {
+			ASSERT_TRUE(avail < len);
+			size_t unread = JxlDecoderReleaseInput(dec);
+			size_t start = avail - unread;
+			avail = avail + chunk < len ? avail + chunk : len;
+			ASSERT_EQUAL(JXL_DEC_SUCCESS, JxlDecoderSetInput(dec, buf + start, avail - start));
+			if (avail == len) {
+				JxlDecoderCloseInput(dec);
+			}
+		} else if (st == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
+			size_t size = 0;
+			ASSERT_EQUAL(JXL_DEC_SUCCESS, JxlDecoderImageOutBufferSize(dec, &fmt, &size));
+			pixels = malloc(size);
+			ASSERT_NOT_NULL(pixels);
+			ASSERT_EQUAL(JXL_DEC_SUCCESS, JxlDecoderSetImageOutBuffer(dec, &fmt, pixels, size));
+		} else if (st == JXL_DEC_FRAME_PROGRESSION) {
+			events++;
+		} else if (st == JXL_DEC_SUCCESS) {
+			break;
+		} else {
+			ASSERT_TRUE(st == JXL_DEC_BASIC_INFO || st == JXL_DEC_FULL_IMAGE);
+		}
+	}
+	free(pixels);
+	JxlDecoderDestroy(dec);
+	return events;
+}
+
+CTEST(encode_options, jxl_progressive)
+{
+	/* 512x384 photo-like texture (gradient + noise): several AC groups with real AC data */
+	img2_image_t *img = make_image(512, 384, false);
+	uint32_t seed = 1u;
+	for (size_t i = 0; i < (size_t)512 * 384 * 4; i++) {
+		if (i % 4 != 3) {
+			seed = seed * 1664525u + 1013904223u;
+			img->pixels[i] = (uint8_t)((img->pixels[i] * 3 + (seed >> 24)) / 4);
+		}
+	}
+	img2_encode_opts_t pr = IMG2_ENCODE_OPTS_INIT;
+	pr.progressive = true;
+	capture_begin();
+	assert_decodable(img, IMG2_FORMAT_JXL, &pr);
+	capture_end();
+	ASSERT_EQUAL(0, s_warn_count);
+
+	uint8_t *a = NULL;
+	uint8_t *b = NULL;
+	size_t la = 0;
+	size_t lb = 0;
+	ASSERT_EQUAL(IMG2_OK, encode(img, IMG2_FORMAT_JXL, NULL, &a, &la));
+	ASSERT_EQUAL(IMG2_OK, encode(img, IMG2_FORMAT_JXL, &pr, &b, &lb));
+	ASSERT_FALSE(la == lb && memcmp(a, b, la) == 0);
+	int ev_plain = jxl_progression_events(a, la);
+	int ev_prog = jxl_progression_events(b, lb);
+	ASSERT_TRUE(ev_prog > ev_plain); /* AC passes the decoder can show before the end (goldhill: 1 -> 3) */
+	img2_free(a);
+	img2_free(b);
+
+	/* lossless: not progressive, one WARN, the bytes of plain lossless */
+	pr.lossless = true;
+	img2_encode_opts_t ll = IMG2_ENCODE_OPTS_INIT;
+	ll.lossless = true;
+	capture_begin();
+	assert_same_bytes(img, IMG2_FORMAT_JXL, &ll, &pr);
+	capture_end();
+	ASSERT_EQUAL(1, s_warn_count);
+	assert_one_warn("encode: progressive has no effect for lossless JXL (no VarDCT passes)");
 	img2_image_destroy(img);
 }
 #endif
