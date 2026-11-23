@@ -472,6 +472,10 @@ Examples:
   ./imgcat2 --yuv nv12:1920:1080 frame.yuv  Display a raw NV12 frame
 ```
 
+`--help` and `--version` exit with status 0, argument errors with 1. Non-error messages are printed only with
+`-v`, among them the fallback to an 80x24 terminal when there is none (output piped, no `/dev/tty`) and the note
+which frame of an animated image a conversion uses.
+
 <details>
 
 <summary>Examples</summary>
@@ -642,6 +646,7 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
   - Quality 0-94 = lossy mode with distance-based quality
 - `--output <file>` or `-o <file>` - Output file path (stdout if not specified)
 - `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
+- `-w N` / `-H N` - Scale the converted image (up to 16384 pixels; not limited by the terminal size)
 
 ### Conversion Notes
 - **JPEG** does not support transparency - alpha channel will be removed
@@ -712,7 +717,14 @@ Image:
 ```
 
 Depending on the file, the output also has `GPS:`, `Rights:` (artist, copyright), `Annotations:` (description,
-comment) and `XMP Metadata:` (creator, title, keywords, rating, location, ...) sections.
+comment) and `XMP Metadata:` (creator, title, keywords, rating, location, ...) sections. GPS coordinates are
+printed as the absolute value with the hemisphere letter of the file (a coordinate without a reference letter
+as the signed value); the JSON output has signed numbers (`"longitude":-122.419400`):
+```
+GPS:
+  Latitude: 37.774900N
+  Longitude: 122.419400W
+```
 
 ### JSON Output
 
@@ -759,7 +771,7 @@ Example output:
 - Handles both little-endian (Canon, most cameras) and big-endian (Nikon) EXIF data
 - Gracefully handles missing or malformed metadata
 - Built-in XML parser for XMP data (zero dependencies)
-- Text taken from the file is escaped: in the text output, control characters (C0 except tab and newline, DEL, C1) are written as `\xNN`; the JSON output escapes C0 control characters as `\u00NN`
+- Text taken from the file is escaped: in the text output, control characters (C0 except tab and newline, DEL, C1) are written as `\xNN`; the JSON output keeps valid UTF-8 as it is and escapes control characters (C0, DEL, C1) as `\uNNNN`; a byte that is not valid UTF-8 becomes U+FFFD (the JSON stays valid UTF-8)
 
 ## Supported Formats
 
