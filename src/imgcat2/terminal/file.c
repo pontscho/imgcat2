@@ -166,7 +166,14 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	size_t encoded_size = 0;
 
 	img2_frames_t one = { .frames = &img, .count = 1 };
-	img2_encode_opts_t eo = { .quality = quality };
+	img2_encode_opts_t eo = IMG2_ENCODE_OPTS_INIT;
+	eo.quality = quality;
+	eo.lossless = opts->enc_lossless;
+	eo.effort = opts->enc_effort;
+	eo.chroma = opts->enc_chroma;
+	eo.alpha_quality = opts->enc_alpha_quality;
+	eo.progressive = opts->enc_progressive;
+	eo.threads = opts->enc_threads;
 	if (img2_encode(&one, opts->output_format, &eo, &encoded_data, &encoded_size) != IMG2_OK) {
 		fprintf(stderr, "Error: Failed to encode image\n");
 		return -1;

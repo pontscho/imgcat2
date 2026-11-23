@@ -55,6 +55,14 @@ typedef struct {
 	int avif_quality; /**< AVIF quality 0-100 (default: 80) */
 	int frame_index; /**< Frame to convert for animated images (default: 0) */
 
+	/* Encoder options (img2_encode_opts_t; 0 / false = not given = format default; conversion mode only) */
+	bool enc_lossless; /**< --lossless */
+	int enc_effort; /**< --effort 1..10 */
+	img2_chroma_t enc_chroma; /**< --chroma 420|422|444 */
+	int enc_alpha_quality; /**< --alpha-quality 1..100 */
+	bool enc_progressive; /**< --progressive */
+	int enc_threads; /**< --threads 1..64 */
+
 	/* Raw input options */
 	bool yuv_input; /**< true = input is raw YUV described by yuv (bypasses magic detection) */
 	img2_yuv_params_t yuv; /**< Raw YUV geometry (valid when yuv_input), strides resolved */

@@ -58,6 +58,12 @@ int main(int argc, char **argv)
 		.jxl_quality = 80,
 		.avif_quality = 80,
 		.frame_index = 0,
+		.enc_lossless = false,
+		.enc_effort = 0,
+		.enc_chroma = IMG2_CHROMA_DEFAULT,
+		.enc_alpha_quality = 0,
+		.enc_progressive = false,
+		.enc_threads = 0,
 
 		.terminal = {
 			.rows = 0,

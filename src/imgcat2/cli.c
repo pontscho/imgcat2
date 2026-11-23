@@ -68,6 +68,13 @@ void print_usage(const char *program_name)
 	printf("      --webp <quality>      Convert to WebP (quality: 0-100, default: 80, 100=lossless)\n");
 	printf("      --jxl <quality>       Convert to JXL (quality: 0-100, default: 80, >=95=lossless)\n");
 	printf("      --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)\n");
+	printf("      --lossless            Lossless output (WebP, JXL, AVIF; PNG is always lossless)\n");
+	printf("      --effort <1-10>       Encoder effort: 1 = fastest .. 10 = smallest file\n");
+	printf("      --chroma <420|422|444>  Chroma subsampling (JPEG, AVIF; default: 420)\n");
+	printf("      --alpha-quality <1-100>  Alpha channel quality (WebP, JXL, AVIF)\n");
+	printf("      --progressive         Progressive JPEG / interlaced (Adam7) PNG\n");
+	printf("      --threads <1-64>      Encoder threads (WebP, JXL, AVIF)\n");
+	printf("                            An option the format cannot use is ignored with a warning\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
 	printf("      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)\n");
@@ -273,6 +280,25 @@ static int parse_dimension_arg(const char *arg, const char *what, int *out)
 }
 
 /**
+ * @brief Parse an encoder option value: decimal integer in [lo, hi], nothing else
+ *
+ * @return 0 on success, -1 on error (error printed to stderr)
+ */
+static int parse_range_arg(const char *arg, const char *flag, int lo, int hi, int *out)
+{
+	char *end = NULL;
+	errno = 0;
+	long v = strtol(arg, &end, 10);
+	if (errno != 0 || end == arg || *end != '\0' || v < lo || v > hi) {
+		char safe[CLI_SAFE_PATH_SIZE]; /* [P39] the argument with control characters escaped */
+		fprintf(stderr, "Error: %s must be %d-%d (got '%s')\n", flag, lo, hi, cli_safe_str(arg, safe, sizeof(safe)));
+		return -1;
+	}
+	*out = (int)v;
+	return 0;
+}
+
+/**
  * @brief Parse command-line arguments
  *
  * Parses command-line arguments using getopt_long() and populates
@@ -321,6 +347,12 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "iterm2-format", required_argument, 0, 't'  },
 		{ "yuv",           required_argument, 0, 1003 },
 		{ "avif",          required_argument, 0, 1004 },
+		{ "lossless",      no_argument,       0, 1005 },
+		{ "effort",        required_argument, 0, 1006 },
+		{ "chroma",        required_argument, 0, 1007 },
+		{ "alpha-quality", required_argument, 0, 1008 },
+		{ "progressive",   no_argument,       0, 1009 },
+		{ "threads",       required_argument, 0, 1010 },
 		{ 0,		       0,		         0, 0    },
 	};
 
@@ -395,6 +427,41 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 				opts->convert_mode = true;
 				opts->output_format = IMG2_FORMAT_AVIF;
 				opts->avif_quality = atoi(optarg);
+				break;
+
+			case 1005: opts->enc_lossless = true; break; /* --lossless */
+
+			case 1006: /* --effort */
+				if (parse_range_arg(optarg, "--effort", 1, 10, &opts->enc_effort) < 0) {
+					return -1;
+				}
+				break;
+
+			case 1007: /* --chroma */
+				if (strcmp(optarg, "420") == 0) {
+					opts->enc_chroma = IMG2_CHROMA_420;
+				} else if (strcmp(optarg, "422") == 0) {
+					opts->enc_chroma = IMG2_CHROMA_422;
+				} else if (strcmp(optarg, "444") == 0) {
+					opts->enc_chroma = IMG2_CHROMA_444;
+				} else {
+					fprintf(stderr, "Error: Invalid --chroma '%s' (must be 420, 422 or 444)\n", cli_safe_str(optarg, safe, sizeof(safe)));
+					return -1;
+				}
+				break;
+
+			case 1008: /* --alpha-quality */
+				if (parse_range_arg(optarg, "--alpha-quality", 1, 100, &opts->enc_alpha_quality) < 0) {
+					return -1;
+				}
+				break;
+
+			case 1009: opts->enc_progressive = true; break; /* --progressive */
+
+			case 1010: /* --threads */
+				if (parse_range_arg(optarg, "--threads", 1, 64, &opts->enc_threads) < 0) {
+					return -1;
+				}
 				break;
 
 			case 1003: /* --yuv */
@@ -544,6 +611,15 @@ int validate_options(cli_options_t *opts)
 	if (opts->json_output && !opts->info_mode) {
 		fprintf(stderr, "Error: --json can only be used with --info\n");
 		return -1;
+	}
+
+	/* Validate that the encoder options are only used with a conversion */
+	if (!opts->convert_mode) {
+		const char *flag = opts->enc_lossless ? "--lossless" : opts->enc_effort > 0 ? "--effort" : opts->enc_chroma != IMG2_CHROMA_DEFAULT ? "--chroma" : opts->enc_alpha_quality > 0 ? "--alpha-quality" : opts->enc_progressive ? "--progressive" : opts->enc_threads > 0 ? "--threads" : NULL;
+		if (flag != NULL) {
+			fprintf(stderr, "Error: %s can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n", flag);
+			return -1;
+		}
 	}
 
 	/* Validate encoder options */
