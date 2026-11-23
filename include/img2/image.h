@@ -133,7 +133,8 @@ img2_status_t img2_fit_size(uint32_t src_w, uint32_t src_h, uint32_t max_w, uint
  * @brief Apply (*img)->exif->orientation (no-op if there is no EXIF or the orientation is 1)
  *
  * May replace the pixel buffer and swap width/height. Does NOT reset the orientation
- * field: call it once. TIFF/HEIF/AVIF frames arrive already oriented by their codecs.
+ * field: call it once. TIFF/HEIF/AVIF/JPEG XL frames arrive already oriented by their codecs (JPEG XL: by the
+ * codestream orientation; an Exif box orientation is not authoritative there).
  *
  * @param img Image to transform in place
  * @return IMG2_OK; IMG2_E_ARG (NULL, invalid image or invalid orientation); IMG2_E_NOMEM

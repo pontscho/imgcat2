@@ -532,8 +532,9 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, img
 	 * Skip for formats that handle orientation natively:
 	 * - TIFF: libtiff applies orientation during decode
 	 * - HEIF/AVIF: libheif applies orientation during decode
+	 * - JXL: libjxl applies the codestream orientation (authoritative; the Exif box orientation is ignored)
 	 */
-	if (mime != IMG2_MIME_TIFF && mime != IMG2_MIME_HEIF && mime != IMG2_MIME_AVIF) {
+	if (mime != IMG2_MIME_TIFF && mime != IMG2_MIME_HEIF && mime != IMG2_MIME_AVIF && mime != IMG2_MIME_JXL) {
 		for (int i = 0; i < fr.count; i++) {
 			if (fr.frames[i]->exif != NULL && fr.frames[i]->exif->orientation > 1) {
 				if (!opts->silent) {

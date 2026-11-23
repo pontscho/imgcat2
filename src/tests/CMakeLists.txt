@@ -323,6 +323,10 @@ endif()
 img2_add_test(test_sec_fix_cli SOURCES unit/test_sec_fix_cli.c LINK cli REQUIRES EXIF_READER)
 # --- sec-fix end ---
 
+# --- jxl-orient-fix ---
+# libjxl orients JPEG XL pixels by the codestream orientation: the CLI must not apply the Exif box orientation again
+img2_add_test(test_jxl_orient_fix SOURCES unit/test_jxl_orient_fix.c LINK cli REQUIRES JXL EXIF_READER)
+
 # --- jpeg-log ---
 # libjpeg warnings ("Corrupt JPEG data: ...") routed through img2_log (core/log_jpeg.c): the host callback gets them,
 # nothing is written to fd 2 behind its back
