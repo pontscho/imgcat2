@@ -46,9 +46,10 @@ img2_status_t img2_encode_webp(const img2_image_t *img, int quality, uint8_t **o
 /**
  * @brief img2_encode_webp() with encode options (NULL = defaults)
  *
- * WebPConfig + WebPEncode, set up exactly like libwebp's simple API (WebPEncodeRGBA / WebPEncodeLosslessRGBA:
- * WEBP_PRESET_DEFAULT, method 4, alpha_quality 100, lossless with quality factor 70), so the default options
- * give the same bytes. lossless (or quality 100): lossless mode; effort e: method round((e-1)*6/9);
+ * WebPConfig + WebPEncode, set up like libwebp's simple API (WebPEncodeRGBA / WebPEncodeLosslessRGBA:
+ * WEBP_PRESET_DEFAULT, method 4, alpha_quality 100, lossless with quality factor 70), so lossy default output
+ * is the simple API's. lossless (or quality 100): lossless mode with `exact` (the RGB of fully transparent
+ * pixels is kept, unlike WebPEncodeLosslessRGBA); effort e: method round((e-1)*6/9);
  * alpha_quality; threads > 1: thread_level 1. chroma other than 4:2:0 and progressive: one WARN each.
  */
 img2_status_t img2_encode_webp_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
@@ -92,6 +93,7 @@ img2_status_t img2_encode_webp_opts(const img2_image_t *img, int quality, const 
 		return IMG2_E_CODEC;
 	}
 	config.lossless = lossless ? 1 : 0;
+	config.exact = lossless ? 1 : 0; /* keep the RGB under alpha 0 (docs/encoder-api.md decision 6) */
 	if (o->effort > 0) {
 		config.method = ((o->effort - 1) * 12 + 9) / 18; /* round((e-1)*6/9): 1 -> 0 ... 7 -> 4 ... 10 -> 6 */
 	}

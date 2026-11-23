@@ -61,8 +61,9 @@ static void jxl_encoder_destroy(JxlEncoder *encoder, void *runner)
  *
  * lossless (or quality >= 95): JxlEncoderSetFrameLossless; effort e: JXL_ENC_FRAME_SETTING_EFFORT e (default 7);
  * alpha_quality: distance of the alpha extra channel (same mapping as quality); threads >= 2: a thread pool
- * runner with that many workers (default and threads 1: single-threaded, no runner). chroma (XYB / RGB, no
- * subsampling) and progressive: one WARN each; alpha_quality with lossless: one WARN.
+ * runner with that many workers (default and threads 1: single-threaded, no runner); progressive: lossy
+ * PROGRESSIVE_AC 1. chroma (XYB / RGB, no subsampling): one WARN; progressive or alpha_quality with lossless:
+ * one WARN each.
  */
 img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size)
 {
@@ -100,8 +101,10 @@ img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const i
 		snprintf(option, sizeof(option), "chroma %s", img2_chroma_name(o->chroma));
 		img2_encode_warn_ignored(option, "JXL", "no chroma subsampling of RGB / XYB");
 	}
-	if (o->progressive) {
-		img2_encode_warn_ignored("progressive", "JXL", "not mapped");
+	if (use_lossless && o->progressive) {
+		/* modular: PROGRESSIVE_AC has no effect; RESPONSIVE (squeeze) cost ~21% on goldhill and libjxl's decoder
+		 * reports no earlier pass for it (docs/encoder-api.md decision 7) */
+		img2_encode_warn_ignored("progressive", "lossless JXL", "no VarDCT passes");
 	}
 	if (use_lossless && o->alpha_quality > 0) {
 		img2_encode_warn_ignored("alpha_quality", "lossless JXL", "alpha is lossless");
@@ -185,6 +188,12 @@ img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const i
 	}
 	if (o->effort > 0 && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, o->effort) != JXL_ENC_SUCCESS) {
 		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL effort");
+		jxl_encoder_destroy(encoder, runner);
+		return IMG2_E_CODEC;
+	}
+	/* progressive (lossy only, see above): VarDCT spectral AC progression */
+	if (o->progressive && !use_lossless && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_PROGRESSIVE_AC, 1) != JXL_ENC_SUCCESS) {
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL progressive mode");
 		jxl_encoder_destroy(encoder, runner);
 		return IMG2_E_CODEC;
 	}
