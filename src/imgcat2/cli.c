@@ -69,10 +69,10 @@ void print_usage(const char *program_name)
 	printf("      --jxl <quality>       Convert to JXL (quality: 0-100, default: 80, >=95=lossless)\n");
 	printf("      --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)\n");
 	printf("      --lossless            Lossless output (WebP, JXL, AVIF; PNG is always lossless)\n");
-	printf("      --effort <1-10>       Encoder effort: 1 = fastest .. 10 = smallest file\n");
+	printf("      --effort <1-10>       Encoder effort: 1 = fastest .. 10 = smallest file (not with --png)\n");
 	printf("      --chroma <420|422|444>  Chroma subsampling (JPEG, AVIF; default: 420)\n");
 	printf("      --alpha-quality <1-100>  Alpha channel quality (WebP, JXL, AVIF)\n");
-	printf("      --progressive         Progressive JPEG / interlaced (Adam7) PNG\n");
+	printf("      --progressive         Progressive JPEG / JXL, interlaced (Adam7) PNG\n");
 	printf("      --threads <1-64>      Encoder threads (WebP, JXL, AVIF)\n");
 	printf("                            An option the format cannot use is ignored with a warning\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
@@ -627,6 +627,12 @@ int validate_options(cli_options_t *opts)
 		/* Require output format to be set */
 		if (opts->output_format == IMG2_FORMAT_NONE) {
 			fprintf(stderr, "Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl or --avif\n");
+			return -1;
+		}
+
+		/* --png N always sets the zlib level, which is what --effort would choose (docs/encoder-api.md decision 5) */
+		if (opts->output_format == IMG2_FORMAT_PNG && opts->enc_effort > 0) {
+			fprintf(stderr, "Error: --effort has no effect with --png N (N is already the zlib level)\n");
 			return -1;
 		}
 
