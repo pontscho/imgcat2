@@ -15,26 +15,31 @@
  *
  * Populated at compile-time based on IMG2_HAVE_* preprocessor flags.
  * default_quality = the CLI defaults (native scale of each encoder).
+ * available = runtime check of the codec (libheif plugins: a host libheif may lack kvazaar or aom), NULL = always.
  */
 static const img2_encoder_entry_t s_encoders[] = {
 #ifdef IMG2_HAVE_LIBJPEG
-	{ { IMG2_FORMAT_JPEG, "JPEG (libjpeg)", ".jpg"  }, img2_encode_jpeg, 90 },
+	{ { IMG2_FORMAT_JPEG, "JPEG (libjpeg)",    ".jpg"  }, img2_encode_jpeg, 90, NULL                        },
 #endif
 
 #ifdef IMG2_HAVE_LIBPNG
-	{ { IMG2_FORMAT_PNG,  "PNG (libpng)",   ".png"  }, img2_encode_png,  6  },
+	{ { IMG2_FORMAT_PNG,  "PNG (libpng)",      ".png"  }, img2_encode_png,  6,  NULL                        },
 #endif
 
 #ifdef IMG2_HAVE_HEIF
-	{ { IMG2_FORMAT_HEIF, "HEIF (libheif)", ".heif" }, img2_encode_heif, 80 },
+	{ { IMG2_FORMAT_HEIF, "HEIF (libheif)",    ".heif" }, img2_encode_heif, 80, img2_encode_heif_available },
 #endif
 
 #ifdef IMG2_HAVE_WEBP
-	{ { IMG2_FORMAT_WEBP, "WebP (libwebp)", ".webp" }, img2_encode_webp, 80 },
+	{ { IMG2_FORMAT_WEBP, "WebP (libwebp)",    ".webp" }, img2_encode_webp, 80, NULL                        },
 #endif
 
 #ifdef IMG2_HAVE_JXL
-	{ { IMG2_FORMAT_JXL,  "JXL (libjxl)",   ".jxl"  }, img2_encode_jxl,  80 },
+	{ { IMG2_FORMAT_JXL,  "JXL (libjxl)",      ".jxl"  }, img2_encode_jxl,  80, NULL                        },
+#endif
+
+#ifdef IMG2_HAVE_HEIF
+	{ { IMG2_FORMAT_AVIF, "AVIF (libheif/aom)", ".avif" }, img2_encode_avif, 99, img2_encode_avif_available },
 #endif
 };
 
@@ -68,6 +73,9 @@ const img2_encoder_entry_t *img2_encoder_find(img2_format_t format)
 {
 	for (size_t i = 0; i < ENCODER_COUNT; i++) {
 		if (s_encoders[i].info.format == format) {
+			if (s_encoders[i].available != NULL && !s_encoders[i].available()) {
+				return NULL;
+			}
 			return &s_encoders[i];
 		}
 	}
@@ -81,7 +89,7 @@ bool img2_can_encode(img2_format_t format)
 
 void img2_encoder_log_missing(img2_format_t format)
 {
-	const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
+	const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
 	img2_log(IMG2_LOG_ERROR, "Error: No encoder found for format: %s", format_name);
 	img2_log(IMG2_LOG_ERROR, "Error: No encoder available for format");
 }

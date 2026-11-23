@@ -1,6 +1,6 @@
 /**
  * @file encode.h
- * @brief libimg2 encoding: RGBA image -> JPEG / PNG / HEIF / WebP / JXL buffer
+ * @brief libimg2 encoding: RGBA image -> JPEG / PNG / HEIF / WebP / JXL / AVIF buffer
  */
 
 #ifndef IMG2_ENCODE_H
@@ -20,7 +20,8 @@ typedef enum img2_format {
 	IMG2_FORMAT_PNG,          /**< PNG */
 	IMG2_FORMAT_HEIF,         /**< HEIF */
 	IMG2_FORMAT_WEBP,         /**< WebP */
-	IMG2_FORMAT_JXL           /**< JPEG XL */
+	IMG2_FORMAT_JXL,          /**< JPEG XL */
+	IMG2_FORMAT_AVIF          /**< AVIF (AV1 in HEIF; appended, existing values unchanged) */
 } img2_format_t;
 
 /**
@@ -29,7 +30,8 @@ typedef enum img2_format {
  * quality: -1 = format default; otherwise 0..100 with per-format meaning (kept from imgcat2 1.0):
  * JPEG 0..100 (default 90); PNG zlib level = quality/10 clamped 0..9 (default 6, always lossless);
  * HEIF 0..100 (default 80); WebP 0..99 lossy, 100 lossless (default 80);
- * JXL 0..94 lossy (distance (100-q)/10), >= 95 lossless (default 80).
+ * JXL 0..94 lossy (distance (100-q)/10), >= 95 lossless (default 80);
+ * AVIF 0..100 aom quality, lossy 4:2:0 (default 99: the PSNR of HEIF at 80).
  */
 typedef struct img2_encode_opts {
 	int quality;    /**< -1 = default, else 0..100 (see above) */
@@ -53,7 +55,10 @@ img2_status_t img2_encode(const img2_frames_t *in, img2_format_t fmt, const img2
                           uint8_t **out_buf, size_t *out_len);
 
 /**
- * @brief Whether an encoder for a format is built into this library
+ * @brief Whether an encoder for a format is built into this library and usable at runtime
+ *
+ * HEIF and AVIF also ask libheif for an HEVC / AV1 encoder plugin, so a host libheif without kvazaar/x265
+ * or aom reports false although the table row exists.
  *
  * @param fmt Format
  * @return true if img2_encode() supports it

@@ -1118,33 +1118,38 @@ decoders/decoder_jxl.c:753 line = }
 decoders/decoder_jxl.c:754 line = }
 
 # ===== encoders/encoder.c =====
+reason: configuration-specific: the vendored libheif has both the HEVC (kvazaar) and the AV1 (aom) encoder, the runtime check never fails
+encoders/encoder.c:76 region 71 = if (s_encoders[i].available != NULL && !s_encoders[i].available()) {
+encoders/encoder.c:76 branch-true 43 = if (s_encoders[i].available != NULL && !s_encoders[i].available()) {
+encoders/encoder.c:77 line = return NULL;
+encoders/encoder.c:78 line = }
 reason: configuration-specific: all encoders are built in the measured configuration
-encoders/encoder.c:84 region 137 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 region 177 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 region 216 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 region 59 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 region 98 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 branch-true 106 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 branch-true 146 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 branch-true 186 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 branch-true 28 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
-encoders/encoder.c:84 branch-true 68 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : "UNKNOWN";
+encoders/encoder.c:92 region 137 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 region 177 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 region 216 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 region 59 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 region 98 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 branch-true 106 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 branch-true 146 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 branch-true 186 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 branch-true 28 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
+encoders/encoder.c:92 branch-true 68 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
 reason: encoder returned OK without output: every encoder checks this itself; defensive
-encoders/encoder.c:127 region 43 = if (*out_data == NULL || *out_size == 0) {
-encoders/encoder.c:127 branch-true 27 = if (*out_data == NULL || *out_size == 0) {
-encoders/encoder.c:127 branch-true 6 = if (*out_data == NULL || *out_size == 0) {
-encoders/encoder.c:128 line = img2_log(IMG2_LOG_ERROR, "Error: Encoder returned invalid output (data=%p, size=%zu)", (void *)*out_data, *out_size);
-encoders/encoder.c:129 line = if (*out_data != NULL) {
-encoders/encoder.c:129 region 26 = if (*out_data != NULL) {
-encoders/encoder.c:129 region 7 = if (*out_data != NULL) {
-encoders/encoder.c:129 branch-true 7 = if (*out_data != NULL) {
-encoders/encoder.c:129 branch-false 7 = if (*out_data != NULL) {
-encoders/encoder.c:130 line = free(*out_data);
-encoders/encoder.c:131 line = *out_data = NULL;
-encoders/encoder.c:132 line = }
-encoders/encoder.c:133 line = *out_size = 0;
-encoders/encoder.c:134 line = return IMG2_E_CODEC;
-encoders/encoder.c:135 line = }
+encoders/encoder.c:135 region 43 = if (*out_data == NULL || *out_size == 0) {
+encoders/encoder.c:135 branch-true 27 = if (*out_data == NULL || *out_size == 0) {
+encoders/encoder.c:135 branch-true 6 = if (*out_data == NULL || *out_size == 0) {
+encoders/encoder.c:136 line = img2_log(IMG2_LOG_ERROR, "Error: Encoder returned invalid output (data=%p, size=%zu)", (void *)*out_data, *out_size);
+encoders/encoder.c:137 line = if (*out_data != NULL) {
+encoders/encoder.c:137 region 26 = if (*out_data != NULL) {
+encoders/encoder.c:137 region 7 = if (*out_data != NULL) {
+encoders/encoder.c:137 branch-true 7 = if (*out_data != NULL) {
+encoders/encoder.c:137 branch-false 7 = if (*out_data != NULL) {
+encoders/encoder.c:138 line = free(*out_data);
+encoders/encoder.c:139 line = *out_data = NULL;
+encoders/encoder.c:140 line = }
+encoders/encoder.c:141 line = *out_size = 0;
+encoders/encoder.c:142 line = return IMG2_E_CODEC;
+encoders/encoder.c:143 line = }
 
 # ===== encoders/encoder_heif.c =====
 reason: the write callback's state is always the encoder's own write state
@@ -1188,7 +1193,7 @@ reason: libheif always writes at least ftyp/meta after a successful encode
 encoders/encoder_heif.c:228 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
 encoders/encoder_heif.c:228 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
 encoders/encoder_heif.c:228 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_heif.c:229 line = img2_log(IMG2_LOG_ERROR, "Error: HEIF encoder produced no output");
+encoders/encoder_heif.c:229 line = img2_log(IMG2_LOG_ERROR, "Error: %s encoder produced no output", label);
 encoders/encoder_heif.c:230 line = if (write_state.buffer != NULL) {
 encoders/encoder_heif.c:230 region 35 = if (write_state.buffer != NULL) {
 encoders/encoder_heif.c:230 region 7 = if (write_state.buffer != NULL) {

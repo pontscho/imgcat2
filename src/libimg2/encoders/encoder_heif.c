@@ -1,9 +1,9 @@
 /**
  * @file encoder_heif.c
- * @brief HEIF encoder implementation using libheif
+ * @brief HEIF and AVIF encoder implementation using libheif
  *
- * Encodes RGBA8888 images to HEIF format using libheif with HEVC compression.
- * Preserves alpha channel (HEIF supports transparency).
+ * Encodes RGBA8888 images to HEIF (HEVC) or AVIF (AV1) through one shared libheif path.
+ * Preserves alpha channel (both support transparency).
  */
 
 /* clang-format off */
@@ -82,25 +82,25 @@ static struct heif_error heif_memory_write_func(struct heif_context *ctx, const 
 }
 
 /**
- * @brief Encode RGBA image to HEIF format
+ * @brief Encode an RGBA image into a HEIF container with the given libheif compression format
  *
- * Encodes RGBA8888 image to HEIF format with quality control using HEVC compression.
- * Preserves alpha channel (HEIF supports transparency).
+ * Shared by the HEIF (HEVC, kvazaar) and AVIF (AV1, aom) encoders: the libheif encoder is taken with its
+ * default parameters, only the lossy quality is set. Preserves the alpha channel.
  *
  * @param img Input image in RGBA8888 format
- * @param quality HEIF quality level (0-100, higher = better quality, larger file)
+ * @param quality Quality level (0-100, higher = better quality, larger file)
+ * @param compression heif_compression_HEVC or heif_compression_AV1
+ * @param label Format name for messages ("HEIF" / "AVIF")
+ * @param codec Codec name for messages ("HEVC" / "AV1")
+ * @param fn Function name for the invalid-parameter message
  * @param out_data Output parameter for encoded data (caller must free)
  * @param out_size Output parameter for encoded data size in bytes
- * @return 0 on success, -1 on error
- *
- * @note HEIF preserves alpha channel (supports transparency)
- * @note Caller must free *out_data with free() when done
- * @note Requires HEVC encoder to be available in libheif
+ * @return IMG2_OK; IMG2_E_ARG, IMG2_E_NOMEM, IMG2_E_CODEC
  */
-img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+static img2_status_t heif_encode_with(const img2_image_t *img, int quality, enum heif_compression_format compression, const char *label, const char *codec, const char *fn, uint8_t **out_data, size_t *out_size)
 {
 	if (img == NULL || out_data == NULL || out_size == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to encode_heif");
+		img2_log(IMG2_LOG_ERROR, "Error: Invalid parameters to %s", fn);
 		return IMG2_E_ARG;
 	}
 
@@ -160,11 +160,11 @@ img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **o
 		memcpy(dst_row, src_row, img->width * 4);
 	}
 
-	/* Get HEVC encoder */
+	/* Get the HEVC / AV1 encoder (highest-priority plugin, default parameters) */
 	struct heif_encoder *encoder = NULL;
-	err = heif_context_get_encoder_for_format(ctx, heif_compression_HEVC, &encoder);
+	err = heif_context_get_encoder_for_format(ctx, compression, &encoder);
 	if (err.code != heif_error_Ok || encoder == NULL) {
-		img2_log(IMG2_LOG_ERROR, "Error: No HEVC encoder available: %s", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: No %s encoder available: %s", codec, err.message);
 		heif_encoder_release(encoder); /* a plugin's new_encoder error comes with the encoder already created */
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
@@ -174,7 +174,7 @@ img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **o
 	/* Set quality */
 	err = heif_encoder_set_lossy_quality(encoder, heif_quality);
 	if (err.code != heif_error_Ok) {
-		img2_log(IMG2_LOG_ERROR, "Error: Failed to set HEIF quality: %s", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to set %s quality: %s", label, err.message);
 		heif_encoder_release(encoder);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
@@ -185,7 +185,7 @@ img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **o
 	struct heif_image_handle *handle = NULL;
 	err = heif_context_encode_image(ctx, heif_img, encoder, NULL, &handle);
 	if (err.code != heif_error_Ok) {
-		img2_log(IMG2_LOG_ERROR, "Error: Failed to encode HEIF image: %s", err.message);
+		img2_log(IMG2_LOG_ERROR, "Error: Failed to encode %s image: %s", label, err.message);
 		heif_encoder_release(encoder);
 		heif_image_release(heif_img);
 		heif_context_free(ctx);
@@ -226,7 +226,7 @@ img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **o
 
 	/* Check output */
 	if (write_state.buffer == NULL || write_state.size == 0) {
-		img2_log(IMG2_LOG_ERROR, "Error: HEIF encoder produced no output");
+		img2_log(IMG2_LOG_ERROR, "Error: %s encoder produced no output", label);
 		if (write_state.buffer != NULL) {
 			free(write_state.buffer);
 		}
@@ -248,4 +248,30 @@ img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **o
 	free(write_state.buffer);
 
 	return IMG2_OK;
+}
+
+/**
+ * @brief Encode RGBA image to HEIF (HEVC, quality 0-100); the encoder must be available in libheif
+ */
+img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+{
+	return heif_encode_with(img, quality, heif_compression_HEVC, "HEIF", "HEVC", "encode_heif", out_data, out_size);
+}
+
+/**
+ * @brief Encode RGBA image to AVIF (AV1 in HEIF, quality 0-100); the encoder must be available in libheif
+ */
+img2_status_t img2_encode_avif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size)
+{
+	return heif_encode_with(img, quality, heif_compression_AV1, "AVIF", "AV1", "encode_avif", out_data, out_size);
+}
+
+bool img2_encode_heif_available(void)
+{
+	return heif_have_encoder_for_format(heif_compression_HEVC) != 0;
+}
+
+bool img2_encode_avif_available(void)
+{
+	return heif_have_encoder_for_format(heif_compression_AV1) != 0;
 }
