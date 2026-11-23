@@ -159,7 +159,9 @@ CTEST(log, escapes_control_bytes_losslessly)
 		{ "\xe0\x80\x80", "\xe0\\x80\\x80" },         /* overlong 3-byte form */
 		{ "\xed\xa0\x80", "\xed\xa0\\x80" },          /* surrogate */
 		{ "\xf0\x9f\x98", "\xf0\\x9f\\x98" },         /* sequence cut short by the NUL */
-		{ "\xe2\x82x", "\xe2\\x82x" },                /* bad continuation byte */
+		{ "\xe2\x82x", "\xe2\\x82x" },                /* bad continuation byte (ASCII) */
+		{ "\xe2\x82\xc0", "\xe2\\x82\xc0" },          /* bad continuation byte (above 0xBF) */
+		{ "\xf5\x80", "\xf5\\x80" },                  /* 0xF5-0xFF never start a sequence */
 	};
 	img2_log_level_t saved = img2_get_log_level();
 	log_capture_t cap = { 0 };
