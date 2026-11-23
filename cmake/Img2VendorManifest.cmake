@@ -24,6 +24,7 @@ set(_IMG2_MANIFEST_NOTES
 	"libjpeg-turbo=ExternalProject build, jpeg8 ABI"
 	"aom=ExternalProject build"
 	"libjxl=libraries jxl, jxl_cms and jxl_threads (encoder thread pool)"
+	"libwebp=libraries webp, webpdemux, webpmux (encoder EXIF / XMP chunks) and sharpyuv"
 	"nanosvg=upstream baseline only, img2 compiles its fork in src/libimg2/decoders (docs/nanosvg-fork.md)"
 	"stb=header-only (stb_image, stb_image_resize2, stb_truetype), compiled into img2"
 	"qoi=header-only, compiled into img2")
