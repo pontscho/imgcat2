@@ -140,6 +140,7 @@ if [ "${#cli_inputs[@]}" -gt 0 ]; then
 		run "$d" TERM=xterm-256color -- --heif 60 -o "$d/o.heif" "$f"
 		run "$d" TERM=xterm-256color -- --jxl 80 -o "$d/o.jxl" "$f"
 		run "$d" TERM=xterm-256color -- --jxl 100 -o "$d/ll.jxl" "$f"
+		run "$d" TERM=xterm-256color -- --avif 60 -o "$d/o.avif" "$f"
 		# animation loop, ended by SIGINT after 3 s (the CLI's signal path)
 		env TERM=xterm-256color timeout -s INT 3 "$bin" -a -w 32 "$f" </dev/null >/dev/null 2>&1 || true
 		echo run >>"$d/status"

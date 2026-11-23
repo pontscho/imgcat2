@@ -15,6 +15,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <img2/img2.h>
+
 #include "../../imgcat2/cli.h"
 #include "../../libimg2/core/image.h"
 #include "../../libimg2/encoders/encoder.h"
@@ -410,6 +412,56 @@ CTEST(file_render, heif_quality_option)
 	ASSERT_TRUE(size_low > 0);
 	ASSERT_TRUE(size_high > 0);
 	ASSERT_TRUE(size_low < size_high);
+
+	img2_image_destroy(img);
+}
+
+/**
+ * @test Test file_render() honors the AVIF quality option
+ *
+ * Verifies that opts->avif_quality reaches the AV1 encoder (higher quality, larger file) and that the written
+ * file decodes as AVIF with the source dimensions.
+ */
+CTEST(file_render, avif_quality_option)
+{
+	img2_encoder_registry_init();
+
+	img2_image_t *img = create_test_image(64, 48);
+	ASSERT_NOT_NULL(img);
+
+	cli_options_t opts = { 0 };
+	opts.output_format = IMG2_FORMAT_AVIF;
+
+	opts.avif_quality = 10;
+	size_t size_low = render_to_temp_file(img, &opts, "imgcat2_test_render_q10.avif");
+	opts.avif_quality = 90;
+	size_t size_high = render_to_temp_file(img, &opts, "imgcat2_test_render_q90.avif");
+
+	ASSERT_TRUE(size_low > 0);
+	ASSERT_TRUE(size_high > 0);
+	ASSERT_TRUE(size_low < size_high);
+
+	/* the file itself: AVIF, 64x48 */
+	char path[4096];
+	test_tmp_path(path, sizeof(path), "imgcat2_test_render_def.avif");
+	img2_image_t *frames[] = { img };
+	opts.avif_quality = 99;
+	opts.output_file = path;
+	opts.silent = true;
+	ASSERT_EQUAL(0, file_render(frames, 1, &opts));
+	FILE *f = fopen(path, "rb");
+	ASSERT_NOT_NULL(f);
+	uint8_t buf[65536];
+	size_t n = fread(buf, 1, sizeof(buf), f);
+	fclose(f);
+	unlink(path);
+	ASSERT_TRUE(n > 0 && n < sizeof(buf));
+	ASSERT_EQUAL(IMG2_MIME_AVIF, img2_detect_mime(buf, n));
+	img2_frames_t out;
+	ASSERT_EQUAL(IMG2_OK, img2_decode(buf, n, NULL, &out));
+	ASSERT_EQUAL(64, out.frames[0]->width);
+	ASSERT_EQUAL(48, out.frames[0]->height);
+	img2_frames_free(&out);
 
 	img2_image_destroy(img);
 }

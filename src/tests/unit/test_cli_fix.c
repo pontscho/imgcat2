@@ -96,6 +96,7 @@ static void opts_defaults(cli_options_t *opts)
 	opts->heif_quality = 80;
 	opts->webp_quality = 80;
 	opts->jxl_quality = 80;
+	opts->avif_quality = 99;
 	opts->terminal.rows = 24;
 	opts->terminal.cols = 80;
 }
@@ -202,7 +203,7 @@ static int validate_captured(cli_options_t *opts, char **err)
 
 CTEST(cli_fix, convert_dimensions_not_terminal_bound)
 {
-	static const img2_format_t formats[] = { IMG2_FORMAT_JPEG, IMG2_FORMAT_PNG, IMG2_FORMAT_HEIF, IMG2_FORMAT_WEBP, IMG2_FORMAT_JXL };
+	static const img2_format_t formats[] = { IMG2_FORMAT_JPEG, IMG2_FORMAT_PNG, IMG2_FORMAT_HEIF, IMG2_FORMAT_WEBP, IMG2_FORMAT_JXL, IMG2_FORMAT_AVIF };
 	cli_options_t opts;
 	char *err = NULL;
 	for (size_t i = 0; i < sizeof(formats) / sizeof(formats[0]); i++) {
@@ -257,7 +258,7 @@ CTEST(cli_fix, validate_messages)
 	opts.convert_mode = true;
 	opts.output_format = IMG2_FORMAT_NONE;
 	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
-	ASSERT_STR("Error: Conversion mode requires --jpeg, --png, --heif, --webp or --jxl\n", err);
+	ASSERT_STR("Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl or --avif\n", err);
 	free(err);
 
 	/* file_render() without a format: the same list */
@@ -271,9 +272,113 @@ CTEST(cli_fix, validate_messages)
 	err = cap_end(&c, &n);
 	img2_image_destroy(img);
 	ASSERT_EQUAL(-1, rc);
-	ASSERT_STR("Error: No output format specified (use --jpeg, --png, --heif, --webp or --jxl)\n", err);
+	ASSERT_STR("Error: No output format specified (use --jpeg, --png, --heif, --webp, --jxl or --avif)\n", err);
 	free(err);
 }
+
+/* ---- --avif Q: long-only conversion option, 0..100, out of range is an error ---- */
+
+CTEST(cli_fix, avif_option)
+{
+	cli_options_t opts;
+	char *out = NULL;
+	char *err = NULL;
+
+	opts_defaults(&opts);
+	char *argv1[] = { (char *)"imgcat2", (char *)"--avif", (char *)"55", (char *)"-o", (char *)"x.avif", (char *)"in.png", NULL };
+	ASSERT_EQUAL(0, parse_captured(6, argv1, &opts, &out, &err));
+	ASSERT_TRUE(opts.convert_mode);
+	ASSERT_EQUAL(IMG2_FORMAT_AVIF, opts.output_format);
+	ASSERT_EQUAL(55, opts.avif_quality);
+	ASSERT_STR("x.avif", opts.output_file);
+	ASSERT_STR("in.png", opts.input_file);
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+
+	/* bounds: 0 and 100 accepted, -1 and 101 rejected like --heif/--webp/--jxl */
+	static const struct {
+		const char *q;
+		int rc;
+		const char *msg;
+	} cases[] = {
+		{ "0",   0,  ""                                           },
+		{ "100", 0,  ""                                           },
+		{ "-1",  -1, "Error: AVIF quality must be 0-100 (got -1)\n"  },
+		{ "101", -1, "Error: AVIF quality must be 0-100 (got 101)\n" },
+	};
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		opts_defaults(&opts);
+		char *argv2[] = { (char *)"imgcat2", (char *)"--avif", (char *)cases[i].q, (char *)"in.png", NULL };
+		ASSERT_EQUAL(0, parse_captured(4, argv2, &opts, &out, &err));
+		free(out);
+		free(err);
+		ASSERT_EQUAL(cases[i].rc, validate_captured(&opts, &err));
+		ASSERT_STR(cases[i].msg, err);
+		free(err);
+	}
+
+	/* --avif without its argument: a usage error */
+	opts_defaults(&opts);
+	char *argv3[] = { (char *)"imgcat2", (char *)"--avif", NULL };
+	ASSERT_EQUAL(-1, parse_captured(2, argv3, &opts, &out, &err));
+	ASSERT_NOT_NULL(strstr(err, "Try 'imgcat2 --help'"));
+	free(out);
+	free(err);
+
+	/* --help lists it with the other conversion formats */
+	opts_defaults(&opts);
+	char *argv4[] = { (char *)"imgcat2", (char *)"--help", NULL };
+	ASSERT_EQUAL(1, parse_captured(2, argv4, &opts, &out, &err));
+	ASSERT_NOT_NULL(strstr(out, "      --avif <quality>      Convert to AVIF (quality: 0-100, default: 99)\n"));
+	free(out);
+	free(err);
+}
+
+#ifdef IMG2_HAVE_HEIF
+/* file_render() with --avif: the default quality, written to stdout, is an AVIF of the source size */
+CTEST(cli_fix, avif_conversion)
+{
+	img2_image_t *img = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(32, 24, &img));
+	for (uint32_t y = 0; y < 24; y++) {
+		for (uint32_t x = 0; x < 32; x++) {
+			uint8_t *p = img->pixels + (size_t)y * img->stride + x * 4;
+			p[0] = (uint8_t)(x * 8);
+			p[1] = (uint8_t)(y * 10);
+			p[2] = 100;
+			p[3] = 255;
+		}
+	}
+	cli_options_t opts;
+	opts_defaults(&opts);
+	opts.convert_mode = true;
+	opts.output_format = IMG2_FORMAT_AVIF;
+	cap_t co;
+	cap_t ce;
+	cap_begin(&co, STDOUT_FILENO, "avif_out");
+	cap_begin(&ce, STDERR_FILENO, "avif_err");
+	int rc = file_render(&img, 1, &opts);
+	size_t n_err = 0;
+	size_t n_out = 0;
+	char *err = cap_end(&ce, &n_err);
+	char *out = cap_end(&co, &n_out);
+	img2_image_destroy(img);
+	ASSERT_EQUAL(0, rc);
+	ASSERT_STR("", err);
+	ASSERT_TRUE(n_out > 0 && n_out < 65535);
+	ASSERT_EQUAL(IMG2_MIME_AVIF, img2_detect_mime((const uint8_t *)out, n_out));
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_OK, img2_decode((const uint8_t *)out, n_out, NULL, &fr));
+	ASSERT_EQUAL(32, fr.frames[0]->width);
+	ASSERT_EQUAL(24, fr.frames[0]->height);
+	img2_frames_free(&fr);
+	free(out);
+	free(err);
+}
+#endif
 
 /* ---- --frame N of an animated image: the "converting frame" note only with -v ---- */
 

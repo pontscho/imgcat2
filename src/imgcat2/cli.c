@@ -67,6 +67,7 @@ void print_usage(const char *program_name)
 	printf("      --heif <quality>      Convert to HEIF (quality: 0-100, default: 80)\n");
 	printf("      --webp <quality>      Convert to WebP (quality: 0-100, default: 80, 100=lossless)\n");
 	printf("      --jxl <quality>       Convert to JXL (quality: 0-100, default: 80, >=95=lossless)\n");
+	printf("      --avif <quality>      Convert to AVIF (quality: 0-100, default: 99)\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
 	printf("      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)\n");
@@ -319,6 +320,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "frame",         required_argument, 0, 'n'  },
 		{ "iterm2-format", required_argument, 0, 't'  },
 		{ "yuv",           required_argument, 0, 1003 },
+		{ "avif",          required_argument, 0, 1004 },
 		{ 0,		       0,		         0, 0    },
 	};
 
@@ -387,6 +389,12 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 				opts->convert_mode = true;
 				opts->output_format = IMG2_FORMAT_JXL;
 				opts->jxl_quality = atoi(optarg);
+				break;
+
+			case 1004: /* --avif */
+				opts->convert_mode = true;
+				opts->output_format = IMG2_FORMAT_AVIF;
+				opts->avif_quality = atoi(optarg);
 				break;
 
 			case 1003: /* --yuv */
@@ -542,7 +550,7 @@ int validate_options(cli_options_t *opts)
 	if (opts->convert_mode) {
 		/* Require output format to be set */
 		if (opts->output_format == IMG2_FORMAT_NONE) {
-			fprintf(stderr, "Error: Conversion mode requires --jpeg, --png, --heif, --webp or --jxl\n");
+			fprintf(stderr, "Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl or --avif\n");
 			return -1;
 		}
 
@@ -588,6 +596,12 @@ int validate_options(cli_options_t *opts)
 	/* Validate JXL quality range [0, 100] */
 	if (opts->jxl_quality < 0 || opts->jxl_quality > 100) {
 		fprintf(stderr, "Error: JXL quality must be 0-100 (got %d)\n", opts->jxl_quality);
+		return -1;
+	}
+
+	/* Validate AVIF quality range [0, 100] */
+	if (opts->avif_quality < 0 || opts->avif_quality > 100) {
+		fprintf(stderr, "Error: AVIF quality must be 0-100 (got %d)\n", opts->avif_quality);
 		return -1;
 	}
 

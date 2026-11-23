@@ -117,7 +117,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 
 	/* Check output format is specified */
 	if (opts->output_format == IMG2_FORMAT_NONE) {
-		fprintf(stderr, "Error: No output format specified (use --jpeg, --png, --heif, --webp or --jxl)\n");
+		fprintf(stderr, "Error: No output format specified (use --jpeg, --png, --heif, --webp, --jxl or --avif)\n");
 		return -1;
 	}
 
@@ -157,6 +157,8 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		quality = opts->webp_quality;
 	} else if (opts->output_format == IMG2_FORMAT_JXL) {
 		quality = opts->jxl_quality;
+	} else if (opts->output_format == IMG2_FORMAT_AVIF) {
+		quality = opts->avif_quality;
 	}
 
 	/* Encode image */
