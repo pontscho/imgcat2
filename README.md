@@ -451,6 +451,7 @@ Conversion Options:
       --progressive         Progressive JPEG / JXL, interlaced (Adam7) PNG
       --threads <1-64>      Encoder threads (WebP, JXL, AVIF)
                             An option the format cannot use is ignored with a warning
+      --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)
   -o, --output <file>       Output file (stdout if not specified)
   -n, --frame <index>       Select frame for animated images (default: 0)
       --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)
@@ -666,6 +667,9 @@ imgcat2 --jxl 80 --progressive --output out.jxl image.png
 
 # JXL with 8 encoder threads (same bytes as single-threaded) and a lower alpha quality
 imgcat2 --jxl 80 --threads 8 --alpha-quality 70 --output out.jxl image.png
+
+# Keep the camera's EXIF (GPS included) and XMP; the pixels are rotated upright, the written Orientation is 1
+imgcat2 --avif 80 --keep-metadata --output out.avif photo.jpg
 ```
 
 ### Animated Images
@@ -701,6 +705,11 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - `--progressive` - Progressive JPEG, progressive lossy JXL (AC passes), Adam7-interlaced PNG
 - `--threads <1-64>` - Encoder threads of WebP (on/off), JXL (thread pool; output independent of the count) and
   AVIF (`--threads 1` gives different bytes than any count >= 2, the default)
+- `--keep-metadata` - Copy the input's EXIF and XMP blocks into the output: JPEG APP1 segments, PNG `eXIf` / iTXt,
+  WebP `EXIF` / `XMP ` chunks, JXL `Exif` / `xml ` boxes, HEIF/AVIF metadata items. The image is already rotated
+  upright, so the EXIF Orientation tag is rewritten to 1 (if the block has one). Inputs without EXIF/XMP, or
+  formats without them (GIF, BMP, ...), give no metadata and no warning. A JPEG APP1 segment holds at most
+  65533 bytes: a larger EXIF block or XMP packet is skipped with a warning (no extended XMP)
   - These options need a conversion (`--jpeg` ... `--avif`); out of range is an error. An option the chosen format
     cannot honour is ignored with one warning, e.g. `encode: chroma 444 has no effect for HEIF (always 4:2:0)`
 - `--output <file>` or `-o <file>` - Output file path (stdout if not specified)
@@ -718,6 +727,11 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - Quality and compression affect both file size and processing time
 - Out-of-range JPEG quality and PNG level values are clamped with a warning; HEIF, WebP, JXL and AVIF quality outside 0-100 is an error
 - Only one frame is encoded (no animated output)
+- Without `--keep-metadata` no metadata is written (the output is byte-identical to earlier versions)
+- `--keep-metadata` known limitations: the EXIF thumbnail (IFD1) and the PixelXDimension / PixelYDimension tags
+  are copied as decoded, so after `-w` / `-H` scaling or a rotation they can be stale; metadata blocks over 1 MiB
+  are not kept; TIFF inputs carry no EXIF block to copy and RAW inputs only their XMP; for animated inputs only
+  frame 0 has metadata (`--frame N` with N > 0 writes none)
 
 ## Metadata Extraction
 
@@ -737,8 +751,9 @@ Images captured by digital cameras and smartphones often contain EXIF orientatio
 - 270° clockwise rotation (orientation 8)
 
 **Supported formats:**
-- Automatic orientation correction works with JPEG, PNG, WebP, JPEG XL, and RAW formats
-- TIFF, HEIF, and AVIF formats handle orientation natively through their libraries (no additional processing needed)
+- Automatic orientation correction works with JPEG, PNG, WebP and RAW formats
+- TIFF, HEIF, AVIF and JPEG XL formats handle orientation natively through their libraries (no additional
+  processing needed; for JPEG XL the codestream orientation counts, an Exif box orientation is not applied on top)
 - Transformation is applied during decoding, before rendering or scaling
 - No user interaction required - orientation is automatically detected and applied
 

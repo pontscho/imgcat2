@@ -20,7 +20,7 @@ library is vendored (`vendor/`) and built from source, so one archive carries ev
 - [Threading model](#threading-model)
 - [Limits](#limits)
 - [Font discovery](#font-discovery)
-- [Encode quality](#encode-quality) and [options](#encode-options)
+- [Encode quality](#encode-quality), [options](#encode-options) and [metadata writing](#metadata-writing)
 - [Orientation](#orientation)
 - [Deviations from locked decisions](#deviations-from-locked-decisions)
 - [Known limitations / CLI deltas](#known-limitations--cli-deltas)
@@ -80,7 +80,7 @@ full RELRO (`-z relro -z now`).
 With `IMG2_FAT_ARCHIVE` (default for top-level builds) the `img2_fat` target merges `libimg2.a` and the
 vendored archives, in the former static link order, into `build/fat/libimg2.a` with a GNU `ar -M` MRI script
 (`cmake/scripts/img2_fat_archive.cmake`; macOS `libtool -static`, best effort and untested). Merged: zlib-ng,
-libpng (+APNG patch), jpeg-quantsmooth, libjpeg-turbo, giflib, libwebp (webp, webpdemux, sharpyuv), libheif,
+libpng (+APNG patch), jpeg-quantsmooth, libjpeg-turbo, giflib, libwebp (webp, webpdemux, webpmux, sharpyuv), libheif,
 libde265, aom, OpenJPEG, kvazaar, libtiff, LibRaw, libjxl (+jxl_cms, jxl_threads), highway, lcms2 and brotli. Host libraries
 (`IMG2_USE_SYSTEM_*`, resvg) are not merged: they become link dependencies of the package, and configure warns
 about it. The imgcat2 executable, every test and the installed package use this one archive, so the shipped
@@ -152,7 +152,7 @@ no build/source path leaked into an installed file, then build `src/tests/consum
 |---|---|
 | `<img2/common.h>` | `img2_status_t`, `img2_strerror`, `img2_free`, `img2_init`/`img2_shutdown`, `img2_version_string`, `IMG2_BEGIN_DECLS` |
 | `<img2/log.h>` | `img2_log_level_t`, `img2_set_log_callback`, `img2_set_log_level`, `img2_get_log_level` |
-| `<img2/image.h>` | `img2_image_t`, `img2_frames_t`, `img2_filter_t`, `img2_image_create`/`destroy`, `img2_frames_free`, `img2_scale`, `img2_scale_fit`, `img2_fit_size`, `img2_apply_orientation`, inline `img2_image_get_pixel`/`set_pixel`, the `IMG2_MAX_*` limits |
+| `<img2/image.h>` | `img2_image_t` (pixels, parsed EXIF/XMP, raw metadata blocks, `orientation`), `img2_frames_t`, `img2_filter_t`, `img2_image_create`/`destroy`, `img2_image_set_metadata`, `img2_frames_free`, `img2_scale`, `img2_scale_fit`, `img2_fit_size`, `img2_apply_orientation`, inline `img2_image_get_pixel`/`set_pixel`, the `IMG2_MAX_*` limits |
 | `<img2/mime.h>` | `img2_mime_t` (append-only), `img2_detect_mime`, `img2_mime_name`, `img2_mime_string` |
 | `<img2/yuv.h>` | raw YUV formats, `img2_yuv_params_t`, `img2_yuv_parse_spec`, `img2_yuv_frame_size`, name helpers |
 | `<img2/decode.h>` | `img2_decode`, `img2_decode_opts_t` (+ `IMG2_DECODE_OPTS_INIT`), `img2_can_decode`, `img2_is_animated`, decoder table |
@@ -180,7 +180,7 @@ int thumbnail(const uint8_t *data, size_t len, uint8_t **png, size_t *png_len)
 		fprintf(stderr, "decode: %s\n", img2_strerror(st));
 		return -1;
 	}
-	st = img2_apply_orientation(&fr.frames[0]);         /* EXIF orientation; call once */
+	st = img2_apply_orientation(&fr.frames[0]);         /* the orientation still to apply; resets it to 1 */
 	if (st == IMG2_OK) {
 		st = img2_scale_fit(fr.frames[0], 256, 256, IMG2_FILTER_DEFAULT, &small);
 	}
@@ -240,7 +240,8 @@ Everything the library allocates is released by an `img2_*` function, never by `
 
 | Object | Created by | Released by |
 |---|---|---|
-| `img2_image_t *` | `img2_image_create` (status + out-param), `img2_scale`, `img2_scale_fit` | `img2_image_destroy` (frees pixels, exif, xmp, struct; NULL-safe) |
+| `img2_image_t *` | `img2_image_create` (status + out-param), `img2_scale`, `img2_scale_fit` | `img2_image_destroy` (frees pixels, exif, xmp, the raw metadata blocks, struct; NULL-safe) |
+| raw metadata blocks (`exif_raw`, `xmp_raw`) | decoders, `img2_image_set_metadata` (copies), `img2_scale*` (copies) | owned by the image; replaced or cleared with `img2_image_set_metadata`; freed by `img2_image_destroy` (a caller that sets the fields directly must use `malloc` memory) |
 | `img2_frames_t` contents | `img2_decode` | `img2_frames_free` (destroys every frame, frees the array, zeroes the struct; NULL-safe) |
 | `img2_exif_t` / `img2_xmp_t` contents | decoders (attached to frames), `img2_exif_parse_*`, `img2_xmp_parse_*` | owned by the image when attached; caller-owned structs: `img2_exif_init`/`img2_exif_clear`, `img2_xmp_init`/`img2_xmp_clear` |
 | encoded buffers | `img2_encode` | `img2_free` |
@@ -465,7 +466,7 @@ missing fields; use `IMG2_ENCODE_OPTS_INIT` or designated initialisers.)
 | `alpha_quality` | 0, 1..100 | warn | warn | `alpha_quality` (lossless: warn) | alpha distance, quality mapping (lossless: warn) | warn | aom `alpha-quality` (lossless: warn) |
 | `progressive` | bool | `jpeg_simple_progression` | Adam7 interlace | warn | lossy: `PROGRESSIVE_AC` (AC passes); lossless: warn | warn | warn |
 | `threads` | 0, 1..64 | warn | warn | `thread_level` 1 when > 1 | thread pool when >= 2 (output identical for every count) | warn | aom `threads` (1 gives other bytes than >= 2) |
-| `metadata` | `IMG2_META_*` bits | not written yet: one WARN, ignored (phase 3 of [encoder-api.md](encoder-api.md)) | | | | | |
+| `metadata` | `IMG2_META_*` bits | APP1 Exif / XMP (a segment over 65533 bytes: warn, skipped) | `eXIf` / iTXt `XML:com.adobe.xmp` | VP8X `EXIF` / `XMP ` chunks (libwebpmux) | container + `Exif` / `xml ` boxes | `heif_context_add_exif_metadata` / `_XMP_metadata` | same as HEIF |
 
 "warn": the option is valid but the format cannot honour it; the encode proceeds and logs one `IMG2_LOG_WARN`
 naming option and format, e.g. `encode: chroma 444 has no effect for WebP (always 4:2:0)`. Details and the
@@ -476,11 +477,58 @@ parameters unless an option sets one). `img2_can_encode(IMG2_FORMAT_HEIF / _AVIF
 (`heif_have_encoder_for_format`), so a host libheif without an HEVC or AV1 encoder reports false and
 `img2_encode` returns `IMG2_E_UNSUPPORTED`, although the encoder table still lists the row.
 
+### Metadata writing
+
+Decoders keep the raw metadata blocks next to the parsed `img2_exif_t` / `img2_xmp_t` (phase 3 of
+[encoder-api.md](encoder-api.md#metadata-passthrough)):
+
+| Field | Contents |
+|---|---|
+| `exif_raw`, `exif_raw_len` | EXIF block in TIFF-header form (`II*\0` / `MM\0*`), container prefixes stripped; NULL if none |
+| `xmp_raw`, `xmp_raw_len` | XMP packet, NUL-terminated (the terminator is not counted); NULL if none |
+| `orientation` | EXIF orientation still to be applied to the pixels, 1..8 (1 = upright) |
+
+| Decoder | EXIF block from | XMP packet from | `orientation` |
+|---|---|---|---|
+| JPEG | APP1 `Exif\0\0` | APP1 `http://ns.adobe.com/xap/1.0/` (standard XMP only) | EXIF value |
+| PNG | `eXIf` (before IDAT) | iTXt / zTXt / tEXt `XML:com.adobe.xmp` | EXIF value |
+| WebP (still) | `EXIF` chunk (an `Exif\0\0` prefix is stripped) | `XMP ` chunk | EXIF value |
+| JPEG XL | `Exif` box (TIFF header at offset 0 or after the 4-byte offset) | `xml ` box | 1 (libjxl applies the codestream orientation) |
+| HEIF / AVIF (still) | `Exif` item (offset prefix stripped; a later item replaces an earlier one) | `mime` item `application/rdf+xml` | 1 (libheif applies irot/imir) |
+| TIFF | none (the file's IFD0 is the image directory, not an EXIF block) | none (not parsed) | 1 (libtiff orients) |
+| RAW | none (LibRaw exposes no TIFF-form block) | LibRaw's XMP | LibRaw flip |
+
+Each block is capped at `IMG2_MAX_METADATA_SIZE` (1 MiB): a larger one is not kept and the decoder logs one WARN
+(`PNG: EXIF block of N bytes exceeds the 1 MiB metadata cap (raw block not kept)`); the parsed struct is filled as
+before. A block that is not in TIFF-header form is not kept. Animated decodes attach metadata to the first frame
+only. `img2_image_create` gives no blocks and `orientation = 1`.
+
+`img2_image_set_metadata(img, exif, exif_len, xmp, xmp_len)` replaces both blocks with copies (NULL removes one;
+EXIF must start with a TIFF header, `IMG2_E_ARG` otherwise; a block over 1 MiB is `IMG2_E_LIMIT`; on error the image
+is unchanged). It does not touch the parsed structs or `orientation`. `img2_scale` / `img2_scale_fit` copy the
+blocks and `orientation` to the result; `img2_apply_orientation` keeps them.
+
+`img2_encode_opts_t.metadata` (`IMG2_META_EXIF`, `IMG2_META_XMP`) makes the encoders write the blocks the image
+has; a requested block the image lacks is silently absent, and `metadata = 0` gives the bytes of earlier
+releases. The written EXIF block is a copy whose IFD0 Orientation tag (0x0112, SHORT, either byte order) is set
+to `img->orientation` (a value outside 1..8 is written as 1); a block without the tag is written unchanged (the
+IFD is never grown). So a decoded image encoded after `img2_apply_orientation` says 1, and one encoded with its
+stored pixels keeps the original value. JPEG XL, HEIF and AVIF readers ignore the EXIF tag: with the EXIF bit
+and an orientation 2..8 those writers also set their own orientation (JPEG XL codestream orientation; HEIF/AVIF
+`irot`/`imir` through `heif_encoding_options.image_orientation`, libheif >= 1.14). A block put directly into
+the public fields that is not TIFF-header form, or a block over 1 MiB, is not written (WARN).
+
+Known limitation (not fixed): the EXIF IFD1 thumbnail and the PixelXDimension / PixelYDimension tags are
+written as decoded, so they can be stale after scaling (or rotation).
+
 ## Orientation
 
-`img2_apply_orientation(&img)` applies `img->exif->orientation` (1..8) in place and does **not** reset the
-field, so call it once per image (imgcat2 prints the original orientation in `--info` after applying it).
-TIFF, HEIF and AVIF frames arrive already oriented by their codecs; their EXIF orientation is informative.
+`img2_apply_orientation(&img)` applies `img->orientation` (2..8) in place and sets it to 1; a second call is
+a no-op. Decoders set the field to the EXIF orientation for JPEG, PNG, WebP and RAW, and to 1 for TIFF, HEIF,
+AVIF and JPEG XL, whose codecs orient the pixels themselves (JPEG XL: libjxl applies the codestream orientation;
+the Exif box orientation is not authoritative there and was applied a second time by imgcat2 before S26).
+`img->exif->orientation` keeps the file's value (imgcat2 prints it in `--info`). Since S26 the parsed EXIF
+value alone no longer rotates: a caller who builds an image and wants a rotation sets `img->orientation`.
 
 ## Deviations from locked decisions
 

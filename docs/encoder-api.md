@@ -2,7 +2,10 @@
 
 Status: phase 1 (AVIF output) implemented (img2/s24, default AVIF quality 80 at aom speed 6, see
 [Measurements](#measurements)); phase 2 (encoder options) implemented (img2/s25, see
-[Phase 2 results](#phase-2-results)); phase 3 open. Branch base: feature/split (img2/s23).
+[Phase 2 results](#phase-2-results)); phase 3 (metadata passthrough) implemented (img2/s26, see
+[Phase 3 results](#phase-3-results)). Branch base: feature/split (img2/s23).
+
+The "Current state" section below describes the code before phase 1; the phase results describe what changed.
 
 ## Goals
 
@@ -125,7 +128,8 @@ Size caps: EXIF and XMP are each capped (proposal: 1 MiB) at decode; larger bloc
 ### Orientation
 
 Pixels from the TIFF, HEIF and AVIF decoders are already upright (the codecs apply it); JPEG, PNG, WebP, JXL and RAW are
-not. Today this is known only to the CLI (`pipeline.c:530-551`, by format). Proposal: decoders set
+not. (Correction, phase 3: JXL pixels are upright too, libjxl applies the codestream orientation; see
+[Phase 3 results](#phase-3-results).) Today this is known only to the CLI (`pipeline.c:530-551`, by format). Proposal: decoders set
 `img->orientation` (1 for the self-orienting codecs, the EXIF value for the others), `img2_apply_orientation` sets it to
 1, and the encoder rewrites the EXIF Orientation tag (0x0112 in IFD0) to `img->orientation` in its copy of the block.
 The written file is then correct whether or not the caller rotated the pixels. The CLI pipeline can test the field
@@ -241,7 +245,8 @@ Implemented as in the mapping table, with these facts and refinements (2026-11-2
   (always 4:4:4), and lossless JXL warns for `progressive` (decision 7). PNG `lossless` and explicit
   `chroma 420` on JPEG/WebP/HEIF/AVIF are silent no-ops.
 - **Metadata (phase 3).** The `IMG2_META_*` bits are defined and validated (unknown bits: `IMG2_E_ARG`); a nonzero
-  `metadata` logs one WARN `encode: metadata is not supported yet (ignored)` and the encode proceeds.
+  `metadata` logs one WARN `encode: metadata is not supported yet (ignored)` and the encode proceeds. (Phase 3
+  removed the WARN: the blocks are written, see [Phase 3 results](#phase-3-results).)
 - **WebP config equivalence.** `WebPConfig` + `WebPEncode` set up as libwebp's simple API does
   (`picture_enc.c`: `WEBP_PRESET_DEFAULT` with the quality, `use_argb = lossless`; lossless with quality factor
   70) gives the same bytes: golden 0 mismatches on the WebP cases at S25, and `test_encode_options` compares
@@ -281,6 +286,88 @@ Implemented as in the mapping table, with these facts and refinements (2026-11-2
   the error case `meta:--png 9 --effort 10`; new `enc:--jxl 80 --progressive`; `enc:--webp 80 --lossless` on
   `pal4_trns_interlaced.png` changes bytes (decision 6, the image has transparent pixels; `--webp 100` on the
   opaque goldhill keeps its bytes); `meta:--help` text.
+
+## Phase 3 results
+
+Implemented as specified above, with these facts and choices (2026-11-23, vendored libraries; reference:
+[libimg2.md, Metadata writing](libimg2.md#metadata-writing)):
+
+- **JXL orientation (bug, fixed first: `fix(jxl)`).** `decoder_jxl.c` never calls `JxlDecoderSetKeepOrientation`,
+  so libjxl returns pixels already transformed by the codestream orientation, and `pipeline.c` applied the Exif box
+  orientation on top. Evidence (4x2 RGBA, red pixel at (0,0), lossless, encoded with the vendored libjxl):
+  codestream orientation 6 + Exif box 6: `img2_decode` 2x4 with red at (1,0) (correct), the CLI's output 4x2 with
+  red at (3,1) (rotated twice); codestream 6 without Exif or with Exif 1 (what cjxl writes): correct; codestream 1
+  + Exif 6: the CLI rotated by the Exif box, although the JPEG XL codestream orientation is authoritative. Fix:
+  JXL is self-orienting like TIFF/HEIF/AVIF (`img->orientation = 1`, the Exif box orientation is not applied).
+  Red-first test `test_jxl_orient_fix`. Sanity check of the other non-orienting decoders: PNG `eXIf` and WebP
+  `EXIF` (VP8X) with orientation 6 decode unrotated (libpng / libwebp do not orient) and the CLI rotates once:
+  correct, unchanged.
+- **Fields and setter.** `exif_raw` / `exif_raw_len`, `xmp_raw` / `xmp_raw_len`, `orientation` appended to
+  `img2_image_t` (earlier members keep their offsets); `IMG2_MAX_METADATA_SIZE` = 1 MiB (decision 4).
+  `img2_image_set_metadata()` copies both blocks (NULL clears one; EXIF must start with `II*\0` / `MM\0*` and be
+  at least 8 bytes, `IMG2_E_ARG`; over 1 MiB `IMG2_E_LIMIT`; atomic: the image is unchanged on any error; the
+  arguments may alias the current blocks); it touches neither the parsed structs nor `orientation`.
+- **Decoders.** Raw blocks kept by JPEG (APP1), PNG (`eXIf`, `XML:com.adobe.xmp` text chunk), still WebP
+  (`EXIF` without an `Exif\0\0` prefix, `XMP `), JXL (`Exif` box without its offset, `xml `), still HEIF/AVIF
+  (`Exif` / `application/rdf+xml` items; with several items the last one wins, as for the parsed fields), RAW
+  (LibRaw's XMP only). Not applicable: TIFF (the file's IFD0 is the image directory, there is no separate EXIF
+  block; TIFF XMP is not parsed) and RAW EXIF (LibRaw parses it itself). A block over 1 MiB is not kept, one
+  WARN `<FMT>: EXIF block of N bytes exceeds the 1 MiB metadata cap (raw block not kept)` (the parsed struct is
+  unchanged); a block not in TIFF-header form is dropped silently. `orientation`: the EXIF value (1..8, else
+  1) for JPEG, PNG, WebP and RAW (LibRaw flip); 1 for TIFF, HEIF, AVIF and JXL.
+- **Derived images.** `img2_scale` / `img2_scale_fit` copy the raw blocks and `orientation` (a failed copy is
+  `IMG2_E_NOMEM`); the parsed structs are still not copied. `img2_apply_orientation` works in place, keeps the
+  blocks, applies `img->orientation` and resets it to 1 (idempotent). Behaviour change: it used to apply
+  `img->exif->orientation` (and rotated TIFF/HEIF/AVIF frames a second time if called on them); a caller-built
+  image now rotates only through the field. `img2_image_orient` (internal) and `img2_convert_*` (from raw
+  buffers) do not involve metadata. Animated decodes attach metadata to frame 0 only (unchanged), so a CLI
+  conversion of `--frame N > 0` writes none.
+- **CLI pipeline.** Uses `img->orientation` instead of the format list. The [P11] diagnostic for an EXIF value
+  outside 1..8 ("Applying EXIF orientation: N (invalid)" + "Warning: Failed to apply orientation N, displaying
+  as-is") is kept and is now printed for any format (before: not for TIFF/HEIF/AVIF/JXL); no golden case has such
+  a file.
+- **Writers.** `img2_encode_meta_prepare()` gives the encoder a copy of the EXIF block with the IFD0 Orientation
+  (0x0112, SHORT, count 1, either byte order) set to `img->orientation` (outside 1..8: 1). Absent tag, other
+  type or count: the block is written unchanged (the IFD is never grown). A requested block the image does not
+  have is silently absent (`--keep-metadata` on a GIF or a PNG without EXIF must not warn). A block put directly
+  into the public fields that is not TIFF-header form or over 1 MiB is not written (one WARN). JPEG: APP1 after
+  `jpeg_start_compress` (i.e. after the JFIF APP0), payload limit 65533 bytes including the identifier
+  (`Exif\0\0`: block <= 65527; XMP namespace: packet <= 65504), larger: WARN, skipped. PNG: `png_set_eXIf_1`,
+  uncompressed iTXt (written before IDAT). WebP: WebPMux `EXIF` / `XMP ` chunks after `WebPEncode` (the
+  bitstream is unchanged inside the VP8X container). JXL: `JxlEncoderUseContainer` + `Exif` box (4 zero bytes +
+  block) + `xml ` box only when a block is written. HEIF/AVIF: `heif_context_add_exif_metadata` (libheif prepends
+  the offset) / `heif_context_add_XMP_metadata` on the primary handle.
+- **Orientation in self-orienting containers (choice).** JPEG XL, HEIF and AVIF readers ignore the EXIF tag, so
+  an API caller who encodes stored (un-rotated) pixels with `orientation` 2..8 and the EXIF bit also gets the
+  container's own orientation: JXL `JxlBasicInfo.orientation`, HEIF/AVIF `irot`/`imir` through
+  `heif_encoding_options.image_orientation` (libheif >= 1.14; options are allocated only then, so default
+  encodes still pass none). The written EXIF tag keeps the value. Without the EXIF bit nothing changes
+  (`metadata = 0` stays byte-identical). The CLI always applies the orientation first, so it writes 1.
+- **libwebpmux.** Built from the vendored libwebp (`WEBP_BUILD_LIBWEBPMUX ON`, the tool stays off), linked
+  with the WebP feature, merged into the fat archive, noted in the vendor manifest; the host path needs
+  `libwebpmux` (pkg-config) / `webpmux` (macOS `find_library`).
+- **Identical defaults.** `metadata = 0`, NULL options, and metadata requested for an image without blocks give
+  the same bytes for every encoder (`test_encode_metadata` compares them; golden: 0 mismatches in every existing
+  output file).
+- **Tests.** `test_encode_metadata`: every writer round trip (raw bytes equal, parsed make / model / date / GPS
+  and XMP creator / title / rating / keywords equal; one bit at a time), default bytes, orientation of
+  un-rotated pixels (JPEG/PNG/WebP: tag 6 and field 6; JXL/HEIF/AVIF: upright 48x64 with the marked corner
+  top right) and after `img2_apply_orientation` (tag 1, rest of the block unchanged), the IFD0 patch (both byte
+  orders, absent tag, wrong type / count, truncated, out of range), decode cap (PNG `eXIf` of exactly 1 MiB
+  kept, 1 MiB + 1 dropped with WARN, iTXt XMP over the cap), JPEG APP1 limit (65527 / 65528 EXIF, 65504 / 65505
+  XMP), WebP `Exif\0\0` prefix, setter validation / aliasing / clearing, scale and orient copies, invalid public
+  fields, lossless AVIF + orientation, `--keep-metadata` parsing, validation and a conversion through
+  `pipeline_decode` + `file_render`. `test_alloc_fail` (`metadata_passthrough`): every allocation of the
+  setter, `img2_apply_orientation`, scaling with blocks, every writer except HEIF (kvazaar) and decoding their
+  output fails once. `test_jxl_orient_fix`: the JXL bug. Updated: `test_core_edges` (orientation field
+  semantics), `test_encode_options` (the phase-2 WARN is gone: requested but absent metadata is silent).
+- **Golden.** Existing cases: 0 mismatches in every output file; the only text change is `meta:--help` (one new
+  line under "Conversion Options"). New cases (S26): `--keep-metadata` from `jpg/DSCN0010.jpg` (EXIF with GPS +
+  XMP) to JPEG, PNG, WebP, JXL, HEIF and AVIF (default thread count), the rotated `jpg/canon_hdr_NO.jpg`
+  (orientation 6) to JPEG with `--keep-metadata` (written Orientation 1), and the CLI error `--keep-metadata`
+  without a conversion.
+- **Known limitation** (as specified): the EXIF IFD1 thumbnail and PixelX/YDimension are written as decoded, so
+  they can be stale after scaling or rotation.
 
 ## Decisions (2026-11-23)
 
