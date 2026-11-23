@@ -459,11 +459,11 @@ missing fields; use `IMG2_ENCODE_OPTS_INIT` or designated initialisers.)
 
 | Field | Range (else `IMG2_E_ARG`) | JPEG | PNG | WebP | JPEG XL | HEIF (kvazaar) | AVIF (aom) |
 |---|---|---|---|---|---|---|---|
-| `lossless` | bool | warn | no-op (always lossless) | lossless mode (quality factor 70, as `WebPEncodeLosslessRGBA`) | `JxlEncoderSetFrameLossless` | warn | aom lossless, 4:4:4, identity matrix: RGB and alpha bit-exact |
-| `effort` | 0, 1..10 | >= 6: optimised Huffman tables | zlib level e-1 if `quality` is -1, else warn | `method` round((e-1)*6/9) (7 = default 4) | libjxl effort e (7 = default) | warn | aom speed 10-e (4 = default speed 6) |
+| `lossless` | bool | warn | no-op (always lossless) | lossless mode (quality factor 70) with `exact`: the RGB under alpha 0 is kept | `JxlEncoderSetFrameLossless` | warn | aom lossless, 4:4:4, identity matrix: RGB and alpha bit-exact |
+| `effort` | 0, 1..10 | >= 6: optimised Huffman tables | zlib level e-1 if `quality` is -1, else warn (CLI: `--png N --effort` is an error) | `method` round((e-1)*6/9) (7 = default 4) | libjxl effort e (7 = default) | warn | aom speed 10-e (4 = default speed 6) |
 | `chroma` | `IMG2_CHROMA_*` | luma sampling factors (default 4:2:0) | warn | 4:2:0 only, else warn | warn | 4:2:0 only, else warn | aom `chroma` 420/422/444; lossless: 444 only, else warn |
 | `alpha_quality` | 0, 1..100 | warn | warn | `alpha_quality` (lossless: warn) | alpha distance, quality mapping (lossless: warn) | warn | aom `alpha-quality` (lossless: warn) |
-| `progressive` | bool | `jpeg_simple_progression` | Adam7 interlace | warn | warn | warn | warn |
+| `progressive` | bool | `jpeg_simple_progression` | Adam7 interlace | warn | lossy: `PROGRESSIVE_AC` (AC passes); lossless: warn | warn | warn |
 | `threads` | 0, 1..64 | warn | warn | `thread_level` 1 when > 1 | thread pool when >= 2 (output identical for every count) | warn | aom `threads` (1 gives other bytes than >= 2) |
 | `metadata` | `IMG2_META_*` bits | not written yet: one WARN, ignored (phase 3 of [encoder-api.md](encoder-api.md)) | | | | | |
 

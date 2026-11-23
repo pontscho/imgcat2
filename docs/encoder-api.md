@@ -85,11 +85,11 @@ Out-of-range values: `IMG2_E_ARG`. A valid option the chosen format cannot honou
 | Option | JPEG | PNG | WebP | JXL | HEIF (kvazaar) | AVIF (aom) |
 |---|---|---|---|---|---|---|
 | quality | as today | zlib level q/10 | as today | as today | as today | aom `quality` |
-| lossless | warn | always lossless | `config.lossless` (q=100 still selects it) | `SetFrameLossless` (q>=95 still selects it) | warn (kvazaar lossless is 4:2:0 YCbCr, not RGB-lossless) | aom `lossless` + 4:4:4, identity matrix (verified bit-exact) |
-| effort 1..10 | >= 6: `optimize_coding` | zlib level e-1 when quality is default (decision 3), else warn | `method` = round((e-1)*6/9) | `EFFORT` = e | warn (no preset parameter) | aom `speed` = 10 - e (clamped 0..9) |
+| lossless | warn | always lossless | `config.lossless` + `exact` (q=100 still selects it; decision 6) | `SetFrameLossless` (q>=95 still selects it) | warn (kvazaar lossless is 4:2:0 YCbCr, not RGB-lossless) | aom `lossless` + 4:4:4, identity matrix (verified bit-exact) |
+| effort 1..10 | >= 6: `optimize_coding` | zlib level e-1 when quality is default (decision 3), else warn (CLI: error, decision 5) | `method` = round((e-1)*6/9) | `EFFORT` = e | warn (no preset parameter) | aom `speed` = 10 - e (9..0, linear: decision 8) |
 | chroma | comp_info sampling factors | warn | 420 only: warn otherwise | warn (XYB) | 420 only: warn otherwise | aom `chroma` "420"/"422"/"444" |
 | alpha_quality | warn | warn | `alpha_quality` | extra channel distance from quality | warn | aom `alpha-quality` |
-| progressive | `jpeg_simple_progression` | Adam7 interlace | warn | warn | warn | warn |
+| progressive | `jpeg_simple_progression` | Adam7 interlace | warn | lossy: `PROGRESSIVE_AC` = 1; lossless: warn (decision 7) | warn | warn |
 | threads | warn | warn | `thread_level` = threads > 1 | parallel runner (links `jxl_threads`) | warn (kvazaar auto) | aom `threads` |
 | metadata | APP1 Exif / XMP | eXIf / iTXt `XML:com.adobe.xmp` | VP8X EXIF / XMP chunks (needs libwebpmux) | container + `Exif` / `xml ` boxes | `heif_context_add_exif_metadata` / `_XMP_metadata` | same as HEIF |
 
@@ -237,16 +237,18 @@ Implemented as in the mapping table, with these facts and refinements (2026-11-2
   entry points stay (default options) next to the `_opts` / `img2_encoder_dispatch_opts()` forms.
 - **Warnings.** One `IMG2_LOG_WARN` per unhonoured option, `encode: <option> has no effect for <format> (<why>)`;
   `chroma 420` is never warned for the 4:2:0-only formats (it is what they do). Beyond the table: with lossless
-  WebP, JXL or AVIF, `alpha_quality` warns (alpha is lossless), and lossless AVIF warns for chroma 420/422
-  (always 4:4:4). PNG `lossless` and explicit `chroma 420` on JPEG/WebP/HEIF/AVIF are silent no-ops.
+  WebP, JXL or AVIF, `alpha_quality` warns (alpha is lossless), lossless AVIF warns for chroma 420/422
+  (always 4:4:4), and lossless JXL warns for `progressive` (decision 7). PNG `lossless` and explicit
+  `chroma 420` on JPEG/WebP/HEIF/AVIF are silent no-ops.
 - **Metadata (phase 3).** The `IMG2_META_*` bits are defined and validated (unknown bits: `IMG2_E_ARG`); a nonzero
   `metadata` logs one WARN `encode: metadata is not supported yet (ignored)` and the encode proceeds.
 - **WebP config equivalence.** `WebPConfig` + `WebPEncode` set up as libwebp's simple API does
   (`picture_enc.c`: `WEBP_PRESET_DEFAULT` with the quality, `use_argb = lossless`; lossless with quality factor
-  70) gives the same bytes: golden 0 mismatches on the WebP cases, and `test_encode_options` compares against
-  `WebPEncodeRGBA` (q 0/50/80/99) and `WebPEncodeLosslessRGBA` directly. `lossless` keeps that quality factor 70
-  (so `{ .lossless = true }` equals `quality = 100`); `effort` only changes `method`. `exact` stays 0 as before,
-  so lossless WebP may still rewrite the RGB of fully transparent pixels (alpha 0).
+  70) gives the same bytes: golden 0 mismatches on the WebP cases at S25, and `test_encode_options` compares
+  lossy output against `WebPEncodeRGBA` (q 0/50/80/99) directly. `lossless` keeps that quality factor 70 (so
+  `{ .lossless = true }` equals `quality = 100`); `effort` only changes `method`. Since S25b lossless sets
+  `exact` (decision 6), so it no longer equals `WebPEncodeLosslessRGBA` when the image has fully transparent
+  pixels; every RGBA byte round-trips (tested with an alpha-0 block of non-black RGB).
 - **AVIF lossless.** aom lossless + `chroma` "444" + an output NCLX profile with `matrix_coefficients` 0 (GBR,
   identity), BT.709 primaries, sRGB transfer, full range (written as a `colr` nclx box) round-trips RGB and alpha
   bit-exactly (`memcmp` after `img2_decode()`, alpha included). libheif's aom plugin switches `tune=auto` from
@@ -261,8 +263,11 @@ Implemented as in the mapping table, with these facts and refinements (2026-11-2
   the manifest note; the host path requires `libjxl_threads` next to `libjxl`).
 - **JPEG.** `chroma` sets the luma sampling factors (420: 2x2, 422: 2x1, 444: 1x1; Cb/Cr 1x1); `progressive`
   calls `jpeg_simple_progression()`; effort >= 6 sets `optimize_coding` (effort 1..5 leave the default).
+- **JXL progressive** (S25b, decision 7). Lossy: `JXL_ENC_FRAME_SETTING_PROGRESSIVE_AC` = 1. Fed to libjxl's
+  decoder in chunks with `JxlDecoderSetProgressiveDetail(kPasses)`, goldhill q80 reports 3 progression steps
+  (DC + 2 AC passes) instead of 1 (DC), +2.6% size; the default output is unchanged. Lossless: one WARN.
 - **PNG.** `progressive` = Adam7 (libpng's `png_write_image()` runs the passes). Through the CLI `--png N` always
-  sets the quality, so `--effort` there only logs the warning (decision 3).
+  sets the quality, so `--png N --effort E` is a CLI error (decision 5); the API keeps decision 3.
 - **CLI.** `--lossless`, `--effort N`, `--chroma 420|422|444`, `--alpha-quality N`, `--progressive`,
   `--threads N`: ranges checked while parsing ("Error: --effort must be 1-10 (got '11')"); outside conversion
   mode `validate_options()` rejects them ("Error: --effort can only be used with --jpeg, --png, --heif, --webp,
@@ -272,6 +277,10 @@ Implemented as in the mapping table, with these facts and refinements (2026-11-2
   warning, lossless WebP, JXL effort 3, JXL `--threads 4` (same bytes as the single-threaded `--jxl 100` case),
   AVIF 4:4:4 effort 4 and lossless (default thread count), the HEIF chroma/threads warnings, and the two CLI
   errors (conversion-only flag, out-of-range effort).
+  S25b: `enc:--png 9 --effort 10 --progressive` replaced by `enc:--png 9 --progressive` (same output bytes) and
+  the error case `meta:--png 9 --effort 10`; new `enc:--jxl 80 --progressive`; `enc:--webp 80 --lossless` on
+  `pal4_trns_interlaced.png` changes bytes (decision 6, the image has transparent pixels; `--webp 100` on the
+  opaque goldhill keeps its bytes); `meta:--help` text.
 
 ## Decisions (2026-11-23)
 
@@ -288,3 +297,17 @@ Implemented as in the mapping table, with these facts and refinements (2026-11-2
    0..9, i.e. effort 1 -> level 0 ... effort 10 -> level 9. An explicit `quality` wins (and `effort` then logs the usual
    no-effect warning).
 4. Raw metadata cap: 1 MiB each for EXIF and XMP.
+5. (Zoltán, 2026-11-23, after phase 2) CLI `--png N` with `--effort`: an error (exit 1, "Error: --effort has no
+   effect with --png N (N is already the zlib level)"), since `--png` always carries the level. The API keeps
+   decision 3 (effort maps to the level only when `quality` is -1, else a WARN).
+6. (Zoltán, 2026-11-23) Lossless WebP sets `config.exact = 1`, so the RGB under alpha 0 is kept and lossless means
+   every RGBA byte. Lossy WebP is unchanged. This is the one approved exception to the byte-identical rule: lossless
+   WebP of images with fully transparent pixels (`--webp 100`, `--lossless`) changes bytes.
+7. (Zoltán, 2026-11-23) JXL `progressive` maps to `JXL_ENC_FRAME_SETTING_PROGRESSIVE_AC` = 1 for lossy (VarDCT)
+   output; no WARN. Checked alternatives: `QPROGRESSIVE_AC` is not needed (`PROGRESSIVE_AC` alone already gives the
+   decoder AC passes, and cjxl's `--progressive` also uses spectral `progressive_ac`, not `qprogressive_ac`).
+   Lossless JXL is modular, where `PROGRESSIVE_AC` has no effect; `RESPONSIVE` = 1 (squeeze) was measured on
+   goldhill: +21% size (485 -> 589 KB) and libjxl's decoder reports no progression step for it either way, so
+   lossless + `progressive` logs `encode: progressive has no effect for lossless JXL (no VarDCT passes)`.
+8. (Zoltán, 2026-11-23) The AVIF effort mapping stays linear, speed = 10 - effort (effort 4 = the default speed 6),
+   although the other formats' defaults sit near effort 7.
