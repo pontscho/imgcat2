@@ -21,6 +21,7 @@
 
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
+#include "../metadata/meta_raw.h"
 #endif
 
 #ifdef IMG2_HAVE_EXIF_READER
@@ -219,6 +220,15 @@ static void raw_attach_metadata(img2_image_t *img, libraw_data_t *raw)
 	}
 	img->exif = extract_raw_exif(raw);
 	img->xmp = extract_raw_xmp(raw);
+
+	/* Raw blocks: LibRaw parses the EXIF itself and exposes no TIFF-header block, so a RAW image carries no raw
+	 * EXIF (a preview JPEG's own block is dropped with its parsed EXIF above); the XMP packet is kept. The pixels
+	 * are not rotated (user_flip = 0): the orientation is LibRaw's flip. */
+	img2_meta_clear(img);
+	if (raw->idata.xmpdata != NULL && raw->idata.xmplen > 0) {
+		img2_meta_keep_xmp(img, "RAW", (const uint8_t *)raw->idata.xmpdata, raw->idata.xmplen);
+	}
+	img->orientation = img2_meta_orientation(img->exif);
 }
 #endif
 

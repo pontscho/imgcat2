@@ -23,6 +23,7 @@
 
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
+#include "../metadata/meta_raw.h"
 #endif
 
 /** Maximum number of WebP frames to decode (prevents DoS) */
@@ -37,9 +38,10 @@
  *
  * @param data Raw WebP file data
  * @param len Length of data in bytes
+ * @param img Image that keeps a copy of the raw EXIF block (TIFF-header form, img2_meta_keep_exif)
  * @return Pointer to img2_exif_t structure, or NULL if no EXIF found or on error
  */
-static img2_exif_t *extract_webp_exif(const uint8_t *data, size_t len)
+static img2_exif_t *extract_webp_exif(const uint8_t *data, size_t len, img2_image_t *img)
 {
 	if (data == NULL || len == 0) {
 		return NULL;
@@ -61,6 +63,13 @@ static img2_exif_t *extract_webp_exif(const uint8_t *data, size_t len)
 	if (WebPDemuxGetChunk(demux, "EXIF", 1, &chunk_iter)) {
 		/* EXIF chunk found */
 		if (chunk_iter.chunk.bytes != NULL && chunk_iter.chunk.size > 0) {
+			/* Raw block without the optional "Exif\0\0" prefix */
+			if (chunk_iter.chunk.size >= 6 && memcmp(chunk_iter.chunk.bytes, "Exif\0\0", 6) == 0) {
+				img2_meta_keep_exif(img, "WebP", chunk_iter.chunk.bytes + 6, chunk_iter.chunk.size - 6);
+			} else {
+				img2_meta_keep_exif(img, "WebP", chunk_iter.chunk.bytes, chunk_iter.chunk.size);
+			}
+
 			/* Allocate and initialize img2_exif_t */
 			img2_exif_t *exif = malloc(sizeof(img2_exif_t));
 			if (exif == NULL) {
@@ -121,9 +130,10 @@ static img2_exif_t *extract_webp_exif(const uint8_t *data, size_t len)
  *
  * @param data Raw WebP file data
  * @param len Length of data in bytes
+ * @param img Image that keeps a copy of the raw XMP packet (img2_meta_keep_xmp)
  * @return Pointer to img2_xmp_t structure, or NULL if no XMP found or on error
  */
-static img2_xmp_t *extract_webp_xmp(const uint8_t *data, size_t len)
+static img2_xmp_t *extract_webp_xmp(const uint8_t *data, size_t len, img2_image_t *img)
 {
 	if (data == NULL || len == 0) {
 		return NULL;
@@ -145,6 +155,8 @@ static img2_xmp_t *extract_webp_xmp(const uint8_t *data, size_t len)
 	if (WebPDemuxGetChunk(demux, "XMP ", 1, &chunk_iter)) {
 		/* XMP chunk found */
 		if (chunk_iter.chunk.bytes != NULL && chunk_iter.chunk.size > 0) {
+			img2_meta_keep_xmp(img, "WebP", chunk_iter.chunk.bytes, chunk_iter.chunk.size);
+
 			/* Allocate and initialize img2_xmp_t */
 			img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 			if (xmp == NULL) {
@@ -227,14 +239,15 @@ static img2_image_t **decode_webp_static(const uint8_t *data, size_t len, int *f
 	// Parse EXIF/XMP metadata
 #ifdef IMG2_HAVE_EXIF_READER
 	// Extract EXIF from EXIF chunk using WebPDemux
-	img2_exif_t *exif = extract_webp_exif(data, len);
+	img2_exif_t *exif = extract_webp_exif(data, len, img);
 
 	// Extract XMP from XMP chunk using WebPDemux
-	img2_xmp_t *xmp = extract_webp_xmp(data, len);
+	img2_xmp_t *xmp = extract_webp_xmp(data, len, img);
 
 	// Store metadata in image structure
 	img->exif = exif;
 	img->xmp = xmp;
+	img->orientation = img2_meta_orientation(exif); /* libwebp does not orient */
 #endif
 
 	// Allocate frames array (single frame)

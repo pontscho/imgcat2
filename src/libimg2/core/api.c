@@ -128,8 +128,15 @@ img2_status_t img2_apply_orientation(img2_image_t **img)
 		img2_log(IMG2_LOG_DEBUG, "img2_apply_orientation: invalid image");
 		return IMG2_E_ARG;
 	}
-	if ((*img)->exif == NULL || (*img)->exif->orientation <= 1) {
+	/* the orientation still to be applied (decoders: 1 for the self-orienting codecs); outside 2..8 = upright */
+	const uint8_t o = (*img)->orientation;
+	if (o < 2 || o > 8) {
+		(*img)->orientation = 1;
 		return IMG2_OK;
 	}
-	return img2_image_orient(*img, (*img)->exif->orientation);
+	img2_status_t st = img2_image_orient(*img, o);
+	if (st == IMG2_OK) {
+		(*img)->orientation = 1;
+	}
+	return st;
 }

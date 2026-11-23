@@ -197,6 +197,11 @@ static int find_app1_segment(const uint8_t *jpeg_data, size_t len, const char *m
 	return -1;
 }
 
+img2_status_t img2_jpeg_find_app1(const uint8_t *jpeg, size_t len, const char *id, size_t id_len, const uint8_t **payload, size_t *payload_len)
+{
+	return find_app1_segment(jpeg, len, id, id_len, payload, payload_len) == 0 ? IMG2_OK : IMG2_E_FORMAT;
+}
+
 /* ========== IFD Parser ========== */
 
 typedef struct {

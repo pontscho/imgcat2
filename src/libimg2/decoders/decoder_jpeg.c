@@ -26,6 +26,7 @@
 /* EXIF/XMP metadata support */
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
+#include "../metadata/meta_raw.h"
 #endif
 
 /**
@@ -269,6 +270,17 @@ static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *f
 			free(xmp); /* never initialised here: img2_xmp_clear() would free garbage pointers */
 		}
 	}
+
+	// Raw blocks for the encoders (APP1 "Exif\0\0" + TIFF, APP1 XMP packet) and the orientation to apply
+	const uint8_t *raw = NULL;
+	size_t raw_len = 0;
+	if (img2_jpeg_find_app1(data, len, IMG2_JPEG_EXIF_ID, IMG2_JPEG_EXIF_ID_LEN, &raw, &raw_len) == IMG2_OK) {
+		img2_meta_keep_exif(img, "JPEG", raw, raw_len);
+	}
+	if (img2_jpeg_find_app1(data, len, IMG2_JPEG_XMP_ID, IMG2_JPEG_XMP_ID_LEN, &raw, &raw_len) == IMG2_OK) {
+		img2_meta_keep_xmp(img, "JPEG", raw, raw_len);
+	}
+	img->orientation = img2_meta_orientation(img->exif);
 #endif
 
 	// Allocate frames array (single frame for JPEG)

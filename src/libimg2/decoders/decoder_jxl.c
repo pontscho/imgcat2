@@ -22,6 +22,7 @@
 
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
+#include "../metadata/meta_raw.h"
 #endif
 
 /** Maximum number of JXL frames to decode (prevents DoS) */
@@ -76,8 +77,9 @@ static img2_image_t **decode_jxl_animated(const uint8_t *data, size_t len, int *
  * @param len Length of data in bytes
  * @param exif_out Output: EXIF metadata (allocated on success, NULL on failure)
  * @param xmp_out Output: XMP metadata (allocated on success, NULL on failure)
+ * @param img Image that keeps copies of the raw blocks (Exif box without its 4-byte offset, xml box)
  */
-static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **exif_out, img2_xmp_t **xmp_out);
+static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **exif_out, img2_xmp_t **xmp_out, img2_image_t *img);
 #endif
 
 static img2_status_t jxl_get_info(const uint8_t *data, size_t len, uint32_t *width, uint32_t *height, int *num_frames)
@@ -628,7 +630,7 @@ static int jxl_find_box(const uint8_t *data, size_t len, const char *box_type, c
 	return -1;
 }
 
-static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **exif_out, img2_xmp_t **xmp_out)
+static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **exif_out, img2_xmp_t **xmp_out, img2_image_t *img)
 {
 	if (data == NULL || len == 0 || exif_out == NULL || xmp_out == NULL) {
 		return;
@@ -659,6 +661,10 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **
 		}
 		// else: invalid EXIF data (no EXIF; the XMP box is still read below)
 
+		if (tiff_data != NULL) {
+			img2_meta_keep_exif(img, "JXL", tiff_data, tiff_size);
+		}
+
 		// Parse EXIF data
 		img2_exif_t *exif = tiff_data != NULL ? malloc(sizeof(img2_exif_t)) : NULL;
 		if (exif != NULL) {
@@ -677,6 +683,8 @@ static void jxl_extract_metadata(const uint8_t *data, size_t len, img2_exif_t **
 	const uint8_t *xmp_data = NULL;
 	size_t xmp_size = 0;
 	if (jxl_find_box(data, len, "xml ", &xmp_data, &xmp_size) == 0) {
+		img2_meta_keep_xmp(img, "JXL", xmp_data, xmp_size);
+
 		// Parse XMP data
 		img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 		if (xmp != NULL) {
@@ -735,8 +743,10 @@ static img2_image_t **decode_jxl_frames(const uint8_t *data, size_t len, int *fr
 		img2_exif_t *exif = NULL;
 		img2_xmp_t *xmp = NULL;
 
-		// Extract metadata from JXL boxes
-		jxl_extract_metadata(data, len, &exif, &xmp);
+		// Extract metadata from JXL boxes (raw blocks kept on the first frame). The orientation field stays 1:
+		// libjxl already applied the codestream orientation (no JxlDecoderSetKeepOrientation), and the Exif box
+		// orientation is not authoritative for JPEG XL
+		jxl_extract_metadata(data, len, &exif, &xmp, frames[0]);
 
 		// Attach metadata to the first frame (metadata applies to entire image)
 		if (frames[0] != NULL) {

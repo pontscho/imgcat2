@@ -244,7 +244,9 @@ CTEST(core_edges, encoder_dispatch_paths)
 	img2_image_destroy(wide);
 }
 
-CTEST(core_edges, apply_orientation_from_exif)
+/* Phase 3 (docs/encoder-api.md): img2_apply_orientation applies img->orientation and resets it to 1; the parsed
+ * EXIF orientation is the file's value only (a TIFF / HEIF / AVIF / JXL frame has 1 in the field) */
+CTEST(core_edges, apply_orientation_from_field)
 {
 	ASSERT_EQUAL(IMG2_E_ARG, img2_apply_orientation(NULL));
 	img2_image_t *none = NULL;
@@ -252,16 +254,27 @@ CTEST(core_edges, apply_orientation_from_exif)
 
 	img2_image_t *img = edge_image(3, 2);
 	ASSERT_NOT_NULL(img);
+	ASSERT_EQUAL(1, img->orientation); /* caller-built: upright */
 	ASSERT_EQUAL(IMG2_OK, img2_apply_orientation(&img)); /* no EXIF */
 	img->exif = calloc(1, sizeof(*img->exif));
 	ASSERT_NOT_NULL(img->exif);
-	img->exif->orientation = 1;
+	img->exif->orientation = 6; /* the parsed value alone does not rotate */
 	ASSERT_EQUAL(IMG2_OK, img2_apply_orientation(&img));
 	ASSERT_EQUAL(3, img->width);
-	img->exif->orientation = 6;
+	img->orientation = 6;
 	ASSERT_EQUAL(IMG2_OK, img2_apply_orientation(&img));
 	ASSERT_EQUAL(2, img->width);
 	ASSERT_EQUAL(3, img->height);
+	ASSERT_EQUAL(1, img->orientation);
+	ASSERT_EQUAL(6, img->exif->orientation);
+	ASSERT_EQUAL(IMG2_OK, img2_apply_orientation(&img)); /* idempotent */
+	ASSERT_EQUAL(2, img->width);
+	img->orientation = 0; /* outside 1..8: upright */
+	ASSERT_EQUAL(IMG2_OK, img2_apply_orientation(&img));
+	ASSERT_EQUAL(1, img->orientation);
+	img->orientation = 9;
+	ASSERT_EQUAL(IMG2_OK, img2_apply_orientation(&img));
+	ASSERT_EQUAL(2, img->width);
 	img2_image_destroy(img);
 }
 

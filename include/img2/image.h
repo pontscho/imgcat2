@@ -37,7 +37,16 @@ typedef struct img2_image {
 	uint32_t delay_ms;        /**< Frame duration; 0 = unknown / not animated */
 	img2_exif_t *exif;        /**< EXIF metadata, NULL if none; owned by the image */
 	img2_xmp_t *xmp;          /**< XMP metadata, NULL if none; owned by the image */
+	/* Raw metadata (docs/libimg2.md "Metadata writing"); owned by the image, freed by img2_image_destroy() */
+	uint8_t *exif_raw;        /**< EXIF block in TIFF-header form ("II*\0" / "MM\0*"), container prefixes stripped; NULL if none */
+	size_t exif_raw_len;      /**< Length of exif_raw in bytes */
+	char *xmp_raw;            /**< XMP packet, NUL-terminated; NULL if none */
+	size_t xmp_raw_len;       /**< Length of xmp_raw in bytes (without the terminator) */
+	uint8_t orientation;      /**< EXIF orientation still to be applied to the pixels, 1..8 (1 = upright) */
 } img2_image_t;
+
+/** Cap of each raw metadata block (img2_image_t.exif_raw / xmp_raw): 1 MiB */
+#define IMG2_MAX_METADATA_SIZE 1048576UL
 
 /**
  * @brief Decoded frame set (count >= 1 on success)
@@ -78,11 +87,30 @@ typedef enum img2_filter {
 img2_status_t img2_image_create(uint32_t width, uint32_t height, img2_image_t **out);
 
 /**
- * @brief Destroy an image: frees pixels, exif, xmp and the struct
+ * @brief Destroy an image: frees pixels, exif, xmp, the raw metadata blocks and the struct
  *
  * @param img Image (NULL-safe)
  */
 void img2_image_destroy(img2_image_t *img);
+
+/**
+ * @brief Replace the raw metadata blocks of an image (copies; the parsed exif / xmp structs and the orientation
+ *        field are not touched)
+ *
+ * Images from img2_image_create() start with no raw blocks and orientation 1; decoded images carry the blocks the
+ * decoder found. img2_encode() writes them when img2_encode_opts_t.metadata asks for them.
+ *
+ * @param img      Image
+ * @param exif     EXIF block in TIFF-header form (starts with "II*\0" or "MM\0*", at least 8 bytes), or NULL to remove
+ *                 the EXIF block (exif_len is then ignored)
+ * @param exif_len Length of exif in bytes
+ * @param xmp      XMP packet (need not be NUL-terminated; a copy with a terminator is stored), or NULL to remove the
+ *                 XMP block (xmp_len is then ignored)
+ * @param xmp_len  Length of xmp in bytes (> 0)
+ * @return IMG2_OK; IMG2_E_ARG (img NULL, EXIF not in TIFF-header form, xmp_len 0); IMG2_E_LIMIT (a block over
+ *         IMG2_MAX_METADATA_SIZE); IMG2_E_NOMEM. On error the image is unchanged.
+ */
+img2_status_t img2_image_set_metadata(img2_image_t *img, const uint8_t *exif, size_t exif_len, const char *xmp, size_t xmp_len);
 
 /**
  * @brief Destroy all frames of a set, free the array and zero *frames
@@ -130,14 +158,16 @@ img2_status_t img2_scale_fit(const img2_image_t *src, uint32_t max_w, uint32_t m
 img2_status_t img2_fit_size(uint32_t src_w, uint32_t src_h, uint32_t max_w, uint32_t max_h, uint32_t *out_w, uint32_t *out_h);
 
 /**
- * @brief Apply (*img)->exif->orientation (no-op if there is no EXIF or the orientation is 1)
+ * @brief Apply (*img)->orientation to the pixels and set it to 1 (no-op if it is already 1)
  *
- * May replace the pixel buffer and swap width/height. Does NOT reset the orientation
- * field: call it once. TIFF/HEIF/AVIF/JPEG XL frames arrive already oriented by their codecs (JPEG XL: by the
- * codestream orientation; an Exif box orientation is not authoritative there).
+ * May replace the pixel buffer and swap width/height. Decoders set the field to the EXIF orientation for JPEG,
+ * PNG, WebP and RAW, and to 1 for TIFF/HEIF/AVIF/JPEG XL, whose codecs orient the pixels themselves (JPEG XL: by
+ * the codestream orientation; an Exif box orientation is not authoritative there). (*img)->exif->orientation keeps
+ * the file's value. A field outside 1..8 (e.g. 0 in a zero-initialised caller-built struct) counts as 1. The raw
+ * metadata blocks stay with the image; the encoders write Orientation = the field into their copy of the EXIF block.
  *
  * @param img Image to transform in place
- * @return IMG2_OK; IMG2_E_ARG (NULL, invalid image or invalid orientation); IMG2_E_NOMEM
+ * @return IMG2_OK; IMG2_E_ARG (NULL or invalid image); IMG2_E_NOMEM (image unchanged)
  */
 img2_status_t img2_apply_orientation(img2_image_t **img);
 

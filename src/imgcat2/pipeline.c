@@ -528,25 +528,26 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, img
 	}
 
 #if IMG2_HAS_EXIF
-	/* Apply EXIF orientation transformation
-	 * Skip for formats that handle orientation natively:
-	 * - TIFF: libtiff applies orientation during decode
-	 * - HEIF/AVIF: libheif applies orientation during decode
-	 * - JXL: libjxl applies the codestream orientation (authoritative; the Exif box orientation is ignored)
-	 */
-	if (mime != IMG2_MIME_TIFF && mime != IMG2_MIME_HEIF && mime != IMG2_MIME_AVIF && mime != IMG2_MIME_JXL) {
-		for (int i = 0; i < fr.count; i++) {
-			if (fr.frames[i]->exif != NULL && fr.frames[i]->exif->orientation > 1) {
-				if (!opts->silent) {
-					const char *descriptions[] = { "Normal", "Flip horizontal", "Rotate 180°", "Flip vertical", "Transpose", "Rotate 90° CW", "Transverse", "Rotate 270° CW" };
-					const unsigned orientation = fr.frames[i]->exif->orientation;
-					/* [P11] the EXIF value is any SHORT: only 1..8 have a description */
-					fprintf(stderr, "Applying EXIF orientation: %u (%s)\n", orientation, orientation <= 8 ? descriptions[orientation - 1] : "invalid");
-				}
-				if (img2_apply_orientation(&fr.frames[i]) < 0) {
-					fprintf(stderr, "Warning: Failed to apply orientation %u, displaying as-is\n", fr.frames[i]->exif->orientation);
-				}
+	/* Apply the orientation the decoder left to do (img->orientation): the EXIF value for JPEG, PNG, WebP and RAW;
+	 * 1 for TIFF, HEIF/AVIF and JXL, whose codecs orient the pixels themselves */
+	for (int i = 0; i < fr.count; i++) {
+		const unsigned orientation = fr.frames[i]->orientation;
+		/* [P11] the EXIF value is any SHORT: a value outside 1..8 leaves the field at 1 and is reported as invalid
+		 * (nothing is applied, for any format) */
+		const unsigned exif_orientation = fr.frames[i]->exif != NULL ? fr.frames[i]->exif->orientation : 0;
+		if (orientation > 1 && orientation <= 8) {
+			if (!opts->silent) {
+				const char *descriptions[] = { "Normal", "Flip horizontal", "Rotate 180°", "Flip vertical", "Transpose", "Rotate 90° CW", "Transverse", "Rotate 270° CW" };
+				fprintf(stderr, "Applying EXIF orientation: %u (%s)\n", orientation, descriptions[orientation - 1]);
 			}
+			if (img2_apply_orientation(&fr.frames[i]) < 0) {
+				fprintf(stderr, "Warning: Failed to apply orientation %u, displaying as-is\n", orientation);
+			}
+		} else if (exif_orientation > 8) {
+			if (!opts->silent) {
+				fprintf(stderr, "Applying EXIF orientation: %u (invalid)\n", exif_orientation);
+			}
+			fprintf(stderr, "Warning: Failed to apply orientation %u, displaying as-is\n", exif_orientation);
 		}
 	}
 #endif

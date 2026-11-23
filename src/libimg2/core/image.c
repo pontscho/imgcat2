@@ -21,6 +21,7 @@
 
 /* EXIF/XMP metadata (always compiled; freed unconditionally) */
 #include "../metadata/exif_reader.h"
+#include "../metadata/meta_raw.h"
 
 bool img2_image_calc_size(uint32_t width, uint32_t height, size_t *out_size)
 {
@@ -74,6 +75,11 @@ img2_image_t *img2_image_alloc(uint32_t width, uint32_t height)
 	img->delay_ms = 0;
 	img->exif = NULL;
 	img->xmp = NULL;
+	img->exif_raw = NULL;
+	img->exif_raw_len = 0;
+	img->xmp_raw = NULL;
+	img->xmp_raw_len = 0;
+	img->orientation = 1; /* decision 1: caller-built images are upright */
 
 	return img;
 }
@@ -104,8 +110,37 @@ void img2_image_destroy(img2_image_t *img)
 		img->xmp = NULL;
 	}
 
+	/* Free the raw metadata blocks */
+	img2_meta_clear(img);
+
 	/* Free image structure */
 	free(img);
+}
+
+img2_status_t img2_image_set_metadata(img2_image_t *img, const uint8_t *exif, size_t exif_len, const char *xmp, size_t xmp_len)
+{
+	if (img == NULL) {
+		return IMG2_E_ARG;
+	}
+	if (exif != NULL && !img2_meta_is_tiff(exif, exif_len)) {
+		return IMG2_E_ARG;
+	}
+	if (xmp != NULL && xmp_len == 0) {
+		return IMG2_E_ARG;
+	}
+	if ((exif != NULL && exif_len > IMG2_META_RAW_CAP) || (xmp != NULL && xmp_len > IMG2_META_RAW_CAP)) {
+		return IMG2_E_LIMIT;
+	}
+
+	/* copies first (the arguments may alias the current blocks), then the swap */
+	img2_image_t tmp;
+	memset(&tmp, 0, sizeof(tmp));
+	tmp.exif_raw = (uint8_t *)exif; /* read only by img2_meta_copy */
+	tmp.exif_raw_len = exif != NULL ? exif_len : 0;
+	tmp.xmp_raw = (char *)xmp;
+	tmp.xmp_raw_len = xmp != NULL ? xmp_len : 0;
+	tmp.orientation = img->orientation;
+	return img2_meta_copy(img, &tmp);
 }
 
 void img2_frames_free(img2_frames_t *f)
@@ -232,6 +267,14 @@ static img2_status_t scale_impl(const char *tag, const img2_image_t *src, uint32
 		img2_log(IMG2_LOG_ERROR, "%s: stbir_resize failed", tag);
 		img2_image_destroy(dst);
 		return IMG2_E_CODEC;
+	}
+
+	/* the raw metadata blocks and the orientation travel with the pixels (the parsed structs do not, as before;
+	 * EXIF thumbnail / PixelX/YDimension stay as decoded, docs/libimg2.md) */
+	if (img2_meta_copy(dst, src) != IMG2_OK) {
+		img2_log(IMG2_LOG_ERROR, "%s: failed to copy the metadata", tag);
+		img2_image_destroy(dst);
+		return IMG2_E_NOMEM;
 	}
 
 	*out = dst;

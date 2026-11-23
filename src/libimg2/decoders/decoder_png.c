@@ -19,6 +19,7 @@
 
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
+#include "../metadata/meta_raw.h"
 #endif
 
 /**
@@ -87,9 +88,10 @@ static void log_png_warning(png_structp png_ptr, png_const_charp msg)
  *
  * @param data Raw PNG file data
  * @param len Length of data in bytes
+ * @param img Image that keeps a copy of the raw eXIf block (img2_meta_keep_exif)
  * @return Pointer to img2_exif_t structure, or NULL if no EXIF found or on error
  */
-static img2_exif_t *extract_png_exif(const uint8_t *data, size_t len)
+static img2_exif_t *extract_png_exif(const uint8_t *data, size_t len, img2_image_t *img)
 {
 	if (data == NULL || len == 0) {
 		return NULL;
@@ -132,6 +134,8 @@ static img2_exif_t *extract_png_exif(const uint8_t *data, size_t len)
 #if PNG_LIBPNG_VER >= 10617
 	/* png_get_eXIf() available in libpng >= 1.6.17 */
 	if (png_get_eXIf_1(png_ptr, info_ptr, &exif_size, &exif_data) != 0 && exif_data != NULL && exif_size > 0) {
+		img2_meta_keep_exif(img, "PNG", exif_data, exif_size);
+
 		/* Allocate and initialize img2_exif_t */
 		img2_exif_t *exif = malloc(sizeof(img2_exif_t));
 		if (exif == NULL) {
@@ -259,9 +263,10 @@ static int extract_png_text_to_exif(img2_exif_t *exif, const uint8_t *data, size
  *
  * @param data Raw PNG file data
  * @param len Length of data in bytes
+ * @param img Image that keeps a copy of the raw XMP packet (img2_meta_keep_xmp)
  * @return Pointer to img2_xmp_t structure, or NULL if no XMP found or on error
  */
-static img2_xmp_t *extract_png_xmp(const uint8_t *data, size_t len)
+static img2_xmp_t *extract_png_xmp(const uint8_t *data, size_t len, img2_image_t *img)
 {
 	if (data == NULL || len == 0) {
 		return NULL;
@@ -309,6 +314,8 @@ static img2_xmp_t *extract_png_xmp(const uint8_t *data, size_t len)
 				 * there); the text is NUL-terminated for tEXt, zTXt and iTXt alike. */
 				size_t xml_len = text_ptr[i].text != NULL ? strlen(text_ptr[i].text) : 0;
 				if (xml_len > 0) {
+					img2_meta_keep_xmp(img, "PNG", (const uint8_t *)text_ptr[i].text, xml_len);
+
 					/* Allocate and initialize img2_xmp_t */
 					img2_xmp_t *xmp = malloc(sizeof(img2_xmp_t));
 					if (xmp == NULL) {
@@ -987,7 +994,7 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
 	// Parse EXIF/XMP metadata
 #ifdef IMG2_HAVE_EXIF_READER
 	// Extract EXIF from eXIf chunk using full libpng API
-	img2_exif_t *exif = extract_png_exif(data, len);
+	img2_exif_t *exif = extract_png_exif(data, len, img);
 
 	// If no EXIF from eXIf chunk, allocate empty structure for tEXt data
 	if (exif == NULL) {
@@ -1003,11 +1010,12 @@ static img2_image_t **decode_png_static(const uint8_t *data, size_t len, int *fr
 	}
 
 	// Extract XMP from iTXt chunks using full libpng API
-	img2_xmp_t *xmp = extract_png_xmp(data, len);
+	img2_xmp_t *xmp = extract_png_xmp(data, len, img);
 
 	// Store metadata in image structure
 	img->exif = exif;
 	img->xmp = xmp;
+	img->orientation = img2_meta_orientation(exif); /* libpng does not orient */
 #endif
 
 	// Allocate frames array (single frame for PNG)

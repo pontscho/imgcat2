@@ -25,7 +25,7 @@ target_sources(img2 PRIVATE
 	decoders/decoder_qoi.c decoders/decoder_ico.c decoders/decoder_pnm.c decoders/decoder_yuv.c decoders/decoder_nanosvg.c
 	encoders/encoder.c encoders/encoder_jpeg.c encoders/encoder_png.c
 	text/font_manager.c "${IMG2_GENERATED_DIR}/embedded_fonts.c"
-	metadata/xml_parser.c metadata/exif_reader.c)   # always compiled: exif/xmp are part of the image model
+	metadata/xml_parser.c metadata/exif_reader.c metadata/meta_raw.c)   # always compiled: exif/xmp are part of the image model
 
 # Optional codecs
 if(IMG2_HAVE_GIFLIB)

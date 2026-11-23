@@ -20,6 +20,7 @@
 
 #ifdef IMG2_HAVE_EXIF_READER
 #include "../metadata/exif_reader.h"
+#include "../metadata/meta_raw.h"
 #endif
 
 /** Maximum number of AVIF frames to decode (prevents DoS) */
@@ -187,6 +188,11 @@ static img2_image_t **decode_avif_static(const uint8_t *data, size_t len, int *f
 										}
 									}
 
+									// Raw block for the encoders (the first Exif item in TIFF-header form)
+									if (output->exif_raw == NULL) {
+										img2_meta_keep_exif(output, "AVIF", tiff_data, tiff_size);
+									}
+
 									// Parse EXIF from TIFF data
 									if (img2_exif_parse_tiff(exif, tiff_data, tiff_size) != 0) {
 										free(exif);
@@ -209,6 +215,9 @@ static img2_image_t **decode_avif_static(const uint8_t *data, size_t len, int *f
 									struct heif_error err = heif_image_handle_get_metadata(handle, metadata_ids[i], xmp_data);
 									if (err.code == heif_error_Ok) {
 										xmp_data[xmp_size] = '\0'; // Null-terminate XML string
+										if (output->xmp_raw == NULL) {
+											img2_meta_keep_xmp(output, "AVIF", (const uint8_t *)xmp_data, xmp_size);
+										}
 										if (img2_xmp_parse_xml(xmp, xmp_data, xmp_size) != 0) {
 											img2_xmp_clear(xmp);
 											free(xmp);
