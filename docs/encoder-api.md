@@ -320,8 +320,8 @@ Implemented as specified above, with these facts and choices (2026-11-23, vendor
   blocks, applies `img->orientation` and resets it to 1 (idempotent). Behaviour change: it used to apply
   `img->exif->orientation` (and rotated TIFF/HEIF/AVIF frames a second time if called on them); a caller-built
   image now rotates only through the field. `img2_image_orient` (internal) and `img2_convert_*` (from raw
-  buffers) do not involve metadata. Animated decodes attach metadata to frame 0 only (unchanged), so a CLI
-  conversion of `--frame N > 0` writes none.
+  buffers) do not involve metadata. Animated decodes attach metadata to frame 0 only (unchanged); the CLI's
+  `--keep-metadata --frame N` (N > 0) writes frame 0's blocks with frame N (decision 11).
 - **CLI pipeline.** Uses `img->orientation` instead of the format list. The [P11] diagnostic for an EXIF value
   outside 1..8 ("Applying EXIF orientation: N (invalid)" + "Warning: Failed to apply orientation N, displaying
   as-is") is kept and is now printed for any format (before: not for TIFF/HEIF/AVIF/JXL); no golden case has such
@@ -398,3 +398,14 @@ Implemented as specified above, with these facts and choices (2026-11-23, vendor
    lossless + `progressive` logs `encode: progressive has no effect for lossless JXL (no VarDCT passes)`.
 8. (Zoltán, 2026-11-23) The AVIF effort mapping stays linear, speed = 10 - effort (effort 4 = the default speed 6),
    although the other formats' defaults sit near effort 7.
+9. (Zoltán, 2026-11-23, after phase 3) `img2_apply_orientation` applies `img->orientation` and resets it to 1
+   (the parsed `img->exif->orientation` no longer rotates on its own): accepted as implemented.
+10. (Zoltán, 2026-11-23) JXL, HEIF and AVIF also write their native orientation (JXL codestream orientation,
+    HEIF/AVIF irot/imir) when the EXIF bit is set and `orientation` is 2..8: kept.
+11. (Zoltán, 2026-11-23) `--keep-metadata --frame N` (N > 0) writes frame 0's EXIF / XMP, because the metadata
+    describes the file, not one frame. Implemented in the CLI (`file_render`): a selected frame without blocks of
+    its own gets copies of frame 0's (`img2_image_set_metadata`); its `orientation` field stays its own, so the
+    written tag matches its pixels. The decoders keep attaching the blocks to frame 0 only (no per-frame copies of
+    up to 2 MiB). Tested with constructed frames and an animated JPEG XL with Exif / xml boxes encoded in-test; no
+    golden case, as no golden input is an animation with metadata (GIF, APNG and animated WebP decode none).
+12. (Zoltán, 2026-11-23) JPEG keeps the JFIF APP0 before the EXIF APP1 (libjpeg's `jpeg_start_compress` order).

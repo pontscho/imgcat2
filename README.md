@@ -730,8 +730,8 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - Without `--keep-metadata` no metadata is written (the output is byte-identical to earlier versions)
 - `--keep-metadata` known limitations: the EXIF thumbnail (IFD1) and the PixelXDimension / PixelYDimension tags
   are copied as decoded, so after `-w` / `-H` scaling or a rotation they can be stale; metadata blocks over 1 MiB
-  are not kept; TIFF inputs carry no EXIF block to copy and RAW inputs only their XMP; for animated inputs only
-  frame 0 has metadata (`--frame N` with N > 0 writes none)
+  are not kept; TIFF inputs carry no EXIF block to copy and RAW inputs only their XMP
+- `--keep-metadata --frame N` writes the file's metadata (it describes the file, not one frame) with frame N
 
 ## Metadata Extraction
 

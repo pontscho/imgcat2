@@ -500,8 +500,10 @@ Decoders keep the raw metadata blocks next to the parsed `img2_exif_t` / `img2_x
 
 Each block is capped at `IMG2_MAX_METADATA_SIZE` (1 MiB): a larger one is not kept and the decoder logs one WARN
 (`PNG: EXIF block of N bytes exceeds the 1 MiB metadata cap (raw block not kept)`); the parsed struct is filled as
-before. A block that is not in TIFF-header form is not kept. Animated decodes attach metadata to the first frame
-only. `img2_image_create` gives no blocks and `orientation = 1`.
+before. A block that is not in TIFF-header form is not kept. Animated decodes attach the file's metadata to the
+first frame only; to encode a later frame with it, copy the blocks with `img2_image_set_metadata(frame,
+frames[0]->exif_raw, ..., frames[0]->xmp_raw, ...)` (imgcat2's `--keep-metadata --frame N` does this; the frame's
+own `orientation` is kept). `img2_image_create` gives no blocks and `orientation = 1`.
 
 `img2_image_set_metadata(img, exif, exif_len, xmp, xmp_len)` replaces both blocks with copies (NULL removes one;
 EXIF must start with a TIFF header, `IMG2_E_ARG` otherwise; a block over 1 MiB is `IMG2_E_LIMIT`; on error the image
