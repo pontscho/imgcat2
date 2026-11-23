@@ -7,6 +7,7 @@
  * JSON:    --info --json escaped every byte >= 0x80 as \u00XX (signed char): UTF-8 text came out as mojibake.
  * GPS:     --info printed the signed value with the letter ("-121.314136W") and a NUL byte for no reference.
  * -w / -H: checked against the terminal size even when converting to a file (--jpeg/--png/--heif/--webp/--jxl).
+ * Errors:  "-w or -h" (-h is --help) and "requires --jpeg or --png" (HEIF / WebP / JXL missing).
  */
 
 #include <fcntl.h>
@@ -21,6 +22,7 @@
 
 #include "../../imgcat2/cli.h"
 #include "../../imgcat2/metadata.h"
+#include "../../imgcat2/terminal/file.h"
 #include "../ctest.h"
 
 #ifdef IMG2_HAVE_EXIF_READER
@@ -226,6 +228,43 @@ CTEST(cli_fix, convert_dimensions_not_terminal_bound)
 	opts.target_height = 600;
 	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
 	ASSERT_NOT_NULL(strstr(err, "Error: Height must be between 1 and 48 pixels (got 600)"));
+	free(err);
+}
+
+/* ---- error messages: -H (not -h, which is --help), every conversion format ---- */
+
+CTEST(cli_fix, validate_messages)
+{
+	cli_options_t opts;
+	char *err = NULL;
+
+	opts_defaults(&opts);
+	opts.has_custom_dimensions = true;
+	opts.target_width = 0;
+	opts.target_height = 0;
+	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+	ASSERT_STR("Error: At least one of -w or -H must be positive\n", err);
+	free(err);
+
+	opts_defaults(&opts);
+	opts.convert_mode = true;
+	opts.output_format = IMG2_FORMAT_NONE;
+	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+	ASSERT_STR("Error: Conversion mode requires --jpeg, --png, --heif, --webp or --jxl\n", err);
+	free(err);
+
+	/* file_render() without a format: the same list */
+	img2_image_t *img = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(2, 2, &img));
+	opts_defaults(&opts);
+	cap_t c;
+	cap_begin(&c, STDERR_FILENO, "render");
+	int rc = file_render(&img, 1, &opts);
+	size_t n = 0;
+	err = cap_end(&c, &n);
+	img2_image_destroy(img);
+	ASSERT_EQUAL(-1, rc);
+	ASSERT_STR("Error: No output format specified (use --jpeg, --png, --heif, --webp or --jxl)\n", err);
 	free(err);
 }
 

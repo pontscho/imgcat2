@@ -354,5 +354,5 @@ img2_add_test(test_svg_text_cap SOURCES unit/test_svg_text_cap.c TIMEOUT 60)
 # --- cli-fix ---
 # Command line fixes: -F / -b consistent with --fps / --version; --info --json strings keep UTF-8; --info GPS
 # lines (absolute value + hemisphere letter, no NUL byte without a reference); -w / -H of a conversion not
-# limited by the terminal size
+# limited by the terminal size; error messages name -H and every conversion format
 img2_add_test(test_cli_fix SOURCES unit/test_cli_fix.c LINK cli)

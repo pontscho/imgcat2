@@ -526,7 +526,7 @@ int validate_options(cli_options_t *opts)
 
 		/* At least one dimension must be positive */
 		if (opts->target_width <= 0 && opts->target_height <= 0) {
-			fprintf(stderr, "Error: At least one of -w or -h must be positive\n");
+			fprintf(stderr, "Error: At least one of -w or -H must be positive\n");
 			return -1;
 		}
 	}
@@ -541,7 +541,7 @@ int validate_options(cli_options_t *opts)
 	if (opts->convert_mode) {
 		/* Require output format to be set */
 		if (opts->output_format == IMG2_FORMAT_NONE) {
-			fprintf(stderr, "Error: Conversion mode requires --jpeg or --png\n");
+			fprintf(stderr, "Error: Conversion mode requires --jpeg, --png, --heif, --webp or --jxl\n");
 			return -1;
 		}
 

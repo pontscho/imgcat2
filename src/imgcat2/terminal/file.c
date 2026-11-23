@@ -117,7 +117,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 
 	/* Check output format is specified */
 	if (opts->output_format == IMG2_FORMAT_NONE) {
-		fprintf(stderr, "Error: No output format specified (use --jpeg or --png)\n");
+		fprintf(stderr, "Error: No output format specified (use --jpeg, --png, --heif, --webp or --jxl)\n");
 		return -1;
 	}
 
