@@ -11,9 +11,9 @@
 
 typedef void (*safe_emit_fn)(void *ctx, const char *p, size_t n);
 
-/** Length of the valid UTF-8 sequence (2-4 bytes, no overlong form, no surrogate) starting at p, else 0 */
-static size_t utf8_seq_len(const unsigned char *p)
+size_t cli_utf8_seq_len(const char *s)
 {
+	const unsigned char *p = (const unsigned char *)s;
 	const unsigned char c = p[0];
 	unsigned char lo = 0x80, hi = 0xBF; /* range of the second byte */
 	size_t n;
@@ -65,7 +65,7 @@ static void safe_walk(const char *s, safe_emit_fn emit, void *ctx)
 			p += run;
 			continue;
 		}
-		const size_t seq = *p >= 0x80 ? utf8_seq_len(p) : 0;
+		const size_t seq = *p >= 0x80 ? cli_utf8_seq_len((const char *)p) : 0;
 		if (seq == 2 && p[0] == 0xC2 && p[1] <= 0x9F) {
 			emit_escaped(p, 2, emit, ctx); /* C1 control in UTF-8 */
 			p += 2;

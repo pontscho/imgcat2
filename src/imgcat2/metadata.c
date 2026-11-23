@@ -264,7 +264,10 @@ void output_xmp_text(const struct img2_xmp *xmp)
 }
 
 /**
- * @brief Helper to escape JSON strings
+ * @brief Write str as a JSON string (null when empty)
+ *
+ * Valid UTF-8 goes out unchanged. Escaped: '"', '\\', the C0 controls (\b \f \n \r \t short, the rest \u00XX),
+ * DEL (\u007f) and the UTF-8 encoded C1 controls U+0080-U+009F (\u0080-\u009f).
  */
 static void print_json_string(const char *str)
 {
@@ -273,24 +276,43 @@ static void print_json_string(const char *str)
 		return;
 	}
 
-	printf("\"");
-	for (const char *p = str; *p != '\0'; p++) {
+	putchar('"');
+	const unsigned char *p = (const unsigned char *)str;
+	while (*p != '\0') {
+		if (*p >= 0x80) {
+			const size_t seq = cli_utf8_seq_len((const char *)p);
+			if (seq == 2 && p[0] == 0xC2 && p[1] <= 0x9F) {
+				printf("\\u%04x", p[1]); /* C1 control */
+			} else if (seq > 0) {
+				fwrite(p, 1, seq, stdout);
+			} else {
+				/* The only lossy case: a byte outside a valid UTF-8 sequence (Latin-1 text, a truncated sequence)
+				 * has no JSON escape (\u00XX would mean the code point U+00XX, not the byte) and written raw it
+				 * would make the output invalid UTF-8, i.e. invalid JSON: each such byte becomes U+FFFD. */
+				fputs("\xef\xbf\xbd", stdout);
+			}
+			p += seq > 0 ? seq : 1;
+			continue;
+		}
 		switch (*p) {
 			case '"': printf("\\\""); break;
 			case '\\': printf("\\\\"); break;
+			case '\b': printf("\\b"); break;
+			case '\f': printf("\\f"); break;
 			case '\n': printf("\\n"); break;
 			case '\r': printf("\\r"); break;
 			case '\t': printf("\\t"); break;
 			default:
-				if (*p < 32) {
-					printf("\\u%04x", (unsigned char)*p);
+				if (*p < 0x20 || *p == 0x7F) {
+					printf("\\u%04x", *p);
 				} else {
 					putchar(*p);
 				}
 				break;
 		}
+		p++;
 	}
-	printf("\"");
+	putchar('"');
 }
 
 /**

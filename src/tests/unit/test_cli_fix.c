@@ -4,6 +4,7 @@
  *
  * -F / -b: the short forms of --fps / --version did not match their long options (-F read a missing argument:
  *          `imgcat2 -F` crashed; -b took an argument --version does not have).
+ * JSON:    --info --json escaped every byte >= 0x80 as \u00XX (signed char): UTF-8 text came out as mojibake.
  */
 
 #include <fcntl.h>
@@ -17,7 +18,12 @@
 #include <img2/img2.h>
 
 #include "../../imgcat2/cli.h"
+#include "../../imgcat2/metadata.h"
 #include "../ctest.h"
+
+#ifdef IMG2_HAVE_EXIF_READER
+#include "../../libimg2/metadata/exif_reader.h"
+#endif
 
 /* ---- capture of a standard stream (fd 1 or 2) into a file of the test temp dir ---- */
 
@@ -168,3 +174,45 @@ CTEST(cli_fix, short_version_takes_no_argument)
 	free(out);
 	free(err);
 }
+
+#ifdef IMG2_HAVE_EXIF_READER
+/* ---- --info --json strings: UTF-8 passed through, controls escaped ---- */
+
+CTEST(cli_fix, json_string_utf8)
+{
+	static const struct {
+		const char *in;
+		const char *out; /* the JSON string */
+	} cases[] = {
+		{ "Zolt\xc3\xa1n", "\"Zolt\xc3\xa1n\"" },                                   /* 2-byte UTF-8 */
+		{ "\xe2\x82\xac \xf0\x9f\x98\x80", "\"\xe2\x82\xac \xf0\x9f\x98\x80\"" },   /* 3- and 4-byte UTF-8 */
+		{ "a\"b\\c/", "\"a\\\"b\\\\c/\"" },
+		{ "\b\f\n\r\t", "\"\\b\\f\\n\\r\\t\"" },                                    /* short forms */
+		{ "\x01\x1b\x1f\x7f", "\"\\u0001\\u001b\\u001f\\u007f\"" },                 /* other C0, DEL */
+		{ "\xc2\x80\xc2\x9b\xc2\x9f\xc2\xa0", "\"\\u0080\\u009b\\u009f\xc2\xa0\"" }, /* UTF-8 C1; U+00A0 stays */
+		/* invalid UTF-8: one U+FFFD per byte (raw C1 byte, Latin-1 byte, truncated / overlong / surrogate) */
+		{ "x\x9b\xe1y", "\"x\xef\xbf\xbd\xef\xbf\xbdy\"" },
+		{ "\xe2\x82", "\"\xef\xbf\xbd\xef\xbf\xbd\"" },
+		{ "\xc0\xaf", "\"\xef\xbf\xbd\xef\xbf\xbd\"" },
+		{ "\xed\xa0\x80", "\"\xef\xbf\xbd\xef\xbf\xbd\xef\xbf\xbd\"" },
+	};
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		img2_exif_t e;
+		img2_exif_init(&e);
+		snprintf(e.artist, sizeof(e.artist), "%s", cases[i].in);
+		cap_t c;
+		cap_begin(&c, STDOUT_FILENO, "json");
+		output_exif_json(&e, true);
+		size_t n = 0;
+		char *out = cap_end(&c, &n);
+		img2_exif_clear(&e);
+		char expect[256];
+		snprintf(expect, sizeof(expect), "\"exif\":{\"rights\":{\"artist\":%s}}", cases[i].out);
+		if (strcmp(out, expect) != 0) {
+			fprintf(stderr, "  case %zu: got %s\n", i, out);
+		}
+		ASSERT_STR(expect, out);
+		free(out);
+	}
+}
+#endif /* IMG2_HAVE_EXIF_READER */

@@ -8,7 +8,8 @@
  * (C2 80 - C2 9F) and the raw bytes 0x80-0x9F outside a valid UTF-8 sequence. Valid UTF-8 and every other byte
  * (0xA0-0xFF outside a valid sequence, e.g. Latin-1 text) are written unchanged.
  *
- * JSON output escapes on its own (metadata.c print_json_string); the library log sanitizes its messages.
+ * JSON output escapes on its own (metadata.c print_json_string, with cli_utf8_seq_len()); the library log
+ * sanitizes its messages.
  */
 
 #ifndef IMGCAT2_SAFE_TEXT_H
@@ -39,5 +40,13 @@ void cli_fputs_safe(const char *s, FILE *f);
  * @return buf
  */
 const char *cli_safe_str(const char *s, char *buf, size_t size);
+
+/**
+ * @brief Length of the valid UTF-8 sequence starting at s
+ *
+ * @param s NUL-terminated text, s[0] >= 0x80 (a lead byte)
+ * @return 2-4 for a well-formed sequence (no overlong form, no surrogate, at most U+10FFFF), else 0
+ */
+size_t cli_utf8_seq_len(const char *s);
 
 #endif /* IMGCAT2_SAFE_TEXT_H */
