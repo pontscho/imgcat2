@@ -33,6 +33,8 @@ img2_add_test(test_encoder_webp SOURCES unit/test_encoder_webp.c REQUIRES WEBP)
 img2_add_test(test_encoder_heif SOURCES unit/test_encoder_heif.c REQUIRES HEIF)
 img2_add_test(test_encoder_avif SOURCES unit/test_encoder_avif.c REQUIRES HEIF)
 img2_add_test(test_encoder_jxl SOURCES unit/test_encoder_jxl.c REQUIRES JXL)
+# S25: encoder options (docs/encoder-api.md phase 2); the per-format cases are compiled in per IMG2_HAVE_*
+img2_add_test(test_encode_options SOURCES unit/test_encode_options.c REQUIRES HEIF TIMEOUT 120)
 img2_add_test(test_file_render SOURCES unit/test_file_render.c LINK cli)
 img2_add_test(test_xml_parser SOURCES unit/test_xml_parser.c REQUIRES EXIF_READER)
 img2_add_test(test_exif_reader SOURCES unit/test_exif_reader.c REQUIRES EXIF_READER)

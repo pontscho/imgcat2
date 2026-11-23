@@ -380,6 +380,140 @@ CTEST(cli_fix, avif_conversion)
 }
 #endif
 
+/* ---- encoder options (S25): long-only, ranged, conversion mode only, passed to img2_encode() ---- */
+
+CTEST(cli_fix, encoder_option_flags)
+{
+	cli_options_t opts;
+	char *out = NULL;
+	char *err = NULL;
+
+	opts_defaults(&opts);
+	char *argv1[] = { (char *)"imgcat2", (char *)"--jpeg", (char *)"85", (char *)"--lossless", (char *)"--effort", (char *)"7", (char *)"--chroma", (char *)"444",
+		          (char *)"--alpha-quality", (char *)"60", (char *)"--progressive", (char *)"--threads", (char *)"8", (char *)"in.png", NULL };
+	ASSERT_EQUAL(0, parse_captured(14, argv1, &opts, &out, &err));
+	ASSERT_STR("", err);
+	ASSERT_TRUE(opts.enc_lossless);
+	ASSERT_EQUAL(7, opts.enc_effort);
+	ASSERT_EQUAL(IMG2_CHROMA_444, opts.enc_chroma);
+	ASSERT_EQUAL(60, opts.enc_alpha_quality);
+	ASSERT_TRUE(opts.enc_progressive);
+	ASSERT_EQUAL(8, opts.enc_threads);
+	ASSERT_STR("in.png", opts.input_file);
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+
+	/* range edges and the chroma values */
+	static const char *const good[][2] = { { "--effort", "1" }, { "--effort", "10" }, { "--alpha-quality", "1" }, { "--alpha-quality", "100" },
+		                                   { "--threads", "1" }, { "--threads", "64" }, { "--chroma", "420" }, { "--chroma", "422" } };
+	for (size_t i = 0; i < sizeof(good) / sizeof(good[0]); i++) {
+		opts_defaults(&opts);
+		char *argv2[] = { (char *)"imgcat2", (char *)"--png", (char *)"6", (char *)good[i][0], (char *)good[i][1], (char *)"in.png", NULL };
+		ASSERT_EQUAL(0, parse_captured(6, argv2, &opts, &out, &err));
+		ASSERT_STR("", err);
+		free(out);
+		free(err);
+	}
+	ASSERT_EQUAL(IMG2_CHROMA_422, opts.enc_chroma);
+
+	/* out of range / malformed: errors at parse time */
+	static const char *const bad[][3] = {
+		{ "--effort", "0", "Error: --effort must be 1-10 (got '0')\n" },
+		{ "--effort", "11", "Error: --effort must be 1-10 (got '11')\n" },
+		{ "--effort", "5x", "Error: --effort must be 1-10 (got '5x')\n" },
+		{ "--alpha-quality", "0", "Error: --alpha-quality must be 1-100 (got '0')\n" },
+		{ "--alpha-quality", "101", "Error: --alpha-quality must be 1-100 (got '101')\n" },
+		{ "--threads", "0", "Error: --threads must be 1-64 (got '0')\n" },
+		{ "--threads", "65", "Error: --threads must be 1-64 (got '65')\n" },
+		{ "--threads", "", "Error: --threads must be 1-64 (got '')\n" },
+		{ "--chroma", "421", "Error: Invalid --chroma '421' (must be 420, 422 or 444)\n" },
+	};
+	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+		opts_defaults(&opts);
+		char *argv3[] = { (char *)"imgcat2", (char *)"--jxl", (char *)"80", (char *)bad[i][0], (char *)bad[i][1], (char *)"in.png", NULL };
+		ASSERT_EQUAL(-1, parse_captured(6, argv3, &opts, &out, &err));
+		ASSERT_STR(bad[i][2], err);
+		free(out);
+		free(err);
+	}
+
+	/* --help lists them under Conversion Options */
+	opts_defaults(&opts);
+	char *argv4[] = { (char *)"imgcat2", (char *)"--help", NULL };
+	ASSERT_EQUAL(1, parse_captured(2, argv4, &opts, &out, &err));
+	ASSERT_NOT_NULL(strstr(out, "      --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)\n"
+	                            "      --lossless            Lossless output (WebP, JXL, AVIF; PNG is always lossless)\n"
+	                            "      --effort <1-10>       Encoder effort: 1 = fastest .. 10 = smallest file\n"
+	                            "      --chroma <420|422|444>  Chroma subsampling (JPEG, AVIF; default: 420)\n"
+	                            "      --alpha-quality <1-100>  Alpha channel quality (WebP, JXL, AVIF)\n"
+	                            "      --progressive         Progressive JPEG / interlaced (Adam7) PNG\n"
+	                            "      --threads <1-64>      Encoder threads (WebP, JXL, AVIF)\n"));
+	free(out);
+	free(err);
+}
+
+CTEST(cli_fix, encoder_options_need_conversion)
+{
+	static const char *const flags[][3] = {
+		{ "--lossless", NULL, "Error: --lossless can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
+		{ "--effort", "3", "Error: --effort can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
+		{ "--chroma", "444", "Error: --chroma can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
+		{ "--alpha-quality", "50", "Error: --alpha-quality can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
+		{ "--progressive", NULL, "Error: --progressive can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
+		{ "--threads", "2", "Error: --threads can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
+	};
+	cli_options_t opts;
+	char *out = NULL;
+	char *err = NULL;
+	for (size_t i = 0; i < sizeof(flags) / sizeof(flags[0]); i++) {
+		opts_defaults(&opts);
+		char *argv[] = { (char *)"imgcat2", (char *)flags[i][0], (char *)flags[i][1], (char *)"in.png", NULL };
+		if (flags[i][1] == NULL) {
+			argv[2] = (char *)"in.png";
+			argv[3] = NULL;
+		}
+		ASSERT_EQUAL(0, parse_captured(flags[i][1] == NULL ? 3 : 4, argv, &opts, &out, &err));
+		free(out);
+		free(err);
+		ASSERT_FALSE(opts.convert_mode);
+		ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+		ASSERT_STR(flags[i][2], err);
+		free(err);
+	}
+}
+
+/* file_render() hands the options to img2_encode(): --progressive with --png gives an Adam7 PNG */
+CTEST(cli_fix, encoder_options_reach_encoder)
+{
+	img2_image_t *img = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(16, 8, &img));
+	cli_options_t opts;
+	opts_defaults(&opts);
+	opts.convert_mode = true;
+	opts.output_format = IMG2_FORMAT_PNG;
+	opts.enc_progressive = true;
+	cap_t co;
+	cap_t ce;
+	cap_begin(&co, STDOUT_FILENO, "prog_out");
+	cap_begin(&ce, STDERR_FILENO, "prog_err");
+	int rc = file_render(&img, 1, &opts);
+	size_t n_err = 0;
+	size_t n_out = 0;
+	char *err = cap_end(&ce, &n_err);
+	char *out = cap_end(&co, &n_out);
+	img2_image_destroy(img);
+	ASSERT_EQUAL(0, rc);
+	ASSERT_STR("", err);
+	ASSERT_TRUE(n_out > 29);
+	ASSERT_EQUAL(0, memcmp(out + 12, "IHDR", 4));
+	ASSERT_EQUAL(1, out[28]); /* interlace method: Adam7 */
+	free(out);
+	free(err);
+}
+
 /* ---- --frame N of an animated image: the "converting frame" note only with -v ---- */
 
 /* file_render() of a 2-frame image to stdout (discarded); returns its stderr (free()) */

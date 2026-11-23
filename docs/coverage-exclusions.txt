@@ -1135,21 +1135,21 @@ encoders/encoder.c:92 branch-true 186 = const char *format_name = (format == IMG
 encoders/encoder.c:92 branch-true 28 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
 encoders/encoder.c:92 branch-true 68 = const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
 reason: encoder returned OK without output: every encoder checks this itself; defensive
-encoders/encoder.c:135 region 43 = if (*out_data == NULL || *out_size == 0) {
-encoders/encoder.c:135 branch-true 27 = if (*out_data == NULL || *out_size == 0) {
-encoders/encoder.c:135 branch-true 6 = if (*out_data == NULL || *out_size == 0) {
-encoders/encoder.c:136 line = img2_log(IMG2_LOG_ERROR, "Error: Encoder returned invalid output (data=%p, size=%zu)", (void *)*out_data, *out_size);
-encoders/encoder.c:137 line = if (*out_data != NULL) {
-encoders/encoder.c:137 region 26 = if (*out_data != NULL) {
-encoders/encoder.c:137 region 7 = if (*out_data != NULL) {
-encoders/encoder.c:137 branch-true 7 = if (*out_data != NULL) {
-encoders/encoder.c:137 branch-false 7 = if (*out_data != NULL) {
-encoders/encoder.c:138 line = free(*out_data);
-encoders/encoder.c:139 line = *out_data = NULL;
-encoders/encoder.c:140 line = }
-encoders/encoder.c:141 line = *out_size = 0;
-encoders/encoder.c:142 line = return IMG2_E_CODEC;
-encoders/encoder.c:143 line = }
+encoders/encoder.c:161 region 43 = if (*out_data == NULL || *out_size == 0) {
+encoders/encoder.c:161 branch-true 27 = if (*out_data == NULL || *out_size == 0) {
+encoders/encoder.c:161 branch-true 6 = if (*out_data == NULL || *out_size == 0) {
+encoders/encoder.c:162 line = img2_log(IMG2_LOG_ERROR, "Error: Encoder returned invalid output (data=%p, size=%zu)", (void *)*out_data, *out_size);
+encoders/encoder.c:163 line = if (*out_data != NULL) {
+encoders/encoder.c:163 region 26 = if (*out_data != NULL) {
+encoders/encoder.c:163 region 7 = if (*out_data != NULL) {
+encoders/encoder.c:163 branch-true 7 = if (*out_data != NULL) {
+encoders/encoder.c:163 branch-false 7 = if (*out_data != NULL) {
+encoders/encoder.c:164 line = free(*out_data);
+encoders/encoder.c:165 line = *out_data = NULL;
+encoders/encoder.c:166 line = }
+encoders/encoder.c:167 line = *out_size = 0;
+encoders/encoder.c:168 line = return IMG2_E_CODEC;
+encoders/encoder.c:169 line = }
 
 # ===== encoders/encoder_heif.c =====
 reason: the write callback's state is always the encoder's own write state
@@ -1161,94 +1161,128 @@ encoders/encoder_heif.c:52 line = }
 reason: libheif calls the writer exactly once with the whole file (heif_context_write: StreamWriter, one write call)
 encoders/encoder_heif.c:55 branch-false 6 = if (state->size + size > state->capacity) {
 encoders/encoder_heif.c:58 branch-false 7 = if (new_capacity == 0) {
+reason: the aom plugin of the vendored libheif accepts every parameter value avif_set_options() sets (img2_encode() validated them): there is never a first error to keep
+encoders/encoder_heif.c:123 branch-false 6 = if (first->code == heif_error_Ok) {
 reason: heif_context_alloc() uses new (throws, never returns NULL)
-encoders/encoder_heif.c:122 region 19 = if (ctx == NULL) {
-encoders/encoder_heif.c:122 branch-true 6 = if (ctx == NULL) {
-encoders/encoder_heif.c:123 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
-encoders/encoder_heif.c:124 line = return IMG2_E_NOMEM;
-encoders/encoder_heif.c:125 line = }
+encoders/encoder_heif.c:214 region 19 = if (ctx == NULL) {
+encoders/encoder_heif.c:214 branch-true 6 = if (ctx == NULL) {
+encoders/encoder_heif.c:215 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to allocate HEIF context");
+encoders/encoder_heif.c:216 line = return IMG2_E_NOMEM;
+encoders/encoder_heif.c:217 line = }
 reason: heif_image_create() fails only for an invalid colorspace/chroma pair (RGB + interleaved RGBA is valid)
-encoders/encoder_heif.c:131 region 33 = if (err.code != heif_error_Ok) {
-encoders/encoder_heif.c:131 branch-true 6 = if (err.code != heif_error_Ok) {
-encoders/encoder_heif.c:132 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to create HEIF image: %s", err.message);
-encoders/encoder_heif.c:133 line = heif_context_free(ctx);
-encoders/encoder_heif.c:134 line = return IMG2_E_CODEC;
-encoders/encoder_heif.c:135 line = }
+encoders/encoder_heif.c:223 region 33 = if (err.code != heif_error_Ok) {
+encoders/encoder_heif.c:223 branch-true 6 = if (err.code != heif_error_Ok) {
+encoders/encoder_heif.c:224 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to create HEIF image: %s", err.message);
+encoders/encoder_heif.c:225 line = heif_context_free(ctx);
+encoders/encoder_heif.c:226 line = return IMG2_E_CODEC;
+encoders/encoder_heif.c:227 line = }
 reason: heif_image_add_plane() succeeded: the plane exists
-encoders/encoder_heif.c:149 region 21 = if (plane == NULL) {
-encoders/encoder_heif.c:149 branch-true 6 = if (plane == NULL) {
-encoders/encoder_heif.c:150 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get HEIF image plane");
-encoders/encoder_heif.c:151 line = heif_image_release(heif_img);
-encoders/encoder_heif.c:152 line = heif_context_free(ctx);
-encoders/encoder_heif.c:153 line = return IMG2_E_CODEC;
-encoders/encoder_heif.c:154 line = }
+encoders/encoder_heif.c:241 region 21 = if (plane == NULL) {
+encoders/encoder_heif.c:241 branch-true 6 = if (plane == NULL) {
+encoders/encoder_heif.c:242 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to get HEIF image plane");
+encoders/encoder_heif.c:243 line = heif_image_release(heif_img);
+encoders/encoder_heif.c:244 line = heif_context_free(ctx);
+encoders/encoder_heif.c:245 line = return IMG2_E_CODEC;
+encoders/encoder_heif.c:246 line = }
 reason: heif_context_get_encoder_for_format() sets *encoder = new heif_encoder before it returns the plugin's new_encoder result (heif_encoding.cc), and NULL only together with an error: Ok with a NULL encoder is impossible
-encoders/encoder_heif.c:166 branch-true 35 = if (err.code != heif_error_Ok || encoder == NULL) {
+encoders/encoder_heif.c:258 branch-true 35 = if (err.code != heif_error_Ok || encoder == NULL) {
+reason: the aom plugin accepts every option value img2_encode() lets through (validated ranges, chroma 420/422/444); only another AV1 plugin of a host libheif could refuse one
+encoders/encoder_heif.c:281 region 34 = if (err.code != heif_error_Ok) {
+encoders/encoder_heif.c:281 branch-true 7 = if (err.code != heif_error_Ok) {
+encoders/encoder_heif.c:283 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set %s options: %s", label, err.message);
+encoders/encoder_heif.c:284 line = heif_nclx_color_profile_free(nclx);
+encoders/encoder_heif.c:285 line = heif_encoder_release(encoder);
+encoders/encoder_heif.c:286 line = heif_image_release(heif_img);
+encoders/encoder_heif.c:287 line = heif_context_free(ctx);
+encoders/encoder_heif.c:288 line = return IMG2_E_CODEC;
+encoders/encoder_heif.c:289 line = }
 reason: the single write call either stores everything or fails before anything was stored
-encoders/encoder_heif.c:216 region 35 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:216 branch-true 7 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:217 line = free(write_state.buffer);
-encoders/encoder_heif.c:218 line = }
+encoders/encoder_heif.c:330 region 35 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:330 branch-true 7 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:331 line = free(write_state.buffer);
+encoders/encoder_heif.c:332 line = }
 reason: libheif always writes at least ftyp/meta after a successful encode
-encoders/encoder_heif.c:228 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_heif.c:228 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_heif.c:228 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_heif.c:229 line = img2_log(IMG2_LOG_ERROR, "Error: %s encoder produced no output", label);
-encoders/encoder_heif.c:230 line = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:230 region 35 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:230 region 7 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:230 branch-true 7 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:230 branch-false 7 = if (write_state.buffer != NULL) {
-encoders/encoder_heif.c:231 line = free(write_state.buffer);
-encoders/encoder_heif.c:232 line = }
-encoders/encoder_heif.c:233 line = return IMG2_E_CODEC;
-encoders/encoder_heif.c:234 line = }
+encoders/encoder_heif.c:342 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_heif.c:342 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_heif.c:342 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_heif.c:343 line = img2_log(IMG2_LOG_ERROR, "Error: %s encoder produced no output", label);
+encoders/encoder_heif.c:344 line = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:344 region 35 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:344 region 7 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:344 branch-true 7 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:344 branch-false 7 = if (write_state.buffer != NULL) {
+encoders/encoder_heif.c:345 line = free(write_state.buffer);
+encoders/encoder_heif.c:346 line = }
+encoders/encoder_heif.c:347 line = return IMG2_E_CODEC;
+encoders/encoder_heif.c:348 line = }
 
 # ===== encoders/encoder_jpeg.c =====
 reason: jpeg_write_scanlines() returns 0 only for a suspending destination; the memory destination grows or longjmps
-encoders/encoder_jpeg.c:160 region 57 = if (jpeg_write_scanlines(cinfo, row_pointer, 1) != 1) {
-encoders/encoder_jpeg.c:160 branch-true 7 = if (jpeg_write_scanlines(cinfo, row_pointer, 1) != 1) {
-encoders/encoder_jpeg.c:161 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to write JPEG scanline %u", y);
-encoders/encoder_jpeg.c:162 line = jpeg_destroy_compress(cinfo);
-encoders/encoder_jpeg.c:163 line = return IMG2_E_CODEC;
-encoders/encoder_jpeg.c:164 line = }
+encoders/encoder_jpeg.c:173 region 57 = if (jpeg_write_scanlines(cinfo, row_pointer, 1) != 1) {
+encoders/encoder_jpeg.c:173 branch-true 7 = if (jpeg_write_scanlines(cinfo, row_pointer, 1) != 1) {
+encoders/encoder_jpeg.c:174 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to write JPEG scanline %u", y);
+encoders/encoder_jpeg.c:175 line = jpeg_destroy_compress(cinfo);
+encoders/encoder_jpeg.c:176 line = return IMG2_E_CODEC;
+encoders/encoder_jpeg.c:177 line = }
 reason: a successful libjpeg compression always writes SOI and headers
-encoders/encoder_jpeg.c:235 region 22 = if (jpeg_size == 0) {
-encoders/encoder_jpeg.c:235 branch-true 6 = if (jpeg_size == 0) {
-encoders/encoder_jpeg.c:236 line = img2_log(IMG2_LOG_ERROR, "Error: JPEG encoder produced no output");
-encoders/encoder_jpeg.c:237 line = free(dest.buffer);
-encoders/encoder_jpeg.c:238 line = return IMG2_E_CODEC;
-encoders/encoder_jpeg.c:239 line = }
+encoders/encoder_jpeg.c:270 region 22 = if (jpeg_size == 0) {
+encoders/encoder_jpeg.c:270 branch-true 6 = if (jpeg_size == 0) {
+encoders/encoder_jpeg.c:271 line = img2_log(IMG2_LOG_ERROR, "Error: JPEG encoder produced no output");
+encoders/encoder_jpeg.c:272 line = free(dest.buffer);
+encoders/encoder_jpeg.c:273 line = return IMG2_E_CODEC;
+encoders/encoder_jpeg.c:274 line = }
 
 # ===== encoders/encoder_jxl.c =====
-reason: JxlEncoderSetColorEncoding(sRGB) right after a successful JxlEncoderSetBasicInfo() cannot fail
-encoders/encoder_jxl.c:107 region 79 = if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:107 branch-true 6 = if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:108 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL color encoding");
-encoders/encoder_jxl.c:109 line = JxlEncoderDestroy(encoder);
-encoders/encoder_jxl.c:110 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:111 line = }
-reason: JxlEncoderSetFrameLossless() fails only without uses_original_profile, which is set whenever lossless is used
-encoders/encoder_jxl.c:115 region 74 = if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:115 branch-true 7 = if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:116 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL lossless mode");
-encoders/encoder_jxl.c:117 line = JxlEncoderDestroy(encoder);
-encoders/encoder_jxl.c:118 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:119 line = }
-reason: the distance is 0.6..10, inside libjxl's [0, 25]
-encoders/encoder_jxl.c:121 region 74 = if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:121 branch-true 7 = if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
-encoders/encoder_jxl.c:122 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL frame distance");
-encoders/encoder_jxl.c:123 line = JxlEncoderDestroy(encoder);
+reason: RESOURCE-BOUND: JxlThreadParallelRunnerCreate() fails only when its allocation or std::thread fails; JxlEncoderSetParallelRunner() on a fresh encoder fails only when its small allocation fails (the second-runner error cannot happen)
+encoders/encoder_jxl.c:121 region 115 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:121 branch-true 25 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:121 branch-true 7 = if (runner == NULL || JxlEncoderSetParallelRunner(encoder, JxlThreadParallelRunner, runner) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:122 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set up the JXL thread pool");
+encoders/encoder_jxl.c:123 line = jxl_encoder_destroy(encoder, runner);
 encoders/encoder_jxl.c:124 line = return IMG2_E_CODEC;
 encoders/encoder_jxl.c:125 line = }
+reason: JxlEncoderSetColorEncoding(sRGB) right after a successful JxlEncoderSetBasicInfo() cannot fail
+encoders/encoder_jxl.c:161 region 79 = if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:161 branch-true 6 = if (JxlEncoderSetColorEncoding(encoder, &color_encoding) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:162 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL color encoding");
+encoders/encoder_jxl.c:163 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:164 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:165 line = }
+reason: JxlEncoderSetFrameLossless() fails only without uses_original_profile, which is set whenever lossless is used
+encoders/encoder_jxl.c:169 region 74 = if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:169 branch-true 7 = if (JxlEncoderSetFrameLossless(settings, JXL_TRUE) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:170 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL lossless mode");
+encoders/encoder_jxl.c:171 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:172 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:173 line = }
+reason: the distance is 0.6..10, inside libjxl's [0, 25]
+encoders/encoder_jxl.c:175 region 74 = if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:175 branch-true 7 = if (JxlEncoderSetFrameDistance(settings, distance) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:176 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL frame distance");
+encoders/encoder_jxl.c:177 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:178 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:179 line = }
+reason: the alpha distance is 0..9.9, inside libjxl's [0, 25], for the existing extra channel 0
+encoders/encoder_jxl.c:180 region 130 = if (o->alpha_quality > 0 && JxlEncoderSetExtraChannelDistance(settings, 0, jxl_distance(o->alpha_quality)) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:180 branch-true 31 = if (o->alpha_quality > 0 && JxlEncoderSetExtraChannelDistance(settings, 0, jxl_distance(o->alpha_quality)) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:181 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL alpha distance");
+encoders/encoder_jxl.c:182 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:183 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:184 line = }
+reason: effort 1..10 (validated by img2_encode()) is inside libjxl's [1, 10]
+encoders/encoder_jxl.c:186 region 127 = if (o->effort > 0 && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, o->effort) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:186 branch-true 23 = if (o->effort > 0 && JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, o->effort) != JXL_ENC_SUCCESS) {
+encoders/encoder_jxl.c:187 line = img2_log(IMG2_LOG_ERROR, "Error: Failed to set JXL effort");
+encoders/encoder_jxl.c:188 line = jxl_encoder_destroy(encoder, runner);
+encoders/encoder_jxl.c:189 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:190 line = }
 reason: a successful JXL encode always writes the signature and headers
-encoders/encoder_jxl.c:197 region 24 = if (buffer_size == 0) {
-encoders/encoder_jxl.c:197 branch-true 6 = if (buffer_size == 0) {
-encoders/encoder_jxl.c:198 line = img2_log(IMG2_LOG_ERROR, "Error: JXL encoder produced no output");
-encoders/encoder_jxl.c:199 line = free(buffer);
-encoders/encoder_jxl.c:200 line = return IMG2_E_CODEC;
-encoders/encoder_jxl.c:201 line = }
+encoders/encoder_jxl.c:261 region 24 = if (buffer_size == 0) {
+encoders/encoder_jxl.c:261 branch-true 6 = if (buffer_size == 0) {
+encoders/encoder_jxl.c:262 line = img2_log(IMG2_LOG_ERROR, "Error: JXL encoder produced no output");
+encoders/encoder_jxl.c:263 line = free(buffer);
+encoders/encoder_jxl.c:264 line = return IMG2_E_CODEC;
+encoders/encoder_jxl.c:265 line = }
 
 # ===== encoders/encoder_png.c =====
 reason: the write callback's state is always the encoder's own write state; return after png_error() (longjmp)
@@ -1270,23 +1304,28 @@ encoders/encoder_png.c:86 line = }
 reason: the libpng error pointer is always the encoder's jmp_buf
 encoders/encoder_png.c:103 branch-false 6 = if (jmpbuf != NULL) {
 reason: a successful libpng write always produces the signature and IHDR
-encoders/encoder_png.c:242 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_png.c:242 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_png.c:242 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
-encoders/encoder_png.c:243 line = img2_log(IMG2_LOG_ERROR, "Error: PNG encoder produced no output");
-encoders/encoder_png.c:244 line = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:244 region 35 = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:244 region 7 = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:244 branch-true 7 = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:244 branch-false 7 = if (write_state.buffer != NULL) {
-encoders/encoder_png.c:245 line = free(write_state.buffer);
-encoders/encoder_png.c:246 line = }
-encoders/encoder_png.c:247 line = return IMG2_E_CODEC;
-encoders/encoder_png.c:248 line = }
+encoders/encoder_png.c:274 region 59 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_png.c:274 branch-true 36 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_png.c:274 branch-true 6 = if (write_state.buffer == NULL || write_state.size == 0) {
+encoders/encoder_png.c:275 line = img2_log(IMG2_LOG_ERROR, "Error: PNG encoder produced no output");
+encoders/encoder_png.c:276 line = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:276 region 35 = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:276 region 7 = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:276 branch-true 7 = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:276 branch-false 7 = if (write_state.buffer != NULL) {
+encoders/encoder_png.c:277 line = free(write_state.buffer);
+encoders/encoder_png.c:278 line = }
+encoders/encoder_png.c:279 line = return IMG2_E_CODEC;
+encoders/encoder_png.c:280 line = }
 
 # ===== encoders/encoder_webp.c =====
-reason: libwebp returns size 0 whenever it has no output buffer
-encoders/encoder_webp.c:70 branch-true 24 = if (webp_size == 0 || webp_buffer == NULL) {
+reason: WebPConfigPreset() / WebPPictureInit() fail only on an ABI version mismatch between the libwebp headers and the linked library (both the vendored copy)
+encoders/encoder_webp.c:90 region 137 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
+encoders/encoder_webp.c:90 branch-true 113 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
+encoders/encoder_webp.c:90 branch-true 6 = if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, lossless ? WEBP_LOSSLESS_QUALITY : (float)webp_quality) || !WebPPictureInit(&pic)) {
+encoders/encoder_webp.c:91 line = img2_log(IMG2_LOG_ERROR, "Error: libwebp version mismatch");
+encoders/encoder_webp.c:92 line = return IMG2_E_CODEC;
+encoders/encoder_webp.c:93 line = }
 
 # ===== metadata/xml_parser.c =====
 reason: arena_destroy(NULL): the arena always exists (img2_xml_document_create() fails without it)
