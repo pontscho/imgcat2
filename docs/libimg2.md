@@ -2,7 +2,7 @@
 
 libimg2 is the image library behind `imgcat2`: a static C11 library that decodes PNG/APNG, JPEG, GIF, BMP,
 TGA, PSD, HDR, PNM, QOI, ICO/CUR, SVG, WebP, HEIF/AVIF, TIFF, camera RAW, JPEG XL and raw YUV into RGBA8888
-frames, scales them, applies EXIF orientation, and encodes JPEG, PNG, HEIF, WebP and JPEG XL. Every codec
+frames, scales them, applies EXIF orientation, and encodes JPEG, PNG, HEIF, WebP, JPEG XL and AVIF. Every codec
 library is vendored (`vendor/`) and built from source, so one archive carries everything.
 
 - Target: `img2::img2` (alias of the static `img2` target for `add_subdirectory`/FetchContent; an imported
@@ -444,9 +444,15 @@ imgcat2 1.0 for byte-identical output):
 | HEIF | 0..100 (never lossless) | 80 |
 | WebP | 0..99 lossy, 100 lossless | 80 |
 | JPEG XL | 0..94 lossy (distance (100 - q) / 10), >= 95 lossless | 80 |
+| AVIF | aom quality 0..100, 4:2:0 (never lossless) | 99 (the PSNR of HEIF at 80, see [encoder-api.md](encoder-api.md#measurements)) |
 
-This deviates from the locked decision "100 = lossless where supported": PNG is always lossless, JPEG/HEIF are
-never lossless, and JPEG XL is already lossless from 95 (see below). Only `in->frames[0]` is encoded.
+This deviates from the locked decision "100 = lossless where supported": PNG is always lossless, JPEG/HEIF/AVIF
+are never lossless, and JPEG XL is already lossless from 95 (see below). Only `in->frames[0]` is encoded.
+
+HEIF and AVIF are encoded through one libheif path (HEVC via kvazaar, AV1 via aom, each with the plugin's default
+parameters). `img2_can_encode(IMG2_FORMAT_HEIF / _AVIF)` asks libheif at runtime
+(`heif_have_encoder_for_format`), so a host libheif without an HEVC or AV1 encoder reports false and
+`img2_encode` returns `IMG2_E_UNSUPPORTED`, although the encoder table still lists the row.
 
 ## Orientation
 
@@ -592,9 +598,14 @@ residual list into its log.
    (and optionally `bool img2_<x>_is_animated(...)`). Errors go through status + `img2_log`; vendor errors are
    trapped with setjmp/handlers and never terminate.
 3. A prototype in `src/libimg2/decoders/decoder.h` (unconditional).
-4. One row under `#ifdef IMG2_HAVE_<X>` in the table in `decoders/decoder.c` (and/or `encoders/encoder.c`).
+4. One row under `#ifdef IMG2_HAVE_<X>` in the table in `decoders/decoder.c` (and/or `encoders/encoder.c`;
+   an encoder row whose codec can be missing at runtime sets the `available` check, like HEIF/AVIF).
 5. A new `IMG2_MIME_<X>` **appended** at the end of `img2_mime_t` in `include/img2/mime.h` (values are ABI).
-   Detection goes in `decoders/magic.c`, names in `img2_mime_name`/`img2_mime_string`.
+   Detection goes in `decoders/magic.c`, names in `img2_mime_name`/`img2_mime_string`. An encoder also
+   **appends** an `IMG2_FORMAT_<X>` to `img2_format_t` (`include/img2/encode.h`), its name to
+   `img2_encoder_log_missing` and, for the CLI, a long option, a quality field with its default in `main.c`, the
+   range check in `validate_options`, the quality switch in `terminal/file.c` and the format lists in the help
+   text and the "requires --jpeg, ..." messages (`cli.c`, `terminal/file.c`, `test_cli_fix.c`).
 6. An `if(IMG2_HAVE_<X>)` source block in `src/libimg2/CMakeLists.txt`.
 7. Add `IMG2_HAS_<X>` to `cmake/img2_config.h.in` and the mapping in `src/libimg2/CMakeLists.txt`.
 8. Tests via `img2_add_test(... REQUIRES <X>)` and golden cases.

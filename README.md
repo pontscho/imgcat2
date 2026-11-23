@@ -21,7 +21,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
 - **Multiple Image Formats** - PNG/APNG, JPEG, GIF (animated), BMP, TGA, HDR, PBM/PGM/PPM/PAM (Netpbm P1-P7, native), ICO, CUR, QOI, PSD (partial), WebP, HEIF/HEIC, AVIF, TIFF, camera RAW, JPEG XL, raw 8-bit YUV frames (`--yuv`) and SVG (nanosvg with `<text>` support, optional resvg). See [Supported Formats](#supported-formats)
-- **Image Conversion** - Convert images to JPEG, PNG, HEIF, WebP, or JXL with quality control and lossless mode support
+- **Image Conversion** - Convert images to JPEG, PNG, HEIF, WebP, JXL or AVIF with quality control and lossless mode support
 - **Native Protocol Support** - Automatically uses the iTerm2 inline images protocol (iTerm2, WezTerm) or the Kitty graphics protocol (Kitty, Ghostty, Konsole) for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
@@ -443,6 +443,7 @@ Conversion Options:
       --heif <quality>      Convert to HEIF (quality: 0-100, default: 80)
       --webp <quality>      Convert to WebP (quality: 0-100, default: 80, 100=lossless)
       --jxl <quality>       Convert to JXL (quality: 0-100, default: 80, >=95=lossless)
+      --avif <quality>      Convert to AVIF (quality: 0-100, default: 99)
   -o, --output <file>       Output file (stdout if not specified)
   -n, --frame <index>       Select frame for animated images (default: 0)
       --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)
@@ -622,6 +623,18 @@ imgcat2 --jxl 100 image.png > output.jxl
 imgcat2 --jxl 85 --output output.jxl image.jpg
 ```
 
+### AVIF Conversion
+```bash
+# Convert to AVIF with the default quality (99: the PSNR of --heif 80)
+imgcat2 --avif 99 image.png > output.avif
+
+# Smaller file, lower quality (0-100)
+imgcat2 --avif 60 image.jpg > output.avif
+
+# Save to file
+imgcat2 --avif 80 --output output.avif image.png
+```
+
 ### Animated Images
 ```bash
 # Convert first frame of animated GIF
@@ -644,6 +657,8 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - `--jxl <quality>` - Convert to JXL format (quality: 0-100, default: 80)
   - Quality >= 95 = lossless mode (preserves transparency)
   - Quality 0-94 = lossy mode with distance-based quality
+- `--avif <quality>` - Convert to AVIF format (AV1 via libheif/aom; quality: 0-100, default: 99)
+  - Always lossy 4:2:0; higher quality = better image quality but larger file size
 - `--output <file>` or `-o <file>` - Output file path (stdout if not specified)
 - `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
 - `-w N` / `-H N` - Scale the converted image (up to 16384 pixels; not limited by the terminal size)
@@ -654,9 +669,10 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - **HEIF** supports transparency and offers better compression than JPEG
 - **WebP** preserves transparency in lossless mode (quality 100) and offers excellent compression
 - **JXL** preserves transparency in lossless mode (quality >= 95) and provides modern, high-efficiency compression with HDR support
+- **AVIF** supports transparency; the default quality 99 matches the PSNR of `--heif 80` at a similar file size, lower values give much smaller files
 - Output to stdout by default (use `>` to redirect or `--output` flag)
 - Quality and compression affect both file size and processing time
-- Out-of-range JPEG quality and PNG level values are clamped with a warning; HEIF, WebP and JXL quality outside 0-100 is an error
+- Out-of-range JPEG quality and PNG level values are clamped with a warning; HEIF, WebP, JXL and AVIF quality outside 0-100 is an error
 - Only one frame is encoded (no animated output)
 
 ## Metadata Extraction
@@ -797,8 +813,9 @@ Example output:
 - **RAW** - Camera raw formats (CR2, NEF, ARW, DNG, etc.), LibRaw
 - **JXL** - JPEG XL format (animated; modern, high efficiency, HDR support), libjxl
 
-Each one can be left out with `-DIMG2_ENABLE_<X>=OFF` (`GIF`, `WEBP`, `HEIF`, `TIFF`, `RAW`, `JXL`). HEIF, WebP
-and JXL output need the matching codec; JPEG and PNG output are always available.
+Each one can be left out with `-DIMG2_ENABLE_<X>=OFF` (`GIF`, `WEBP`, `HEIF`, `TIFF`, `RAW`, `JXL`). HEIF, AVIF,
+WebP and JXL output need the matching codec (HEIF and AVIF output: an HEVC / AV1 encoder in libheif, checked at
+run time); JPEG and PNG output are always available.
 
 **Note:** Run `imgcat2 --version` to see the decoders compiled into the binary.
 

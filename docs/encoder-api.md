@@ -1,6 +1,7 @@
 # Encoder API v2: AVIF output and encoder options
 
-Status: draft for review. Branch base: feature/split (img2/s23).
+Status: phase 1 (AVIF output) implemented (img2/s24, default AVIF quality 99 at aom speed 6, see
+[Measurements](#measurements)); phases 2 and 3 open. Branch base: feature/split (img2/s23).
 
 ## Goals
 
@@ -92,7 +93,8 @@ Out-of-range values: `IMG2_E_ARG`. A valid option the chosen format cannot honou
 | metadata | APP1 Exif / XMP | eXIf / iTXt `XML:com.adobe.xmp` | VP8X EXIF / XMP chunks (needs libwebpmux) | container + `Exif` / `xml ` boxes | `heif_context_add_exif_metadata` / `_XMP_metadata` | same as HEIF |
 
 Defaults stay as today: JPEG optimize off, 4:2:0, baseline; WebP method 4; JXL effort 7; AVIF uses the libheif aom
-defaults (speed 6, 4:2:0, threads = hardware concurrency) with quality from the registry default.
+defaults (speed 6, 4:2:0, threads = hardware concurrency, tune auto = `iq` with the vendored aom 3.15) with quality
+from the registry default (99).
 
 ### Capability query
 
@@ -171,6 +173,54 @@ Each phase ends with gate (golden 0 mismatches on the existing cases), coverage 
    libwebpmux. Tests: encode with `--keep-metadata`, decode, compare parsed fields, Orientation = 1 after an oriented
    JPEG, size-cap and marker-limit paths.
 
+## Measurements
+
+Phase 1, 2026-11-23, vendored libheif + aom 3.15.3, RelWithDebInfo build, 32-core x86-64 host (light load).
+`img2_encode()` with default options except `quality` (AVIF: aom speed 6, 4:2:0, threads = 32, tune auto; HEIF:
+kvazaar defaults). PSNR over R, G, B of the decoded result against the decoded source (`img2_decode()` of the test
+file), alpha-premultiplied for the image with alpha (fully transparent pixels do not count); time = fastest of 3
+encodes. Tool: a small C program against `build/fat/libimg2.a` (not committed). Images from `src/tests/data`.
+
+Cells: size / PSNR / encode time.
+
+| Setting | goldhill (photo, 720x576) | DSCN0010 (photo, 640x480) | hell (graphic + alpha, 512x512) | example (photo, 300x225) | BSG1 (scan, 635x348) |
+|---|---|---|---|---|---|
+| HEIF q80 | 280 KiB / 39.90 dB / 131 ms | 294 KiB / 32.28 dB / 112 ms | 183 KiB / 35.89 dB / 118 ms | 40 KiB / 47.30 dB / 42 ms | 63 KiB / 43.57 dB / 61 ms |
+| AVIF q30 | 11 KiB / 29.59 dB / 139 ms | 18 KiB / 22.71 dB / 150 ms | 8 KiB / 31.13 dB / 128 ms | 3 KiB / 29.42 dB / 48 ms | 5 KiB / 32.79 dB / 91 ms |
+| AVIF q40 | 18 KiB / 30.85 dB / 156 ms | 30 KiB / 24.08 dB / 169 ms | 11 KiB / 31.92 dB / 134 ms | 4 KiB / 30.95 dB / 48 ms | 7 KiB / 34.65 dB / 92 ms |
+| AVIF q50 | 29 KiB / 32.24 dB / 194 ms | 52 KiB / 26.21 dB / 196 ms | 17 KiB / 32.66 dB / 141 ms | 6 KiB / 32.91 dB / 51 ms | 10 KiB / 36.73 dB / 99 ms |
+| AVIF q60 | 45 KiB / 33.64 dB / 226 ms | 77 KiB / 28.29 dB / 211 ms | 27 KiB / 33.28 dB / 157 ms | 9 KiB / 35.14 dB / 61 ms | 13 KiB / 38.50 dB / 105 ms |
+| AVIF q70 | 66 KiB / 34.90 dB / 216 ms | 107 KiB / 30.07 dB / 241 ms | 41 KiB / 33.93 dB / 146 ms | 13 KiB / 37.56 dB / 59 ms | 17 KiB / 40.04 dB / 100 ms |
+| AVIF q80 | 96 KiB / 36.25 dB / 241 ms | 135 KiB / 31.10 dB / 257 ms | 61 KiB / 34.64 dB / 169 ms | 17 KiB / 39.86 dB / 66 ms | 22 KiB / 41.24 dB / 99 ms |
+| AVIF q90 | 147 KiB / 37.76 dB / 292 ms | 176 KiB / 31.79 dB / 293 ms | 96 KiB / 35.27 dB / 193 ms | 24 KiB / 43.55 dB / 84 ms | 31 KiB / 42.36 dB / 110 ms |
+| AVIF q95 | 202 KiB / 38.93 dB / 343 ms | 217 KiB / 32.10 dB / 272 ms | 133 KiB / 35.64 dB / 234 ms | 29 KiB / 45.91 dB / 102 ms | 43 KiB / 43.02 dB / 131 ms |
+| AVIF q96 | 224 KiB / 39.27 dB / 308 ms | 232 KiB / 32.16 dB / 276 ms | 146 KiB / 35.73 dB / 238 ms | 31 KiB / 46.55 dB / 101 ms | 48 KiB / 43.21 dB / 117 ms |
+| AVIF q97 | 224 KiB / 39.27 dB / 323 ms | 232 KiB / 32.16 dB / 278 ms | 147 KiB / 35.73 dB / 230 ms | 31 KiB / 46.55 dB / 103 ms | 48 KiB / 43.21 dB / 132 ms |
+| AVIF q98 | 247 KiB / 39.54 dB / 313 ms | 256 KiB / 32.23 dB / 293 ms | 162 KiB / 35.80 dB / 243 ms | 34 KiB / 47.05 dB / 103 ms | 54 KiB / 43.38 dB / 146 ms |
+| **AVIF q99** | **273 KiB / 39.75 dB / 322 ms** | **286 KiB / 32.26 dB / 284 ms** | **180 KiB / 35.86 dB / 246 ms** | **37 KiB / 47.50 dB / 102 ms** | **64 KiB / 43.58 dB / 158 ms** |
+| AVIF q100 | 324 KiB / 40.34 dB / 271 ms | 339 KiB / 32.35 dB / 196 ms | 214 KiB / 36.01 dB / 205 ms | 47 KiB / 49.07 dB / 74 ms | 90 KiB / 44.13 dB / 135 ms |
+
+Alpha of hell.png (separate aux image, aom tune PSNR): 46.6 dB at q30, 56.2 dB at q80, 67.4 dB at q99 (HEIF q80:
+66.6 dB).
+
+Choice:
+
+- **Default quality 99.** It is the closest match to the HEIF q80 PSNR on every image (deltas 0.01-0.20 dB; the
+  next best, q98 on every image, is 0.05-0.36 dB off). The match is only reached at the top of the scale because
+  kvazaar at q80 spends 2.3-7.8 bpp; consequently AVIF at the default is about as large as HEIF at q80
+  (0.94-1.02x). The PSNR rule also undervalues aom's default `tune=iq`, which optimises perceived quality rather
+  than PSNR; users who want small files pick a lower quality (q80 is one third to one half of the HEIF q80 size). A
+  different rule (e.g. matching SSIM, or a size target) would give a much lower default; revisit together with
+  `effort` in phase 2 if wanted.
+- **Speed 6 kept** (libheif default): AVIF q99 takes 2.1-2.6x the HEIF q80 encode time, below the ~3x threshold.
+
+Determinism (aom, the same image encoded repeatedly, md5/FNV of the output): identical run to run for every thread
+count. Across thread counts the output is identical for every `threads >= 2` (2, 4, 8, 16, 32 and the default) but
+differs at `threads = 1` (libheif enables aom row-MT only when threads > 1; e.g. goldhill q99: 279316 bytes with
+>= 2 threads, 278907 with 1). The default thread count is `std::thread::hardware_concurrency()` (the number of
+online CPUs, not the affinity mask: `taskset -c 0` gives the same bytes). So the golden AVIF cases use the default
+options: they are stable on any host with at least 2 CPUs; phase 2's `--threads 1` would change their bytes.
+
 ## Decisions (2026-11-23)
 
 1. Orientation: the `img->orientation` field. Default 1 (upright) for images created by the caller
@@ -178,6 +228,8 @@ Each phase ends with gate (golden 0 mismatches on the existing cases), coverage 
 2. AVIF default quality and effort: measured in phase 1. For q in a sweep, record file size, PSNR against the source
    and encode time on several test images; the default quality is the one whose PSNR matches HEIF at q80, the default
    effort is libheif's speed 6 unless the encode time is unreasonable. The numbers go into this document.
+   Result ([Measurements](#measurements)): quality **99** (closest PSNR to HEIF q80 on all five images), speed **6**
+   kept (2.1-2.6x the HEIF encode time).
 3. PNG `effort`: mapped to the zlib level when `quality` is left at default (-1): level = round((e-1)*9/9) clamped
    0..9, i.e. effort 1 -> level 0 ... effort 10 -> level 9. An explicit `quality` wins (and `effort` then logs the usual
    no-effect warning).
