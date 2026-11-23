@@ -84,10 +84,10 @@ if(IMG2_HAVE_SECURE_GETENV)
 endif()
 
 # Compile definitions and include directories (formerly directory-global definitions / include dirs).
-# The nanosvg dir comes first, as on master (Img2VendorHeaderOnly.cmake used to add it globally before the
-# main include list); then src/, the two S2 directories, stb, qoi, and the codec dirs in IMG2_INCLUDE_ORDER.
+# src/, the two S2 directories, stb, qoi, and the codec dirs in IMG2_INCLUDE_ORDER. No vendor/nanosvg: the
+# nanosvg fork is included from decoders/ (docs/nanosvg-fork.md).
 set(_img2_defs "")
-set(_img2_incs ${NANOSVG_INCLUDE_DIR} ${PROJECT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR} ${IMG2_GENERATED_DIR}
+set(_img2_incs ${PROJECT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR} ${IMG2_GENERATED_DIR}
 	${STB_INCLUDE_DIR} ${QOI_INCLUDE_DIR})
 foreach(_f IN LISTS IMG2_MACRO_FEATURES)          # no HAVE_ZLIB
 	if(IMG2_HAVE_${_f})

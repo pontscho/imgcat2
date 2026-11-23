@@ -23,7 +23,7 @@ set(_IMG2_MANIFEST_NOTES
 	"libpng=built from a configure-time copy with vendor/patches/libpng-1.6.59-apng.patch applied"
 	"libjpeg-turbo=ExternalProject build, jpeg8 ABI"
 	"aom=ExternalProject build"
-	"nanosvg=header-only, compiled into img2"
+	"nanosvg=upstream baseline only; img2 compiles its fork in src/libimg2/decoders (docs/nanosvg-fork.md)"
 	"stb=header-only (stb_image, stb_image_resize2, stb_truetype), compiled into img2"
 	"qoi=header-only, compiled into img2")
 
