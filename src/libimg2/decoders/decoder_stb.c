@@ -14,14 +14,16 @@
 /* Define STB_IMAGE_IMPLEMENTATION once in this file */
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC     /* TU-local: no stbi_* globals leak from libimg2 */
-#define STBI_ASSERT(x) ((void)0)
+#define STBI_ASSERT(x)       ((void)0)
 #define STBI_NO_STDIO        /* We provide data buffer directly */
 #define STBI_FAILURE_USERMSG /* Use custom error messages */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
 /* STB_IMAGE_STATIC lets GCC inline stbi__context use; it then flags io_user_data/buflen of the memory
  * context (only read on the callback path, never taken with STBI_NO_STDIO + *_from_memory) */
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include "stb_image.h"
 #pragma GCC diagnostic pop
 #include "../core/log.h"
