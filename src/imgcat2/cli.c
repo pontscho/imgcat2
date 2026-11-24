@@ -77,6 +77,8 @@ void print_usage(const char *program_name)
 	printf("                            An option the format cannot use is ignored with a warning\n");
 	printf("      --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
+	printf("                            Without a format option the extension chooses it, default quality:\n");
+	printf("                            .jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
 	printf("      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)\n");
 	printf("                            png: lossless, transparency support\n");
@@ -102,6 +104,7 @@ void print_usage(const char *program_name)
 	printf("  %s --fps 10 anim.gif      Animate at 10 FPS\n", program_name);
 	printf("  %s --jpeg 90 img.png > out.jpg  Convert to JPEG (stdout)\n", program_name);
 	printf("  %s --png 6 --output out.png img.jpg  Convert to PNG file\n", program_name);
+	printf("  %s -w 480 -o out.webp img.jpg  Scale and convert (format from the extension)\n", program_name);
 	printf("  %s --yuv nv12:1920:1080 frame.yuv  Display a raw NV12 frame\n", program_name);
 	printf("\n");
 }
@@ -527,6 +530,41 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 }
 
 /**
+ * @brief Output format named by the extension of a file name (case-insensitive)
+ *
+ * @param path Output file name
+ *
+ * @return IMG2_FORMAT_JPEG / PNG / WEBP / HEIF / JXL / AVIF, or IMG2_FORMAT_NONE (unknown or no extension)
+ */
+static img2_format_t format_from_extension(const char *path)
+{
+	static const struct {
+		const char *ext;
+		img2_format_t format;
+	} exts[] = {
+		{ "jpg",  IMG2_FORMAT_JPEG },
+		{ "jpeg", IMG2_FORMAT_JPEG },
+		{ "png",  IMG2_FORMAT_PNG  },
+		{ "webp", IMG2_FORMAT_WEBP },
+		{ "heic", IMG2_FORMAT_HEIF },
+		{ "heif", IMG2_FORMAT_HEIF },
+		{ "jxl",  IMG2_FORMAT_JXL  },
+		{ "avif", IMG2_FORMAT_AVIF },
+	};
+	const char *base = strrchr(path, '/');
+	const char *dot = strrchr(base != NULL ? base + 1 : path, '.');
+	if (dot == NULL) {
+		return IMG2_FORMAT_NONE;
+	}
+	for (size_t i = 0; i < sizeof(exts) / sizeof(exts[0]); i++) {
+		if (strcasecmp(dot + 1, exts[i].ext) == 0) {
+			return exts[i].format;
+		}
+	}
+	return IMG2_FORMAT_NONE;
+}
+
+/**
  * @brief Validate CLI options
  *
  * Validates parsed command-line options for correctness:
@@ -542,6 +580,23 @@ int validate_options(cli_options_t *opts)
 {
 	if (opts == NULL) {
 		return -1;
+	}
+	/* -o <file>.<ext> without a format option chooses the format by the extension (with the format's default
+	 * quality); a format option wins. Before the checks below, which depend on convert_mode. --info ignores -o */
+	if (opts->output_file != NULL && !opts->info_mode) {
+		char safe[CLI_SAFE_PATH_SIZE];
+		img2_format_t ext_format = format_from_extension(opts->output_file);
+		if (!opts->convert_mode) {
+			if (ext_format == IMG2_FORMAT_NONE) {
+				fprintf(stderr, "Error: Cannot infer the output format from '%s'\n", cli_safe_str(opts->output_file, safe, sizeof(safe)));
+				fprintf(stderr, "Use a .jpg, .jpeg, .png, .webp, .heic, .heif, .jxl or .avif extension, or --jpeg, --png, --heif, --webp, --jxl or --avif\n");
+				return -1;
+			}
+			opts->convert_mode = true;
+			opts->output_format = ext_format;
+		} else if (ext_format != IMG2_FORMAT_NONE && ext_format != opts->output_format) {
+			fprintf(stderr, "Warning: The extension of '%s' names another format than the format option, using the format option\n", cli_safe_str(opts->output_file, safe, sizeof(safe)));
+		}
 	}
 
 	/* Validate FPS range */
@@ -621,7 +676,7 @@ int validate_options(cli_options_t *opts)
 	if (!opts->convert_mode) {
 		const char *flag = opts->enc_lossless ? "--lossless" : opts->enc_effort > 0 ? "--effort" : opts->enc_chroma != IMG2_CHROMA_DEFAULT ? "--chroma" : opts->enc_alpha_quality > 0 ? "--alpha-quality" : opts->enc_progressive ? "--progressive" : opts->enc_threads > 0 ? "--threads" : opts->enc_keep_metadata ? "--keep-metadata" : NULL;
 		if (flag != NULL) {
-			fprintf(stderr, "Error: %s can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n", flag);
+			fprintf(stderr, "Error: %s can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n", flag);
 			return -1;
 		}
 	}
@@ -630,7 +685,7 @@ int validate_options(cli_options_t *opts)
 	if (opts->convert_mode) {
 		/* Require output format to be set */
 		if (opts->output_format == IMG2_FORMAT_NONE) {
-			fprintf(stderr, "Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl or --avif\n");
+			fprintf(stderr, "Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n");
 			return -1;
 		}
 

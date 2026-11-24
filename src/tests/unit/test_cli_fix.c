@@ -258,7 +258,7 @@ CTEST(cli_fix, validate_messages)
 	opts.convert_mode = true;
 	opts.output_format = IMG2_FORMAT_NONE;
 	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
-	ASSERT_STR("Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl or --avif\n", err);
+	ASSERT_STR("Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n", err);
 	free(err);
 
 	/* file_render() without a format: the same list */
@@ -335,6 +335,121 @@ CTEST(cli_fix, avif_option)
 	ASSERT_NOT_NULL(strstr(out, "      --avif <quality>      Convert to AVIF (quality: 0-100, default: 80)\n"));
 	free(out);
 	free(err);
+}
+
+/* ---- -o <file>.<ext> without a format option: the extension chooses the format, a format option wins ---- */
+
+CTEST(cli_fix, output_extension_format)
+{
+	cli_options_t opts;
+	char *out = NULL;
+	char *err = NULL;
+
+	/* known extensions, case-insensitive: conversion with the format's default quality */
+	static const struct {
+		const char *file;
+		img2_format_t format;
+	} known[] = {
+		{ "x.png",        IMG2_FORMAT_PNG  },
+		{ "X.JPG",        IMG2_FORMAT_JPEG },
+		{ "dir/a.b.jpeg", IMG2_FORMAT_JPEG },
+		{ "x.webp",       IMG2_FORMAT_WEBP },
+		{ "x.heic",       IMG2_FORMAT_HEIF },
+		{ "x.HEIF",       IMG2_FORMAT_HEIF },
+		{ "x.jxl",        IMG2_FORMAT_JXL  },
+		{ "x.avif",       IMG2_FORMAT_AVIF },
+	};
+	for (size_t i = 0; i < sizeof(known) / sizeof(known[0]); i++) {
+		opts_defaults(&opts);
+		char *argv1[] = { (char *)"imgcat2", (char *)"-o", (char *)known[i].file, (char *)"in.jpg", NULL };
+		ASSERT_EQUAL(0, parse_captured(4, argv1, &opts, &out, &err));
+		free(out);
+		free(err);
+		ASSERT_FALSE(opts.convert_mode);
+		ASSERT_EQUAL(0, validate_captured(&opts, &err));
+		ASSERT_STR("", err);
+		free(err);
+		ASSERT_TRUE(opts.convert_mode);
+		ASSERT_EQUAL(known[i].format, opts.output_format);
+		ASSERT_EQUAL(90, opts.jpeg_quality);
+		ASSERT_EQUAL(6, opts.png_compression);
+	}
+
+	/* -w 480 -o out.png: a conversion, not bound by a tiny terminal */
+	opts_defaults(&opts);
+	opts.terminal.cols = 10;
+	opts.terminal.rows = 5;
+	char *argv2[] = { (char *)"imgcat2", (char *)"-w", (char *)"480", (char *)"-o", (char *)"out.png", (char *)"in.jpg", NULL };
+	ASSERT_EQUAL(0, parse_captured(6, argv2, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+	ASSERT_EQUAL(IMG2_FORMAT_PNG, opts.output_format);
+	ASSERT_EQUAL(480, opts.target_width);
+
+	/* unknown or no extension without a format option: an error naming the file */
+	static const char *const unknown[] = { "x.ppm", "noext", "dir.d/out", "x." };
+	for (size_t i = 0; i < sizeof(unknown) / sizeof(unknown[0]); i++) {
+		opts_defaults(&opts);
+		char *argv3[] = { (char *)"imgcat2", (char *)"-o", (char *)unknown[i], (char *)"in.jpg", NULL };
+		ASSERT_EQUAL(0, parse_captured(4, argv3, &opts, &out, &err));
+		free(out);
+		free(err);
+		ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+		char expect[128];
+		snprintf(expect, sizeof(expect), "Error: Cannot infer the output format from '%s'\n", unknown[i]);
+		ASSERT_NOT_NULL(strstr(err, expect));
+		ASSERT_NOT_NULL(strstr(err, ".jpg, .jpeg, .png, .webp, .heic, .heif, .jxl or .avif"));
+		free(err);
+	}
+
+	/* a format option wins: a different known extension warns, an unknown one is silent */
+	opts_defaults(&opts);
+	char *argv4[] = { (char *)"imgcat2", (char *)"--jpeg", (char *)"80", (char *)"-o", (char *)"x.png", (char *)"in.jpg", NULL };
+	ASSERT_EQUAL(0, parse_captured(6, argv4, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_NOT_NULL(strstr(err, "Warning: "));
+	ASSERT_NOT_NULL(strstr(err, "'x.png'"));
+	free(err);
+	ASSERT_EQUAL(IMG2_FORMAT_JPEG, opts.output_format);
+	ASSERT_EQUAL(80, opts.jpeg_quality);
+
+	opts_defaults(&opts);
+	char *argv5[] = { (char *)"imgcat2", (char *)"--png", (char *)"3", (char *)"-o", (char *)"x.ppm", (char *)"in.jpg", NULL };
+	ASSERT_EQUAL(0, parse_captured(6, argv5, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+	ASSERT_EQUAL(IMG2_FORMAT_PNG, opts.output_format);
+
+	/* encoder options after -o: the inferred conversion admits them, whatever the option order */
+	opts_defaults(&opts);
+	char *argv6[] = { (char *)"imgcat2", (char *)"-o", (char *)"x.webp", (char *)"--lossless", (char *)"in.jpg", NULL };
+	ASSERT_EQUAL(0, parse_captured(5, argv6, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+	ASSERT_EQUAL(IMG2_FORMAT_WEBP, opts.output_format);
+	ASSERT_TRUE(opts.enc_lossless);
+
+	/* --info ignores -o: no conversion, no extension check */
+	opts_defaults(&opts);
+	char *argv7[] = { (char *)"imgcat2", (char *)"--info", (char *)"-o", (char *)"x.ppm", (char *)"in.jpg", NULL };
+	ASSERT_EQUAL(0, parse_captured(5, argv7, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+	ASSERT_FALSE(opts.convert_mode);
 }
 
 #ifdef IMG2_HAVE_HEIF
@@ -458,12 +573,12 @@ CTEST(cli_fix, encoder_option_flags)
 CTEST(cli_fix, encoder_options_need_conversion)
 {
 	static const char *const flags[][3] = {
-		{ "--lossless", NULL, "Error: --lossless can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
-		{ "--effort", "3", "Error: --effort can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
-		{ "--chroma", "444", "Error: --chroma can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
-		{ "--alpha-quality", "50", "Error: --alpha-quality can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
-		{ "--progressive", NULL, "Error: --progressive can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
-		{ "--threads", "2", "Error: --threads can only be used with --jpeg, --png, --heif, --webp, --jxl or --avif\n" },
+		{ "--lossless", NULL, "Error: --lossless can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
+		{ "--effort", "3", "Error: --effort can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
+		{ "--chroma", "444", "Error: --chroma can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
+		{ "--alpha-quality", "50", "Error: --alpha-quality can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
+		{ "--progressive", NULL, "Error: --progressive can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
+		{ "--threads", "2", "Error: --threads can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
 	};
 	cli_options_t opts;
 	char *out = NULL;

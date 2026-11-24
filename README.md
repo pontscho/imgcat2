@@ -456,6 +456,8 @@ Conversion Options:
                             An option the format cannot use is ignored with a warning
       --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)
   -o, --output <file>       Output file (stdout if not specified)
+                            Without a format option the extension chooses it, default quality:
+                            .jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif
   -n, --frame <index>       Select frame for animated images (default: 0)
       --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)
                             png: lossless, transparency support
@@ -481,6 +483,7 @@ Examples:
   ./imgcat2 --fps 10 anim.gif      Animate at 10 FPS
   ./imgcat2 --jpeg 90 img.png > out.jpg  Convert to JPEG (stdout)
   ./imgcat2 --png 6 --output out.png img.jpg  Convert to PNG file
+  ./imgcat2 -w 480 -o out.webp img.jpg  Scale and convert (format from the extension)
   ./imgcat2 --yuv nv12:1920:1080 frame.yuv  Display a raw NV12 frame
 ```
 
@@ -713,9 +716,14 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
   upright, so the EXIF Orientation tag is rewritten to 1 (if the block has one). Inputs without EXIF/XMP, or
   formats without them (GIF, BMP, ...), give no metadata and no warning. A JPEG APP1 segment holds at most
   65533 bytes: a larger EXIF block or XMP packet is skipped with a warning (no extended XMP)
-  - These options need a conversion (`--jpeg` ... `--avif`); out of range is an error. An option the chosen format
-    cannot honour is ignored with one warning, e.g. `encode: chroma 444 has no effect for HEIF (always 4:2:0)`
-- `--output <file>` or `-o <file>` - Output file path (stdout if not specified)
+  - These options need a conversion (`--jpeg` ... `--avif`, or `-o <file>.<ext>`); out of range is an error. An
+    option the chosen format cannot honour is ignored with one warning, e.g. `encode: chroma 444 has no effect for
+    HEIF (always 4:2:0)`
+- `--output <file>` or `-o <file>` - Output file path (stdout if not specified). Without a format option the
+  extension (case-insensitive) chooses the format with its default quality and turns on the conversion:
+  `.jpg`/`.jpeg`, `.png`, `.webp`, `.heic`/`.heif`, `.jxl`, `.avif` (`imgcat2 -w 480 -o out.png in.jpg`). Another
+  extension, or none, is an error (there is no PPM encoder). A format option wins over the extension, with a
+  warning if the extension names another format. `--info` ignores `-o`
 - `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
 - `-w N` / `-H N` - Scale the converted image (up to 16384 pixels; not limited by the terminal size)
 
