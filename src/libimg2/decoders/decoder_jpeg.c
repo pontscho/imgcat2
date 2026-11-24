@@ -336,22 +336,17 @@ img2_status_t img2_probe_jpeg(const uint8_t *data, size_t len, img2_probe_info_t
 	jpeg_create_decompress(&cinfo);
 	jpeg_mem_src(&cinfo, data, (unsigned long)len);
 
-	if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
-		img2_log(IMG2_LOG_DEBUG, "img2_probe: no JPEG image header");
-		jpeg_destroy_decompress(&cinfo);
-		return IMG2_E_CODEC;
-	}
+	// require_image on a memory source (never suspends): JPEG_HEADER_OK, or a libjpeg error (longjmp above)
+	(void)jpeg_read_header(&cinfo, TRUE);
 
+	// libjpeg rejected a zero size (get_sof) and a side over JPEG_MAX_DIMENSION, 65500 < IMG2_MAX_DIMENSION
 	const uint32_t width = cinfo.image_width;
 	const uint32_t height = cinfo.image_height;
 	jpeg_destroy_decompress(&cinfo);
 
-	// The decoder's limits ([P33] header check, dispatcher), without its ERROR line
+	// The decoder's pixel limit ([P33] header check, dispatcher), without its ERROR line
 	size_t byte_count;
-	if (width == 0 || height == 0) {
-		return IMG2_E_FORMAT;
-	}
-	if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION || !img2_image_calc_size(width, height, &byte_count)) {
+	if (!img2_image_calc_size(width, height, &byte_count)) {
 		img2_log(IMG2_LOG_DEBUG, "img2_probe: JPEG dimensions %ux%u exceed the limits", width, height);
 		return IMG2_E_LIMIT;
 	}

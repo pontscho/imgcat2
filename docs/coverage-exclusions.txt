@@ -98,35 +98,35 @@ core/init.c:52 branch-false 54 = if (img2_font_manager_init_lazy() && s_refs == 
 
 # ===== decoders/decoder.c =====
 reason: dispatcher output validation (contract, defensive): the registry is a const table without public registration, and every registered decoder returns an error or >= 1 non-NULL frames from img2_image_alloc() (dimensions 1..IMG2_MAX_DIMENSION, pixels set) through img2_frames_adopt(); verified per decoder by the coverage audits (ico/qoi/stb/pnm/yuv/nanosvg, png/gif/webp/jpeg/tiff/raw, jxl/heif/avif)
-decoders/decoder.c:241 region 41 = if (out->count <= 0 || frames == NULL) {
-decoders/decoder.c:241 branch-true 25 = if (out->count <= 0 || frames == NULL) {
-decoders/decoder.c:241 branch-true 6 = if (out->count <= 0 || frames == NULL) {
-decoders/decoder.c:242 line = img2_log(IMG2_LOG_ERROR, "Error: Decoder returned invalid frame count: %d", out->count);
-decoders/decoder.c:243 line = return dispatch_fail(out, IMG2_E_FORMAT);
-decoders/decoder.c:244 line = }
-decoders/decoder.c:248 region 26 = if (frames[i] == NULL) {
-decoders/decoder.c:248 branch-true 7 = if (frames[i] == NULL) {
-decoders/decoder.c:249 line = img2_log(IMG2_LOG_ERROR, "Error: Decoder returned NULL frame at index %d", i);
-decoders/decoder.c:250 line = return dispatch_fail(out, IMG2_E_FORMAT);
-decoders/decoder.c:251 line = }
-decoders/decoder.c:254 region 56 = if (frames[i]->width == 0 || frames[i]->height == 0) {
-decoders/decoder.c:254 branch-true 32 = if (frames[i]->width == 0 || frames[i]->height == 0) {
-decoders/decoder.c:254 branch-true 7 = if (frames[i]->width == 0 || frames[i]->height == 0) {
-decoders/decoder.c:255 line = img2_log(IMG2_LOG_ERROR, "Error: Frame %d has invalid dimensions: %ux%u", i, frames[i]->width, frames[i]->height);
-decoders/decoder.c:256 line = return dispatch_fail(out, IMG2_E_FORMAT);
-decoders/decoder.c:257 line = }
-decoders/decoder.c:259 region 88 = if (frames[i]->width > IMG2_MAX_DIMENSION || frames[i]->height > IMG2_MAX_DIMENSION) {
-decoders/decoder.c:259 branch-true 48 = if (frames[i]->width > IMG2_MAX_DIMENSION || frames[i]->height > IMG2_MAX_DIMENSION) {
-decoders/decoder.c:259 branch-true 7 = if (frames[i]->width > IMG2_MAX_DIMENSION || frames[i]->height > IMG2_MAX_DIMENSION) {
-decoders/decoder.c:260 line = img2_log(IMG2_LOG_ERROR, "Error: Frame %d dimensions exceed maximum (%u): %ux%u", i, IMG2_MAX_DIMENSION, frames[i]->width, frames[i]->height);
-decoders/decoder.c:260 region 89>include/img2/image.h:14:28 = img2_log(IMG2_LOG_ERROR, "Error: Frame %d dimensions exceed maximum (%u): %ux%u", i, IMG2_MAX_DIMENSION, frames[i]->width, frames[i]->height);
-decoders/decoder.c:261 line = return dispatch_fail(out, IMG2_E_LIMIT);
-decoders/decoder.c:262 line = }
-decoders/decoder.c:265 region 34 = if (frames[i]->pixels == NULL) {
-decoders/decoder.c:265 branch-true 7 = if (frames[i]->pixels == NULL) {
-decoders/decoder.c:266 line = img2_log(IMG2_LOG_ERROR, "Error: Frame %d has NULL pixel buffer", i);
-decoders/decoder.c:267 line = return dispatch_fail(out, IMG2_E_FORMAT);
-decoders/decoder.c:268 line = }
+decoders/decoder.c:279 region 41 = if (out->count <= 0 || frames == NULL) {
+decoders/decoder.c:279 branch-true 25 = if (out->count <= 0 || frames == NULL) {
+decoders/decoder.c:279 branch-true 6 = if (out->count <= 0 || frames == NULL) {
+decoders/decoder.c:280 line = img2_log(IMG2_LOG_ERROR, "Error: Decoder returned invalid frame count: %d", out->count);
+decoders/decoder.c:281 line = return dispatch_fail(out, IMG2_E_FORMAT);
+decoders/decoder.c:282 line = }
+decoders/decoder.c:286 region 26 = if (frames[i] == NULL) {
+decoders/decoder.c:286 branch-true 7 = if (frames[i] == NULL) {
+decoders/decoder.c:287 line = img2_log(IMG2_LOG_ERROR, "Error: Decoder returned NULL frame at index %d", i);
+decoders/decoder.c:288 line = return dispatch_fail(out, IMG2_E_FORMAT);
+decoders/decoder.c:289 line = }
+decoders/decoder.c:292 region 56 = if (frames[i]->width == 0 || frames[i]->height == 0) {
+decoders/decoder.c:292 branch-true 32 = if (frames[i]->width == 0 || frames[i]->height == 0) {
+decoders/decoder.c:292 branch-true 7 = if (frames[i]->width == 0 || frames[i]->height == 0) {
+decoders/decoder.c:293 line = img2_log(IMG2_LOG_ERROR, "Error: Frame %d has invalid dimensions: %ux%u", i, frames[i]->width, frames[i]->height);
+decoders/decoder.c:294 line = return dispatch_fail(out, IMG2_E_FORMAT);
+decoders/decoder.c:295 line = }
+decoders/decoder.c:297 region 88 = if (frames[i]->width > IMG2_MAX_DIMENSION || frames[i]->height > IMG2_MAX_DIMENSION) {
+decoders/decoder.c:297 branch-true 48 = if (frames[i]->width > IMG2_MAX_DIMENSION || frames[i]->height > IMG2_MAX_DIMENSION) {
+decoders/decoder.c:297 branch-true 7 = if (frames[i]->width > IMG2_MAX_DIMENSION || frames[i]->height > IMG2_MAX_DIMENSION) {
+decoders/decoder.c:298 line = img2_log(IMG2_LOG_ERROR, "Error: Frame %d dimensions exceed maximum (%u): %ux%u", i, IMG2_MAX_DIMENSION, frames[i]->width, frames[i]->height);
+decoders/decoder.c:298 region 89>include/img2/image.h:14:28 = img2_log(IMG2_LOG_ERROR, "Error: Frame %d dimensions exceed maximum (%u): %ux%u", i, IMG2_MAX_DIMENSION, frames[i]->width, frames[i]->height);
+decoders/decoder.c:299 line = return dispatch_fail(out, IMG2_E_LIMIT);
+decoders/decoder.c:300 line = }
+decoders/decoder.c:303 region 34 = if (frames[i]->pixels == NULL) {
+decoders/decoder.c:303 branch-true 7 = if (frames[i]->pixels == NULL) {
+decoders/decoder.c:304 line = img2_log(IMG2_LOG_ERROR, "Error: Frame %d has NULL pixel buffer", i);
+decoders/decoder.c:305 line = return dispatch_fail(out, IMG2_E_FORMAT);
+decoders/decoder.c:306 line = }
 
 # ===== decoders/decoder.h =====
 reason: img2_decode_fail(NULL, ...): every caller passes a status pointer
@@ -158,7 +158,7 @@ decoders/decoder_qoi.c:45 branch-true 34 = if (data == NULL || len == 0 || frame
 
 # ===== decoders/decoder_stb.c =====
 reason: static helper argument check: the only caller passes a local frame counter
-decoders/decoder_stb.c:45 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
+decoders/decoder_stb.c:47 branch-true 34 = if (data == NULL || len == 0 || frame_count == NULL) {
 
 # ===== decoders/decoder_pnm.c =====
 reason: pnm_mul_size(): every caller passes a >= 1, and the products (width * height <= 2^32, * channels <= 4, * bytes per sample <= 2) cannot overflow a 64-bit size_t (32-bit only)

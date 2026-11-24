@@ -343,7 +343,7 @@ img2_status_t img2_decode_yuv(const uint8_t *data, size_t len, const img2_decode
  * Logs only at IMG2_LOG_DEBUG (libjpeg errors and warnings included): a decode that follows logs its own lines.
  *
  * @param out Filled on IMG2_OK (mime, width, height, orientation); untouched on error
- * @return IMG2_OK; IMG2_E_CODEC (libjpeg error); IMG2_E_FORMAT (zero size); IMG2_E_LIMIT (img2_image_calc_size)
+ * @return IMG2_OK; IMG2_E_CODEC (libjpeg error, zero size included); IMG2_E_LIMIT (img2_image_calc_size)
  */
 img2_status_t img2_probe_jpeg(const uint8_t *data, size_t len, img2_probe_info_t *out);
 
