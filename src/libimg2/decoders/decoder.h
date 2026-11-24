@@ -23,7 +23,7 @@
 #include "yuv.h"
 
 /* Public (<img2/decode.h>): img2_decode_opts_t, img2_decoder_info_t, img2_decode, img2_can_decode,
- * img2_is_animated, img2_decoder_count, img2_decoder_info. */
+ * img2_is_animated, img2_probe, img2_decoder_count, img2_decoder_info. */
 
 /**
  * @typedef img2_decode_fn
@@ -336,5 +336,15 @@ img2_status_t img2_decode_pnm(const uint8_t *data, size_t len, const img2_decode
 img2_status_t img2_decode_stb(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out);
 /** @brief Raw YUV: geometry from opts->yuv (IMG2_E_ARG if NULL); only the first frame is decoded */
 img2_status_t img2_decode_yuv(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out);
+
+/**
+ * @brief Internal (img2_probe, libjpeg-turbo builds): jpeg_read_header() size + EXIF orientation, no pixel decode
+ *
+ * Logs only at IMG2_LOG_DEBUG (libjpeg errors and warnings included): a decode that follows logs its own lines.
+ *
+ * @param out Filled on IMG2_OK (mime, width, height, orientation); untouched on error
+ * @return IMG2_OK; IMG2_E_CODEC (libjpeg error); IMG2_E_FORMAT (zero size); IMG2_E_LIMIT (img2_image_calc_size)
+ */
+img2_status_t img2_probe_jpeg(const uint8_t *data, size_t len, img2_probe_info_t *out);
 
 #endif /* IMG2_INTERNAL_DECODERS_DECODER_H */

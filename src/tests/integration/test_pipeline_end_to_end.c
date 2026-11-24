@@ -56,6 +56,39 @@ CTEST(integration, target_dimensions)
 }
 
 /**
+ * @test pipeline_jpeg_skip_deblock(): false without a target or at <= 4,000,000 source pixels; true above
+ *       12,000,000 source pixels; in between, true iff max(src_w / target_w, src_h / target_h) >= 8
+ */
+CTEST(integration, jpeg_skip_deblock)
+{
+	/* 4000x2500 (10 MP) exactly 8x on both axes -> skip */
+	ASSERT_TRUE(pipeline_jpeg_skip_deblock(4000, 2500, 500, 312));
+	/* exactly 8x on the width alone */
+	ASSERT_TRUE(pipeline_jpeg_skip_deblock(4000, 2500, 500, 2500));
+	/* the height ratio alone (portrait): 2500 / 400 = 6.25, 4000 / 500 = 8 */
+	ASSERT_TRUE(pipeline_jpeg_skip_deblock(2500, 4000, 400, 500));
+	/* just below 8x on both axes */
+	ASSERT_FALSE(pipeline_jpeg_skip_deblock(4000, 2500, 501, 313));
+	/* between 4 and 12 MP at 1:1: keep deblocking */
+	ASSERT_FALSE(pipeline_jpeg_skip_deblock(4000, 2500, 4000, 2500));
+	/* 4,000,000 pixels is not above the threshold, 4,002,000 is */
+	ASSERT_FALSE(pipeline_jpeg_skip_deblock(2000, 2000, 10, 10));
+	ASSERT_TRUE(pipeline_jpeg_skip_deblock(2001, 2000, 10, 10));
+	/* <= 4 MP, large downscale: keep deblocking */
+	ASSERT_FALSE(pipeline_jpeg_skip_deblock(2000, 1333, 160, 107));
+	/* 12,000,000 pixels at 1:1 is not above the always-skip threshold, 12,003,000 is */
+	ASSERT_FALSE(pipeline_jpeg_skip_deblock(4000, 3000, 4000, 3000));
+	ASSERT_TRUE(pipeline_jpeg_skip_deblock(4001, 3000, 4001, 3000));
+	/* 6000x4000 (24 MP): skipped at any target, 1:1 included */
+	ASSERT_TRUE(pipeline_jpeg_skip_deblock(6000, 4000, 160, 107));
+	ASSERT_TRUE(pipeline_jpeg_skip_deblock(6000, 4000, 751, 501));
+	ASSERT_TRUE(pipeline_jpeg_skip_deblock(6000, 4000, 6000, 4000));
+	/* no valid target */
+	ASSERT_FALSE(pipeline_jpeg_skip_deblock(6000, 4000, 0, 107));
+	ASSERT_FALSE(pipeline_jpeg_skip_deblock(6000, 4000, 160, 0));
+}
+
+/**
  * @test Test pipeline_decode(NULL, ) with minimal PNG
  *
  * Verifies decoding step of pipeline with embedded PNG data.

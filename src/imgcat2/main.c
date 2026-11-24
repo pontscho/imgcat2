@@ -20,6 +20,94 @@
 #include "terminal/terminal.h"
 
 /**
+ * @brief Print the --info output (text, or JSON with --json) of an image
+ *
+ * @param opts CLI options (json_output)
+ * @param mime Image type
+ * @param width First frame width (after orientation)
+ * @param height First frame height (after orientation)
+ * @param frame_count Frame count
+ * @param exif Parsed EXIF of the first frame, or NULL
+ * @param xmp Parsed XMP of the first frame, or NULL
+ */
+static void print_info(const cli_options_t *opts, img2_mime_t mime, uint32_t width, uint32_t height, int frame_count, const img2_exif_t *exif, const img2_xmp_t *xmp)
+{
+	if (opts->json_output) {
+#if IMG2_HAS_EXIF
+		/* Build complete JSON with EXIF/XMP data */
+		const char *type = img2_mime_name(mime);
+		const char *mime_str = img2_mime_string(mime);
+		printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d", type, mime_str, width, height, frame_count);
+		output_exif_json(exif, false);
+		output_xmp_json(xmp, false);
+		printf("}\n");
+
+#else
+		output_metadata_json(mime, width, height, frame_count);
+#endif
+
+	} else {
+		output_metadata_text(mime, width, height, frame_count);
+#if IMG2_HAS_EXIF
+		output_exif_text(exif);
+		output_xmp_text(xmp);
+#endif
+	}
+
+#if !IMG2_HAS_EXIF
+	(void)exif;
+	(void)xmp;
+#endif
+}
+
+#if IMG2_HAS_JPEG
+/**
+ * @brief --info of a JPEG without the pixel decode: img2_probe() size, EXIF/XMP parsed as the JPEG decoder does,
+ *        the size oriented as pipeline_decode() would; one frame
+ *
+ * @return true if printed; false if the probe failed (nothing printed)
+ */
+static bool print_info_jpeg(const cli_options_t *opts, const uint8_t *buffer, size_t size)
+{
+	img2_probe_info_t info;
+	if (img2_probe(buffer, size, &info) != IMG2_OK) {
+		return false;
+	}
+
+	uint32_t width = info.width;
+	uint32_t height = info.height;
+	const img2_exif_t *exif = NULL;
+	const img2_xmp_t *xmp = NULL;
+#if IMG2_HAS_EXIF
+	img2_exif_t exif_data;
+	img2_xmp_t xmp_data;
+	img2_exif_init(&exif_data);
+	img2_xmp_init(&xmp_data);
+	if (img2_exif_parse_jpeg(&exif_data, buffer, size) == IMG2_OK) {
+		exif = &exif_data;
+	}
+	if (img2_xmp_parse_jpeg(&xmp_data, buffer, size) == IMG2_OK) {
+		xmp = &xmp_data;
+	}
+
+	/* orientations 5..8 transpose the frame */
+	if (info.orientation >= 5 && info.orientation <= 8) {
+		width = info.height;
+		height = info.width;
+	}
+#endif
+
+	print_info(opts, info.mime, width, height, 1, exif, xmp);
+
+#if IMG2_HAS_EXIF
+	img2_exif_clear(&exif_data);
+	img2_xmp_clear(&xmp_data);
+#endif
+	return true;
+}
+#endif
+
+/**
  * @brief Main program entry point
  */
 int main(int argc, char **argv)
@@ -179,6 +267,14 @@ int main(int argc, char **argv)
 		}
 	}
 
+#if IMG2_HAS_JPEG
+	/* STEP 2 (--info of a JPEG): header + metadata only, no pixel decode; a failed probe takes the decode path */
+	if (opts.info_mode && pipeline_input_mime(&opts, buffer, buffer_size) == IMG2_MIME_JPEG && print_info_jpeg(&opts, buffer, buffer_size)) {
+		exit_code = EXIT_SUCCESS;
+		goto cleanup;
+	}
+#endif
+
 	/* STEP 2: Decode image with MIME detection */
 	if (pipeline_decode(&opts, buffer, buffer_size, &frames.frames, &frames.count) < 0) {
 		fprintf(stderr, "Error: Failed to decode image\n");
@@ -193,28 +289,7 @@ int main(int argc, char **argv)
 	if (opts.info_mode) {
 		/* Re-detect MIME type for output (forced IMG2_MIME_YUV for --yuv) */
 		img2_mime_t mime = pipeline_input_mime(&opts, buffer, buffer_size);
-
-		if (opts.json_output) {
-#if IMG2_HAS_EXIF
-			/* Build complete JSON with EXIF/XMP data */
-			const char *type = img2_mime_name(mime);
-			const char *mime_str = img2_mime_string(mime);
-			printf("{\"type\":\"%s\",\"mime\":\"%s\",\"width\":%u,\"height\":%u,\"frames\":%d", type, mime_str, frames.frames[0]->width, frames.frames[0]->height, frames.count);
-			output_exif_json(frames.frames[0]->exif, false);
-			output_xmp_json(frames.frames[0]->xmp, false);
-			printf("}\n");
-
-#else
-			output_metadata_json(mime, frames.frames[0]->width, frames.frames[0]->height, frames.count);
-#endif
-
-		} else {
-			output_metadata_text(mime, frames.frames[0]->width, frames.frames[0]->height, frames.count);
-#if IMG2_HAS_EXIF
-			output_exif_text(frames.frames[0]->exif);
-			output_xmp_text(frames.frames[0]->xmp);
-#endif
-		}
+		print_info(&opts, mime, frames.frames[0]->width, frames.frames[0]->height, frames.count, frames.frames[0]->exif, frames.frames[0]->xmp);
 
 		/* Success - skip scaling and rendering */
 		exit_code = EXIT_SUCCESS;

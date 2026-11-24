@@ -155,6 +155,44 @@ bool img2_is_animated(const uint8_t *data, size_t len)
 	return dec->is_animated(data, len);
 }
 
+img2_status_t img2_probe(const uint8_t *data, size_t len, img2_probe_info_t *out)
+{
+	/* the input checks of img2_decode(), at DEBUG */
+	if (out == NULL) {
+		img2_log(IMG2_LOG_DEBUG, "img2_probe: out is NULL");
+		return IMG2_E_ARG;
+	}
+	memset(out, 0, sizeof(*out));
+	if (data == NULL || len == 0) {
+		img2_log(IMG2_LOG_DEBUG, "img2_probe: empty input");
+		return IMG2_E_ARG;
+	}
+	if (len > IMG2_MAX_FILE_SIZE) {
+		img2_log(IMG2_LOG_DEBUG, "img2_probe: input of %zu bytes exceeds IMG2_MAX_FILE_SIZE", len);
+		return IMG2_E_LIMIT;
+	}
+
+	img2_mime_t mime = img2_detect_mime(data, len);
+#ifdef IMG2_HAVE_LIBJPEG
+	if (mime == IMG2_MIME_JPEG) {
+		return img2_probe_jpeg(data, len, out); /* out stays zeroed on error */
+	}
+#endif
+
+	/* No header-only path for this type: the full decode (its limits and log lines) */
+	img2_frames_t fr;
+	img2_status_t st = img2_decoder_dispatch(NULL, data, len, mime, &fr);
+	if (st != IMG2_OK) {
+		return st;
+	}
+	out->mime = mime;
+	out->width = fr.frames[0]->width;
+	out->height = fr.frames[0]->height;
+	out->orientation = fr.frames[0]->orientation;
+	img2_frames_free(&fr);
+	return IMG2_OK;
+}
+
 img2_status_t img2_frames_adopt(img2_frames_t *out, img2_image_t **frames, int count, img2_status_t fail)
 {
 	if (out == NULL) {

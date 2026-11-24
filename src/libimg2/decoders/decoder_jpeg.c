@@ -299,6 +299,81 @@ static img2_image_t **decode_jpeg_frames(const uint8_t *data, size_t len, int *f
 	return frames;
 }
 
+/** @brief img2_probe_jpeg(): libjpeg fatal error, logged at DEBUG, back to the setjmp of img2_probe_jpeg() */
+static void jpeg_probe_error_exit(j_common_ptr cinfo)
+{
+	struct jpeg_error_mgr_ext *err = (struct jpeg_error_mgr_ext *)cinfo->err;
+
+	char buffer[JMSG_LENGTH_MAX];
+	(*cinfo->err->format_message)(cinfo, buffer);
+	img2_log(IMG2_LOG_DEBUG, "img2_probe: libjpeg error: %s", buffer);
+
+	longjmp(err->setjmp_buffer, 1);
+}
+
+/** @brief img2_probe_jpeg(): libjpeg warning (e.g. extraneous bytes before a marker), logged at DEBUG */
+static void jpeg_probe_output_message(j_common_ptr cinfo)
+{
+	char buffer[JMSG_LENGTH_MAX];
+	(*cinfo->err->format_message)(cinfo, buffer);
+	img2_log(IMG2_LOG_DEBUG, "img2_probe: libjpeg warning: %s", buffer);
+}
+
+img2_status_t img2_probe_jpeg(const uint8_t *data, size_t len, img2_probe_info_t *out)
+{
+	struct jpeg_decompress_struct cinfo;
+	struct jpeg_error_mgr_ext jerr;
+
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = jpeg_probe_error_exit;
+	jerr.pub.output_message = jpeg_probe_output_message;
+
+	if (setjmp(jerr.setjmp_buffer)) {
+		jpeg_destroy_decompress(&cinfo);
+		return IMG2_E_CODEC;
+	}
+
+	jpeg_create_decompress(&cinfo);
+	jpeg_mem_src(&cinfo, data, (unsigned long)len);
+
+	if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
+		img2_log(IMG2_LOG_DEBUG, "img2_probe: no JPEG image header");
+		jpeg_destroy_decompress(&cinfo);
+		return IMG2_E_CODEC;
+	}
+
+	const uint32_t width = cinfo.image_width;
+	const uint32_t height = cinfo.image_height;
+	jpeg_destroy_decompress(&cinfo);
+
+	// The decoder's limits ([P33] header check, dispatcher), without its ERROR line
+	size_t byte_count;
+	if (width == 0 || height == 0) {
+		return IMG2_E_FORMAT;
+	}
+	if (width > IMG2_MAX_DIMENSION || height > IMG2_MAX_DIMENSION || !img2_image_calc_size(width, height, &byte_count)) {
+		img2_log(IMG2_LOG_DEBUG, "img2_probe: JPEG dimensions %ux%u exceed the limits", width, height);
+		return IMG2_E_LIMIT;
+	}
+
+	out->mime = IMG2_MIME_JPEG;
+	out->width = width;
+	out->height = height;
+	out->orientation = 1;
+
+	// The orientation the decoder leaves to apply (img->orientation)
+#ifdef IMG2_HAVE_EXIF_READER
+	img2_exif_t exif;
+	img2_exif_init(&exif);
+	if (img2_exif_parse_jpeg(&exif, data, len) == IMG2_OK) {
+		out->orientation = img2_meta_orientation(&exif);
+	}
+	img2_exif_clear(&exif);
+#endif
+
+	return IMG2_OK;
+}
+
 img2_status_t img2_decode_jpeg(const uint8_t *data, size_t len, const img2_decode_opts_t *opts, img2_frames_t *out)
 {
 	if (out == NULL) {

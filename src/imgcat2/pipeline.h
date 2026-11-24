@@ -113,6 +113,21 @@ typedef struct {
 target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t terminal_width, uint32_t terminal_height, uint32_t img_width, uint32_t img_height, bool fit_mode);
 
 /**
+ * @brief Whether pipeline_decode() turns JPEG deblocking off (jpeg_deblock = 0) for a source shown at a target size
+ *
+ * False without a target (0 width or height) or when src_width * src_height <= 4,000,000; true when
+ * src_width * src_height > 12,000,000 (the deblocking costs ~0.08 s/MP); in between, true iff
+ * max(src_width / target_width, src_height / target_height) >= 8: at that downscale the deblocking is not visible.
+ *
+ * @param src_width Source width (after orientation)
+ * @param src_height Source height (after orientation)
+ * @param target_width Scale target width (0: false)
+ * @param target_height Scale target height (0: false)
+ * @return true to skip deblocking
+ */
+bool pipeline_jpeg_skip_deblock(uint32_t src_width, uint32_t src_height, uint32_t target_width, uint32_t target_height);
+
+/**
  * @brief Read input (file or stdin) based on CLI options
  *
  * Dispatches to read_file_secure() or read_stdin_secure() based on

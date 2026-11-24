@@ -313,11 +313,9 @@ bool read_stdin_secure(uint8_t **out_data, size_t *out_size)
 	return true;
 }
 
-target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t terminal_width, uint32_t terminal_height, uint32_t img_width, uint32_t img_height, bool fit_mode)
+/** @brief calculate_target_terminal_dimensions(); quiet = no error lines (pipeline_decode's pre-decode estimate) */
+static target_dimensions_t terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t img_width, uint32_t img_height, bool fit_mode, bool quiet)
 {
-	(void)terminal_width; /* Reserved for future use */
-	(void)terminal_height; /* Reserved for future use */
-
 	/* Resize factors:
 	 * - RESIZE_FACTOR_X = 1: Horizontal 1:1 (1 pixel per column)
 	 * - RESIZE_FACTOR_Y = 2: Vertical 2:1 (half-block doubles vertical resolution)
@@ -331,7 +329,9 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
 
 	/* Validate inputs */
 	if (cols == 0 || rows == 0) {
-		fprintf(stderr, "calculate_target_terminal_dimensions: invalid terminal size %u×%u\n", cols, rows);
+		if (!quiet) {
+			fprintf(stderr, "calculate_target_terminal_dimensions: invalid terminal size %u×%u\n", cols, rows);
+		}
 		return result;
 	}
 
@@ -382,12 +382,22 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
 
 	/* Validate calculated dimensions */
 	if (result.width == 0 || result.height == 0) {
-		fprintf(stderr, "calculate_target_terminal_dimensions: calculated invalid dimensions %u×%u\n", result.width, result.height);
+		if (!quiet) {
+			fprintf(stderr, "calculate_target_terminal_dimensions: calculated invalid dimensions %u×%u\n", result.width, result.height);
+		}
 		result.width = 0;
 		result.height = 0;
 	}
 
 	return result;
+}
+
+target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t rows, uint32_t terminal_width, uint32_t terminal_height, uint32_t img_width, uint32_t img_height, bool fit_mode)
+{
+	(void)terminal_width; /* Reserved for future use */
+	(void)terminal_height; /* Reserved for future use */
+
+	return terminal_dimensions(cols, rows, img_width, img_height, fit_mode, false);
 }
 
 /**
@@ -398,9 +408,11 @@ target_dimensions_t calculate_target_terminal_dimensions(uint32_t cols, uint32_t
  * 2. Only width specified: calculate height from aspect ratio
  * 3. Only height specified: calculate width from aspect ratio
  *
- * @param src Source image for aspect ratio calculation
+ * @param src_width Source width for aspect ratio calculation
+ * @param src_height Source height for aspect ratio calculation
  * @param target_width Target width (-1 if not specified)
  * @param target_height Target height (-1 if not specified)
+ * @param quiet true: no error lines (pipeline_decode's pre-decode estimate)
  * @param out_dims Output dimensions
  * @return true on success, false on error
  */
@@ -415,15 +427,17 @@ static uint32_t custom_dim_clamp(float v)
 	return (uint32_t)v;
 }
 
-static bool calculate_custom_dimensions(const img2_image_t *src, int target_width, int target_height, target_dimensions_t *out_dims)
+static bool calculate_custom_dimensions(uint32_t src_width, uint32_t src_height, int target_width, int target_height, bool quiet, target_dimensions_t *out_dims)
 {
-	if (src == NULL || src->width == 0 || src->height == 0 || out_dims == NULL) {
-		fprintf(stderr, "calculate_custom_dimensions: invalid parameters\n");
+	if (src_width == 0 || src_height == 0 || out_dims == NULL) {
+		if (!quiet) {
+			fprintf(stderr, "calculate_custom_dimensions: invalid parameters\n");
+		}
 		return false;
 	}
 
 	/* Calculate aspect ratio */
-	float src_aspect = (float)src->width / (float)src->height;
+	float src_aspect = (float)src_width / (float)src_height;
 	uint32_t final_width, final_height;
 
 	if (target_width > 0 && target_height > 0) {
@@ -442,13 +456,17 @@ static bool calculate_custom_dimensions(const img2_image_t *src, int target_widt
 		final_width = custom_dim_clamp(roundf((float)final_height * src_aspect));
 
 	} else {
-		fprintf(stderr, "calculate_custom_dimensions: no dimensions specified\n");
+		if (!quiet) {
+			fprintf(stderr, "calculate_custom_dimensions: no dimensions specified\n");
+		}
 		return false;
 	}
 
 	/* Validate calculated dimensions */
 	if (final_width == 0 || final_height == 0) {
-		fprintf(stderr, "calculate_custom_dimensions: calculated invalid dimensions %u×%u\n", final_width, final_height);
+		if (!quiet) {
+			fprintf(stderr, "calculate_custom_dimensions: calculated invalid dimensions %u×%u\n", final_width, final_height);
+		}
 		return false;
 	}
 
@@ -456,6 +474,129 @@ static bool calculate_custom_dimensions(const img2_image_t *src, int target_widt
 	out_dims->height = final_height;
 	return true;
 }
+
+/**
+ * @brief Scale target of pipeline_scale() for a first frame of src_width x src_height (after orientation)
+ *
+ * Priority: -w/-h, then the Kitty / iTerm2 pixel path, else calculate_target_terminal_dimensions().
+ *
+ * @param opts CLI options (custom dimensions, fit mode, terminal)
+ * @param src_width Source width
+ * @param src_height Source height
+ * @param quiet true: no error lines (pipeline_decode's pre-decode estimate; pipeline_scale reports them)
+ * @param out Target; may be {0, 0} (no valid target) when true is returned
+ * @return false if the -w/-h dimensions cannot be computed, else true
+ */
+static bool pipeline_target_size(const cli_options_t *opts, uint32_t src_width, uint32_t src_height, bool quiet, target_dimensions_t *out)
+{
+	target_dimensions_t target = { 0, 0 };
+
+	if (opts->has_custom_dimensions) {
+		/* Custom dimensions take priority over fit/resize */
+		if (!calculate_custom_dimensions(src_width, src_height, opts->target_width, opts->target_height, quiet, &target)) {
+			*out = target;
+			return false;
+		}
+
+	} else if ((opts->terminal.has_kitty || opts->terminal.is_iterm2) && !opts->force_ansi) {
+		/* Kitty and iTerm2: use terminal pixel dimensions for scaling */
+		uint32_t img_height = src_height;
+		uint32_t half_terminal_height = opts->terminal.height / 2;
+		float aspect = (float)src_width / (float)src_height;
+
+		if (img_height > half_terminal_height) {
+			uint32_t max_height = 0;
+			if (opts->fit_mode) {
+				max_height = (opts->terminal.height > 10) ? (opts->terminal.height - 10) : opts->terminal.height;
+
+			} else {
+				max_height = half_terminal_height;
+			}
+
+			/* Scale to max_height preserving aspect ratio */
+			target.height = max_height;
+			target.width = (uint32_t)roundf((float)max_height * aspect);
+
+		} else if (opts->fit_mode) {
+			/* Fit within terminal width, if new height is bigger than terminal height adjust the target by terminal height */
+			uint32_t max_width = opts->terminal.width;
+			int calc_height = (int)roundf((float)max_width / aspect);
+
+			if (calc_height > opts->terminal.height) {
+				target.height = opts->terminal.height;
+				target.width = (uint32_t)roundf((float)target.height * aspect);
+
+			} else {
+				target.width = max_width;
+				target.height = calc_height;
+			}
+
+		} else {
+			/* Image fits within half terminal height - use original size */
+			calculate_custom_dimensions(src_width, src_height, src_width, src_height, quiet, &target);
+		}
+
+	} else {
+		/* Default: terminal-aware scaling with aspect ratio */
+		target = terminal_dimensions(opts->terminal.cols, opts->terminal.rows, src_width, src_height, opts->fit_mode, quiet);
+	}
+
+	*out = target;
+	return true;
+}
+
+/** JPEG deblocking (jpeg-quantsmooth) is skipped above this many source pixels ... */
+#define PIPELINE_DEBLOCK_SKIP_MIN_PIXELS 4000000u
+/** ... when the image is also shown downscaled by at least this linear factor (deblocking is not visible) */
+#define PIPELINE_DEBLOCK_SKIP_MIN_RATIO 8u
+/** Above this many source pixels deblocking is always skipped for display (~0.08 s/MP, not worth it) */
+#define PIPELINE_DEBLOCK_SKIP_ALWAYS_PIXELS 12000000u
+
+bool pipeline_jpeg_skip_deblock(uint32_t src_width, uint32_t src_height, uint32_t target_width, uint32_t target_height)
+{
+	if (target_width == 0 || target_height == 0 || (uint64_t)src_width * src_height <= PIPELINE_DEBLOCK_SKIP_MIN_PIXELS) {
+		return false;
+	}
+	if ((uint64_t)src_width * src_height > PIPELINE_DEBLOCK_SKIP_ALWAYS_PIXELS) {
+		return true;
+	}
+	/* max(src_width / target_width, src_height / target_height) >= ratio, without division */
+	return (uint64_t)src_width >= (uint64_t)target_width * PIPELINE_DEBLOCK_SKIP_MIN_RATIO || (uint64_t)src_height >= (uint64_t)target_height * PIPELINE_DEBLOCK_SKIP_MIN_RATIO;
+}
+
+#if IMG2_HAS_JPEGQS
+/**
+ * @brief img2_decode_opts_t.jpeg_deblock for a JPEG input: 0 if pipeline_jpeg_skip_deblock() holds for the
+ *        header size (img2_probe, oriented as pipeline_decode will) and the target pipeline_scale() will use
+ *
+ * @return 0 (off) or -1 (the library default); -1 also when the probe fails (the decode reports the error)
+ */
+static int pipeline_jpeg_deblock(const cli_options_t *opts, const uint8_t *buffer, size_t size)
+{
+	img2_probe_info_t info;
+	target_dimensions_t target;
+
+	/* convert mode scales only with -w/-h */
+	if ((opts->convert_mode && !opts->has_custom_dimensions) || img2_probe(buffer, size, &info) != IMG2_OK) {
+		return -1;
+	}
+
+	uint32_t width = info.width;
+	uint32_t height = info.height;
+#if IMG2_HAS_EXIF
+	/* orientations 5..8 transpose the frame before pipeline_scale() sees it */
+	if (info.orientation >= 5 && info.orientation <= 8) {
+		width = info.height;
+		height = info.width;
+	}
+#endif
+
+	if (!pipeline_target_size(opts, width, height, true, &target)) {
+		return -1;
+	}
+	return pipeline_jpeg_skip_deblock(width, height, target.width, target.height) ? 0 : -1;
+}
+#endif
 
 /**
  * @brief Read input (file or stdin) based on CLI options
@@ -519,6 +660,11 @@ int pipeline_decode(cli_options_t *opts, const uint8_t *buffer, size_t size, img
 	img2_decode_opts_t dopts = IMG2_DECODE_OPTS_INIT;
 	dopts.force_mime = mime;
 	dopts.yuv = (opts != NULL && opts->yuv_input) ? &opts->yuv : NULL;
+#if IMG2_HAS_JPEGQS
+	if (mime == IMG2_MIME_JPEG && opts != NULL) {
+		dopts.jpeg_deblock = pipeline_jpeg_deblock(opts, buffer, size);
+	}
+#endif
 	img2_frames_t fr = { NULL, 0, 0 };
 	if (img2_decode(buffer, size, &dopts, &fr) != IMG2_OK || fr.count <= 0) {
 		img2_frames_free(&fr);
@@ -567,72 +713,23 @@ int pipeline_scale(img2_image_t **frames, int frame_count, const cli_options_t *
 		return -1;
 	}
 
-	/* Get terminal size */
-	int rows = opts->terminal.rows, cols = opts->terminal.cols;
-
 	/* Determine target dimensions based on priority */
-	target_dimensions_t target = { 0, 0 };
+	target_dimensions_t target;
+	if (!pipeline_target_size(opts, frames[0]->width, frames[0]->height, false, &target)) {
+		fprintf(stderr, "pipeline_scale: failed to calculate custom dimensions\n");
+		return -1;
+	}
 
-	if (opts->has_custom_dimensions) {
-		/* Custom dimensions take priority over fit/resize */
-		if (!calculate_custom_dimensions(frames[0], opts->target_width, opts->target_height, &target)) {
-			fprintf(stderr, "pipeline_scale: failed to calculate custom dimensions\n");
-			return -1;
+	/* Debug log (if not silent) */
+	if (opts->has_custom_dimensions && !opts->silent) {
+		fprintf(stderr, "Using custom dimensions: ");
+		if (opts->target_width > 0) {
+			fprintf(stderr, "width=%d ", opts->target_width);
 		}
-
-		/* Debug log (if not silent) */
-		if (!opts->silent) {
-			fprintf(stderr, "Using custom dimensions: ");
-			if (opts->target_width > 0) {
-				fprintf(stderr, "width=%d ", opts->target_width);
-			}
-			if (opts->target_height > 0) {
-				fprintf(stderr, "height=%d ", opts->target_height);
-			}
-			fprintf(stderr, "(final: %ux%u)\n", target.width, target.height);
+		if (opts->target_height > 0) {
+			fprintf(stderr, "height=%d ", opts->target_height);
 		}
-
-	} else if ((opts->terminal.has_kitty || opts->terminal.is_iterm2) && !opts->force_ansi) {
-		/* Kitty and iTerm2: use terminal pixel dimensions for scaling */
-		uint32_t img_height = frames[0]->height;
-		uint32_t half_terminal_height = opts->terminal.height / 2;
-		float aspect = (float)frames[0]->width / (float)frames[0]->height;
-
-		if (img_height > half_terminal_height) {
-			uint32_t max_height = 0;
-			if (opts->fit_mode) {
-				max_height = (opts->terminal.height > 10) ? (opts->terminal.height - 10) : opts->terminal.height;
-
-			} else {
-				max_height = half_terminal_height;
-			}
-
-			/* Scale to max_height preserving aspect ratio */
-			target.height = max_height;
-			target.width = (uint32_t)roundf((float)max_height * aspect);
-
-		} else if (opts->fit_mode) {
-			/* Fit within terminal width, if new height is bigger than terminal height adjust the target by terminal height */
-			uint32_t max_width = opts->terminal.width;
-			int calc_height = (int)roundf((float)max_width / aspect);
-
-			if (calc_height > opts->terminal.height) {
-				target.height = opts->terminal.height;
-				target.width = (uint32_t)roundf((float)target.height * aspect);
-
-			} else {
-				target.width = max_width;
-				target.height = calc_height;
-			}
-
-		} else {
-			/* Image fits within half terminal height - use original size */
-			calculate_custom_dimensions(frames[0], frames[0]->width, frames[0]->height, &target);
-		}
-
-	} else {
-		/* Default: terminal-aware scaling with aspect ratio */
-		target = calculate_target_terminal_dimensions(cols, rows, opts->terminal.width, opts->terminal.height, frames[0]->width, frames[0]->height, opts->fit_mode);
+		fprintf(stderr, "(final: %ux%u)\n", target.width, target.height);
 	}
 
 	if (target.width == 0 || target.height == 0) {

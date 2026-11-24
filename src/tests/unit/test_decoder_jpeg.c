@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <img2/img2.h>
+
 #include "../../libimg2/core/image.h"
 #include "../../libimg2/decoders/decoder.h"
 #include "../ctest.h"
@@ -243,4 +245,144 @@ CTEST(decoder_jpeg, status_codes)
 	/* jpeg_deblock = 0 (plain libjpeg) still decodes */
 	img2_decode_opts_t opts = { .force_mime = IMG2_MIME_UNKNOWN, .yuv = NULL, .max_frames = 0, .jpeg_deblock = 0 };
 	ASSERT_EQUAL(IMG2_E_CODEC, img2_decode_jpeg(truncated, sizeof(truncated), &opts, &fr));
+}
+
+/* width x height image encoded as fmt (progressive if asked); free with img2_free() */
+static uint8_t *probe_encode(uint32_t width, uint32_t height, img2_format_t fmt, bool progressive, size_t *len)
+{
+	img2_image_t *img = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(width, height, &img));
+	img2_frames_t one = { &img, 1, 0 };
+	img2_encode_opts_t eo = IMG2_ENCODE_OPTS_INIT;
+	eo.progressive = progressive;
+	uint8_t *buf = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_encode(&one, fmt, &eo, &buf, len));
+	img2_image_destroy(img);
+	return buf;
+}
+
+/* *probe filled with garbage, so the tests see that an error zeroes it */
+static void probe_poison(img2_probe_info_t *info)
+{
+	memset(info, 0xA5, sizeof(*info));
+}
+
+static void assert_probe_zeroed(const img2_probe_info_t *info)
+{
+	ASSERT_EQUAL(IMG2_MIME_UNKNOWN, info->mime);
+	ASSERT_EQUAL(0, info->width);
+	ASSERT_EQUAL(0, info->height);
+	ASSERT_EQUAL(0, info->orientation);
+}
+
+/**
+ * @test img2_probe(): JPEG header size without a pixel decode (baseline, progressive), the img2_decode() input
+ *       checks and limits, errors zero *out, a non-JPEG type through the full-decode fallback
+ */
+CTEST(decoder_jpeg, probe)
+{
+	img2_probe_info_t info;
+	size_t len = 0;
+
+	uint8_t *jpg = probe_encode(37, 23, IMG2_FORMAT_JPEG, false, &len);
+	probe_poison(&info);
+	ASSERT_EQUAL(IMG2_OK, img2_probe(jpg, len, &info));
+	ASSERT_EQUAL(IMG2_MIME_JPEG, info.mime);
+	ASSERT_EQUAL(37, info.width);
+	ASSERT_EQUAL(23, info.height);
+	ASSERT_EQUAL(1, info.orientation);
+
+	/* only the header is read: a file cut after the first scan header still probes */
+	ASSERT_EQUAL(IMG2_OK, img2_probe(jpg, len - 4, &info));
+	ASSERT_EQUAL(37, info.width);
+	img2_free(jpg);
+
+	uint8_t *prog = probe_encode(64, 40, IMG2_FORMAT_JPEG, true, &len);
+	ASSERT_EQUAL(IMG2_OK, img2_probe(prog, len, &info));
+	ASSERT_EQUAL(IMG2_MIME_JPEG, info.mime);
+	ASSERT_EQUAL(64, info.width);
+	ASSERT_EQUAL(40, info.height);
+	img2_free(prog);
+
+	/* truncated before the frame header: libjpeg error -> IMG2_E_CODEC, *out zeroed */
+	static const uint8_t truncated[] = {
+		0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+		0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06,
+	};
+	probe_poison(&info);
+	ASSERT_EQUAL(IMG2_E_CODEC, img2_probe(truncated, sizeof(truncated), &info));
+	assert_probe_zeroed(&info);
+
+	/* garbage: no type -> IMG2_E_FORMAT */
+	static const uint8_t garbage[] = "This is not a JPEG file";
+	probe_poison(&info);
+	ASSERT_EQUAL(IMG2_E_FORMAT, img2_probe(garbage, sizeof(garbage), &info));
+	assert_probe_zeroed(&info);
+
+	/* the img2_decode() argument checks */
+	probe_poison(&info);
+	ASSERT_EQUAL(IMG2_E_ARG, img2_probe(NULL, 10, &info));
+	assert_probe_zeroed(&info);
+	ASSERT_EQUAL(IMG2_E_ARG, img2_probe(garbage, 0, &info));
+	ASSERT_EQUAL(IMG2_E_ARG, img2_probe(garbage, sizeof(garbage), NULL));
+	ASSERT_EQUAL(IMG2_E_LIMIT, img2_probe(garbage, (size_t)IMG2_MAX_FILE_SIZE + 1, &info));
+
+	/* a 20000x20000 frame header (4e8 pixels > IMG2_MAX_PIXELS) -> IMG2_E_LIMIT, as img2_decode() */
+	uint8_t *big = probe_encode(8, 8, IMG2_FORMAT_JPEG, false, &len);
+	bool patched = false;
+	for (size_t i = 0; i + 8 < len; i++) {
+		if (big[i] == 0xFF && big[i + 1] == 0xC0) { /* SOF0: length(2) precision(1) height(2) width(2) */
+			big[i + 5] = 0x4E;
+			big[i + 6] = 0x20;
+			big[i + 7] = 0x4E;
+			big[i + 8] = 0x20;
+			patched = true;
+			break;
+		}
+	}
+	ASSERT_TRUE(patched);
+	probe_poison(&info);
+	ASSERT_EQUAL(IMG2_E_LIMIT, img2_probe(big, len, &info));
+	assert_probe_zeroed(&info);
+	img2_free(big);
+
+	/* non-JPEG: the full decode */
+	uint8_t *png = probe_encode(5, 3, IMG2_FORMAT_PNG, false, &len);
+	probe_poison(&info);
+	ASSERT_EQUAL(IMG2_OK, img2_probe(png, len, &info));
+	ASSERT_EQUAL(IMG2_MIME_PNG, info.mime);
+	ASSERT_EQUAL(5, info.width);
+	ASSERT_EQUAL(3, info.height);
+	ASSERT_EQUAL(1, info.orientation);
+	img2_free(png);
+}
+
+/**
+ * @test img2_probe() of a camera JPEG with EXIF orientation 6: the stored size and the orientation still to
+ *       apply, both as img2_decode() reports them
+ */
+CTEST(decoder_jpeg, probe_orientation_matches_decode)
+{
+	FILE *fp = fopen(IMG2_TEST_SRC_DIR "/data/jpg/canon_hdr_NO.jpg", "rb");
+	ASSERT_NOT_NULL(fp);
+	uint8_t *data = malloc(1 << 22);
+	ASSERT_NOT_NULL(data);
+	size_t len = fread(data, 1, 1 << 22, fp);
+	fclose(fp);
+	ASSERT_TRUE(len > 0);
+
+	img2_probe_info_t info;
+	ASSERT_EQUAL(IMG2_OK, img2_probe(data, len, &info));
+
+	img2_frames_t fr;
+	ASSERT_EQUAL(IMG2_OK, img2_decode(data, len, NULL, &fr));
+	ASSERT_EQUAL(IMG2_MIME_JPEG, info.mime);
+	ASSERT_EQUAL(fr.frames[0]->width, info.width);
+	ASSERT_EQUAL(fr.frames[0]->height, info.height);
+	ASSERT_EQUAL(fr.frames[0]->orientation, info.orientation);
+#if IMG2_HAS_EXIF
+	ASSERT_EQUAL(6, info.orientation);
+#endif
+	img2_frames_free(&fr);
+	free(data);
 }

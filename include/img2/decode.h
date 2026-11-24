@@ -65,6 +65,30 @@ bool img2_can_decode(img2_mime_t mime);
 bool img2_is_animated(const uint8_t *buf, size_t len);
 
 /**
+ * @brief Result of img2_probe()
+ */
+typedef struct img2_probe_info {
+	img2_mime_t mime;       /**< Detected type (img2_mime_name() gives the format name) */
+	uint32_t width;         /**< Stored width of the first frame (before orientation) */
+	uint32_t height;        /**< Stored height of the first frame (before orientation) */
+	uint8_t orientation;    /**< EXIF orientation still to apply, as img2_image_t.orientation (1 = upright) */
+} img2_probe_info_t;
+
+/**
+ * @brief Type and size of an image without decoding its pixels where the format allows it
+ *
+ * JPEG (libjpeg-turbo build): the header and the EXIF orientation only, no pixel decode; libjpeg errors are
+ * logged at IMG2_LOG_DEBUG. Every other type: a full img2_decode() with default options (same result, not
+ * faster). Same input checks and IMG2_MAX_DIMENSION / IMG2_MAX_PIXELS limits as img2_decode().
+ *
+ * @param buf Encoded image data
+ * @param len Length of buf in bytes
+ * @param out Probe result (zeroed on error)
+ * @return IMG2_OK; IMG2_E_ARG; IMG2_E_LIMIT; IMG2_E_FORMAT; IMG2_E_UNSUPPORTED; IMG2_E_NOMEM; IMG2_E_CODEC
+ */
+img2_status_t img2_probe(const uint8_t *buf, size_t len, img2_probe_info_t *out);
+
+/**
  * @brief One row of the decoder table
  */
 typedef struct img2_decoder_info {

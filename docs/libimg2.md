@@ -162,7 +162,7 @@ no build/source path leaked into an installed file, then build `src/tests/consum
 | `<img2/image.h>` | `img2_image_t` (pixels, parsed EXIF/XMP, raw metadata blocks, `orientation`), `img2_frames_t`, `img2_filter_t`, `img2_image_create`/`destroy`, `img2_image_set_metadata`, `img2_frames_free`, `img2_scale`, `img2_scale_fit`, `img2_fit_size`, `img2_apply_orientation`, inline `img2_image_get_pixel`/`set_pixel`, the `IMG2_MAX_*` limits |
 | `<img2/mime.h>` | `img2_mime_t` (append-only), `img2_detect_mime`, `img2_mime_name`, `img2_mime_string` |
 | `<img2/yuv.h>` | raw YUV formats, `img2_yuv_params_t`, `img2_yuv_parse_spec`, `img2_yuv_frame_size`, name helpers |
-| `<img2/decode.h>` | `img2_decode`, `img2_decode_opts_t` (+ `IMG2_DECODE_OPTS_INIT`), `img2_can_decode`, `img2_is_animated`, decoder table |
+| `<img2/decode.h>` | `img2_decode`, `img2_decode_opts_t` (+ `IMG2_DECODE_OPTS_INIT`), `img2_can_decode`, `img2_is_animated`, `img2_probe` (+ `img2_probe_info_t`), decoder table |
 | `<img2/encode.h>` | `img2_encode`, `img2_format_t`, `img2_encode_opts_t` (+ `IMG2_ENCODE_OPTS_INIT`), `img2_can_encode`, encoder table |
 | `<img2/metadata.h>` | `struct img2_exif`, `struct img2_xmp`, init/clear, standalone JPEG/TIFF/XML parsers |
 | `<img2/font.h>` | interned font handles: `img2_font_load`, `img2_font_load_fallback`, data/family getters, `img2_font_foreach` |
@@ -220,6 +220,20 @@ recommended around library use; see [Threading model](#threading-model).
 | `IMG2_FILTER_MITCHELL` | `STBIR_FILTER_MITCHELL` | `mitchell` |
 
 A value outside the enum returns `IMG2_E_ARG`; a resampler failure returns `IMG2_E_CODEC`.
+
+### Probing
+
+`img2_probe(buf, len, &info)` reports the detected type, the stored (pre-orientation) width and height of the
+first frame and the orientation still to apply (`img2_image_t.orientation` semantics), with the input checks
+and `IMG2_MAX_DIMENSION`/`IMG2_MAX_PIXELS` limits of `img2_decode`:
+
+| Type | How |
+|---|---|
+| JPEG (libjpeg-turbo) | `jpeg_read_header` + the EXIF orientation, no pixel decode; libjpeg errors and warnings at `IMG2_LOG_DEBUG` |
+| every other type | a full decode with default options (correct, not faster) |
+
+The frame count is not reported. imgcat2 uses it for `--info` of a JPEG and to skip JPEG deblocking for display:
+always above 12 MP, and for a JPEG above 4 MP when it is shown downscaled by 8x or more.
 
 ### Animation timing
 
