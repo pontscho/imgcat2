@@ -450,6 +450,41 @@ CTEST(cli_fix, output_extension_format)
 	ASSERT_STR("", err);
 	free(err);
 	ASSERT_FALSE(opts.convert_mode);
+
+	/* -o - is stdout: with a format option a conversion with output_file NULL, no extension warning */
+	opts_defaults(&opts);
+	char *argv8[] = { (char *)"imgcat2", (char *)"--png", (char *)"6", (char *)"-o", (char *)"-", (char *)"in.jpg", NULL };
+	ASSERT_EQUAL(0, parse_captured(6, argv8, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+	ASSERT_TRUE(opts.convert_mode);
+	ASSERT_EQUAL(IMG2_FORMAT_PNG, opts.output_format);
+	ASSERT_NULL(opts.output_file);
+
+	/* -o - without a format option: an error naming the format options */
+	opts_defaults(&opts);
+	char *argv9[] = { (char *)"imgcat2", (char *)"-o", (char *)"-", (char *)"in.jpg", NULL };
+	ASSERT_EQUAL(0, parse_captured(4, argv9, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
+	ASSERT_NOT_NULL(strstr(err, "Error: -o - (stdout) needs a format option\n"));
+	ASSERT_NOT_NULL(strstr(err, "--jpeg, --png, --heif, --webp, --jxl or --avif"));
+	free(err);
+
+	/* --info -o -: no conversion, no error */
+	opts_defaults(&opts);
+	char *argv10[] = { (char *)"imgcat2", (char *)"--info", (char *)"-o", (char *)"-", (char *)"in.jpg", NULL };
+	ASSERT_EQUAL(0, parse_captured(5, argv10, &opts, &out, &err));
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+	ASSERT_FALSE(opts.convert_mode);
 }
 
 #ifdef IMG2_HAVE_HEIF

@@ -455,7 +455,7 @@ Conversion Options:
       --threads <1-64>      Encoder threads (WebP, JXL, AVIF)
                             An option the format cannot use is ignored with a warning
       --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)
-  -o, --output <file>       Output file (stdout if not specified)
+  -o, --output <file>       Output file (stdout if not specified; - = stdout, needs a format option)
                             Without a format option the extension chooses it, default quality:
                             .jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif
   -n, --frame <index>       Select frame for animated images (default: 0)
@@ -723,7 +723,8 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
   extension (case-insensitive) chooses the format with its default quality and turns on the conversion:
   `.jpg`/`.jpeg`, `.png`, `.webp`, `.heic`/`.heif`, `.jxl`, `.avif` (`imgcat2 -w 480 -o out.png in.jpg`). Another
   extension, or none, is an error (there is no PPM encoder). A format option wins over the extension, with a
-  warning if the extension names another format. `--info` ignores `-o`
+  warning if the extension names another format. `-o -` writes to stdout and needs a format option
+  (`imgcat2 --png 6 -o - in.jpg > out.png`). `--info` ignores `-o`
 - `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
 - `-w N` / `-H N` - Scale the converted image (up to 16384 pixels; not limited by the terminal size)
 

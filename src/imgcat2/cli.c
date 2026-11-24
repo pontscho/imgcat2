@@ -76,7 +76,7 @@ void print_usage(const char *program_name)
 	printf("      --threads <1-64>      Encoder threads (WebP, JXL, AVIF)\n");
 	printf("                            An option the format cannot use is ignored with a warning\n");
 	printf("      --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)\n");
-	printf("  -o, --output <file>       Output file (stdout if not specified)\n");
+	printf("  -o, --output <file>       Output file (stdout if not specified; - = stdout, needs a format option)\n");
 	printf("                            Without a format option the extension chooses it, default quality:\n");
 	printf("                            .jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
@@ -582,20 +582,30 @@ int validate_options(cli_options_t *opts)
 		return -1;
 	}
 	/* -o <file>.<ext> without a format option chooses the format by the extension (with the format's default
-	 * quality); a format option wins. Before the checks below, which depend on convert_mode. --info ignores -o */
+	 * quality); a format option wins. -o - is stdout and needs a format option. Before the checks below, which
+	 * depend on convert_mode. --info ignores -o */
 	if (opts->output_file != NULL && !opts->info_mode) {
-		char safe[CLI_SAFE_PATH_SIZE];
-		img2_format_t ext_format = format_from_extension(opts->output_file);
-		if (!opts->convert_mode) {
-			if (ext_format == IMG2_FORMAT_NONE) {
-				fprintf(stderr, "Error: Cannot infer the output format from '%s'\n", cli_safe_str(opts->output_file, safe, sizeof(safe)));
-				fprintf(stderr, "Use a .jpg, .jpeg, .png, .webp, .heic, .heif, .jxl or .avif extension, or --jpeg, --png, --heif, --webp, --jxl or --avif\n");
+		if (strcmp(opts->output_file, "-") == 0) {
+			if (!opts->convert_mode) {
+				fprintf(stderr, "Error: -o - (stdout) needs a format option\n");
+				fprintf(stderr, "Use --jpeg, --png, --heif, --webp, --jxl or --avif\n");
 				return -1;
 			}
-			opts->convert_mode = true;
-			opts->output_format = ext_format;
-		} else if (ext_format != IMG2_FORMAT_NONE && ext_format != opts->output_format) {
-			fprintf(stderr, "Warning: The extension of '%s' names another format than the format option, using the format option\n", cli_safe_str(opts->output_file, safe, sizeof(safe)));
+			opts->output_file = NULL;
+		} else {
+			char safe[CLI_SAFE_PATH_SIZE];
+			img2_format_t ext_format = format_from_extension(opts->output_file);
+			if (!opts->convert_mode) {
+				if (ext_format == IMG2_FORMAT_NONE) {
+					fprintf(stderr, "Error: Cannot infer the output format from '%s'\n", cli_safe_str(opts->output_file, safe, sizeof(safe)));
+					fprintf(stderr, "Use a .jpg, .jpeg, .png, .webp, .heic, .heif, .jxl or .avif extension, or --jpeg, --png, --heif, --webp, --jxl or --avif\n");
+					return -1;
+				}
+				opts->convert_mode = true;
+				opts->output_format = ext_format;
+			} else if (ext_format != IMG2_FORMAT_NONE && ext_format != opts->output_format) {
+				fprintf(stderr, "Warning: The extension of '%s' names another format than the format option, using the format option\n", cli_safe_str(opts->output_file, safe, sizeof(safe)));
+			}
 		}
 	}
 
