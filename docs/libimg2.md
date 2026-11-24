@@ -56,6 +56,7 @@ cmake --install build --prefix /opt/img2 --component imgcat2            # CLI on
 | `IMG2_ENABLE_EXIF_READER` | ON | EXIF/XMP feature flag (the parser itself is always compiled) |
 | `IMG2_ENABLE_JPEGQS` | ON | jpeg-quantsmooth JPEG deblocking (OpenMP) |
 | `IMG2_USE_SYSTEM_<X>` | OFF | Use the host library instead of the vendored copy; `<X>` = `JPEG`, `PNG`, `GIF`, `WEBP`, `TIFF`, `LCMS2`, `RAW`, `HEIF`, `JXL` |
+| `IMG2_USE_SYSTEM_OPENMP` | OFF | macOS + LLVM Clang 19 only: use the host OpenMP runtime (`FindOpenMP`) instead of the vendored static libomp 19.1.7 (`vendor/llvm-openmp`); Linux always uses the compiler's `-fopenmp` (libgomp) |
 | `IMG2_BUILD_CLI` | top level | Build the `imgcat2` command line tool |
 | `IMG2_BUILD_TESTS` | top level | Build the test suite and register the ctests |
 | `IMG2_INSTALL` | top level | Generate install rules and the `img2Config.cmake` package (requires `IMG2_FAT_ARCHIVE`) |
@@ -69,8 +70,10 @@ cmake --install build --prefix /opt/img2 --component imgcat2            # CLI on
 "top level" means `PROJECT_IS_TOP_LEVEL`: ON when img2 is the main project, OFF under `add_subdirectory`.
 The vendors are always built with `-O3 -g`, `NDEBUG` and the hardening flags (`IMG2_HARDENING_FLAGS`,
 `cmake/Img2Hardening.cmake`: `-fstack-protector-strong`, plus `-D_FORTIFY_SOURCE=2` unless the toolchain
-predefines it; C/C++ sources only, the ExternalProject builds of libjpeg-turbo and aom get them through
-`CMAKE_C_FLAGS`/`CMAKE_CXX_FLAGS`, assembler flags stay upstream's), but never with our warning flags. Our own
+predefines it; C/C++ sources only, the ExternalProject builds of libjpeg-turbo, aom and libomp get them through
+`CMAKE_C_FLAGS`/`CMAKE_CXX_FLAGS`, assembler flags stay upstream's; those three are configured with
+`CMAKE_BUILD_TYPE=Release` whatever our build type, i.e. `-O3 -DNDEBUG` without `-g`), but never with our
+warning flags. Our own
 targets get `-O3 -g`, warnings and the same hardening flags. Nothing is set globally, so a consumer's targets see
 none of these flags. `imgcat2` is linked fully static (static PIE where supported, see `IMG2_STATIC_PIE`) with
 full RELRO (`-z relro -z now`).
@@ -81,7 +84,8 @@ With `IMG2_FAT_ARCHIVE` (default for top-level builds) the `img2_fat` target mer
 vendored archives, in the former static link order, into `build/fat/libimg2.a` with a GNU `ar -M` MRI script
 (`cmake/scripts/img2_fat_archive.cmake`; macOS `libtool -static`, best effort and untested). Merged: zlib-ng,
 libpng (+APNG patch), jpeg-quantsmooth, libjpeg-turbo, giflib, libwebp (webp, webpdemux, webpmux, sharpyuv), libheif,
-libde265, aom, OpenJPEG, kvazaar, libtiff, LibRaw, libjxl (+jxl_cms, jxl_threads), highway, lcms2 and brotli. Host libraries
+libde265, aom, OpenJPEG, kvazaar, libtiff, LibRaw, libjxl (+jxl_cms, jxl_threads), highway, lcms2 and brotli, plus on
+macOS with LLVM Clang 19 the OpenMP runtime libomp (static, built from `vendor/llvm-openmp`). Host libraries
 (`IMG2_USE_SYSTEM_*`, resvg) are not merged: they become link dependencies of the package, and configure warns
 about it. The imgcat2 executable, every test and the installed package use this one archive, so the shipped
 artefact is the tested one.
@@ -95,7 +99,7 @@ that is no longer duplicated also fails the check. Skipped on Apple and when CMa
 
 Vendored-library manifest: configure writes `build/fat/vendored-libraries.txt` (`cmake/Img2VendorManifest.cmake`),
 installed as `share/img2/vendored-libraries.txt` with the `img2_development` component. One tab-separated row
-per `vendor/` submodule: name, whether it is compiled into this build, submodule path, the commit pinned by the
+per `vendor/` submodule (plus `vendor/llvm-openmp`, committed release sources, when libomp is built): name, whether it is compiled into this build, submodule path, the commit pinned by the
 superproject (gitlink), the checked-out commit, `git describe --tags --always` (upstream version tag where the
 repository has one), working-tree state (`clean`/`modified`/`unknown`), upstream URL and notes (e.g. the APNG
 patch applied to libpng). It is a snapshot of configure time: re-run CMake after moving a submodule. Without a
@@ -113,7 +117,10 @@ target_link_libraries(app PRIVATE img2::img2)
 
 `img2Config.cmake` is relocatable (every path derives from the package prefix). `img2::img2` brings the
 include directory and the link dependencies Threads, OpenMP (when jpeg-quantsmooth or LibRaw use it), `m`,
-the C++ runtime (`stdc++`, `c++` on macOS) and any host libraries. `img2_FEATURES` lists the built features
+the C++ runtime (`stdc++`, `c++` on macOS) and any host libraries. On macOS with LLVM Clang 19 the fat archive
+carries its own static OpenMP runtime (libomp 19.1.7, `IMG2_USE_SYSTEM_OPENMP` OFF), so the package adds no
+OpenMP dependency; such a consumer must not link another OpenMP runtime (`-fopenmp`, `libomp.dylib`,
+`OpenMP::OpenMP_C`): two runtimes in one process abort with `OMP: Error #15`. `img2_FEATURES` lists the built features
 (informative). The installed package is the fat archive only; there is no shared library and no pkg-config
 file.
 
@@ -360,7 +367,8 @@ What is covered by the S6 audit and the `test_threads` ctest (**[SM3]**), and no
   settings), giflib and the header-only stb/nanosvg code are exercised concurrently by `test_threads`.
   libheif is used without `heif_init()` (its implicit initialisation); LibRaw (`libraw_init`), libjxl and
   libheif objects are created per call; libtiff handlers are per handle; jpeg-quantsmooth and LibRaw use
-  OpenMP, i.e. the process-global OpenMP runtime.
+  OpenMP, i.e. the process-global OpenMP runtime. On macOS (LLVM Clang 19) that runtime is the static libomp
+  inside `libimg2.a`; the application must not bring a second one (see [find_package](#find_package-installed-package)).
 - **Not verified thread-safe**: the vendors behind WebP (libwebp), HEIF/AVIF (libheif, libde265, kvazaar, aom,
   OpenJPEG), TIFF (libtiff), RAW (LibRaw), JPEG XL (libjxl, highway, brotli, lcms2) and the JPEG/HEIF/WebP/JXL
   encoders. The library keeps no shared state of its own on those paths, but no concurrency test covers them;
@@ -552,8 +560,9 @@ value alone no longer rotates: a caller who builds an image and wants a rotation
 - With a host libtiff older than 4.5 (`IMG2_USE_SYSTEM_TIFF=ON`) the per-handle handlers are unavailable and
   libtiff's default handlers print directly to stderr.
 - **[SI1]** The fat archive embeds the vendored libpng, libjpeg-turbo, zlib-ng, giflib, libwebp, libheif
-  (+ libde265, kvazaar, aom, OpenJPEG), libtiff, LibRaw and libjxl (+ highway, brotli, lcms2). A consumer that
-  also links its own copy of any of them gets duplicate-symbol errors or silent first-wins binding. Mitigation:
+  (+ libde265, kvazaar, aom, OpenJPEG), libtiff, LibRaw and libjxl (+ highway, brotli, lcms2), and on macOS
+  (LLVM Clang 19) libomp. A consumer that also links its own copy of any of them gets duplicate-symbol errors or
+  silent first-wins binding (a second OpenMP runtime: `OMP: Error #15` at run time). Mitigation:
   link only `img2::img2` for those codecs, or build img2 with the matching `IMG2_USE_SYSTEM_*`;
   `share/img2/vendored-libraries.txt` says which versions are inside. The build only checks for duplicates
   inside the archive itself (see [The fat archive](#the-fat-archive)); prefixing the vendored symbols or hiding

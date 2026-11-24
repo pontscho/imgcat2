@@ -81,7 +81,9 @@ and merged into `libimg2.a`. `IMG2_USE_SYSTEM_<X>` switches a codec to the host 
 
 ### Optional Dependencies
 
-- **OpenMP** - Used by jpeg-quantsmooth and LibRaw when the compiler provides it
+- **OpenMP** - Used by jpeg-quantsmooth and LibRaw when the compiler provides it (Linux: libgomp via
+  `-fopenmp`); on macOS with LLVM Clang 19 a static libomp 19.1.7 is built from `vendor/llvm-openmp` and merged
+  into `libimg2.a`, so nothing has to be installed
 - **resvg** - Host library for advanced SVG rendering, enabled with `-DIMG2_ENABLE_RESVG=ON` (see below)
 - **clang-format** / **clang-tidy** - Developer tooling (`format` target, `IMG2_ENABLE_CLANG_TIDY`)
 
@@ -293,7 +295,8 @@ API overview, ownership rules, error codes, logging, threading and limits: [docs
 
 The installed archive embeds the vendored codec libraries (listed with their versions in
 `share/img2/vendored-libraries.txt`); linking another copy of libpng, libjpeg-turbo, libwebp etc. into the same
-program causes duplicate symbols, see [docs/libimg2.md](docs/libimg2.md#known-limitations--cli-deltas).
+program causes duplicate symbols, see [docs/libimg2.md](docs/libimg2.md#known-limitations--cli-deltas). On macOS
+(LLVM Clang 19) it also embeds the OpenMP runtime (libomp): do not link a second one (`OMP: Error #15`).
 
 ## iTerm2 Native Support
 

@@ -3,7 +3,8 @@
 #          call time, PROJECT_VERSION.
 # Outputs: function img2_write_vendor_manifest(<file>): writes the manifest at configure time.
 #
-# One tab-separated row per vendor/ submodule listed in .gitmodules:
+# One tab-separated row per vendor/ submodule listed in .gitmodules (plus vendor/llvm-openmp, committed source, when
+# the static libomp is built):
 #   name  built  path  pinned  checked_out  describe  state  url  notes
 #   built        yes = compiled into this build (the vendored target exists), no = feature off / host library
 #   pinned       commit recorded in the superproject's HEAD tree (gitlink, `git ls-tree HEAD <path>`)
@@ -109,6 +110,12 @@ function(img2_write_vendor_manifest _file)
 		endif()
 		string(APPEND _txt "${_name}\t${_built}\t${_p}\t${_pinned}\t${_head}\t${_desc}\t${_state}\t${_url_${_p}}\t${_note}\n")
 	endforeach()
+	# Committed source, not a submodule (cmake/vendor/Img2VendorOpenMP.cmake, macOS/Clang only)
+	if(TARGET libomp-ext)
+		string(APPEND _txt "llvm-openmp\tyes\tvendor/llvm-openmp\tcommitted\tcommitted\tllvmorg-19.1.7\tunknown\t"
+			"https://github.com/llvm/llvm-project/releases/tag/llvmorg-19.1.7\t"
+			"static libomp (ExternalProject build) from the release tarballs, see vendor/llvm-openmp/README.md\n")
+	endif()
 	# Write only on change (no needless rebuild/reinstall of dependants)
 	set(_old "")
 	if(EXISTS "${_file}")

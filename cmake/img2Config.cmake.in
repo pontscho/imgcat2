@@ -6,6 +6,7 @@ set_and_check(img2_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
 set_and_check(img2_LIBRARY "@PACKAGE_IMG2_INSTALL_ARCHIVE@")
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
+# 0 also when libimg2.a carries its own static libomp (macOS/Clang): do not link a second OpenMP runtime
 set(_img2_need_openmp @IMG2_NEED_OPENMP@)
 if(_img2_need_openmp)
 	find_dependency(OpenMP COMPONENTS C)

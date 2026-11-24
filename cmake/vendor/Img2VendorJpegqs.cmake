@@ -1,5 +1,5 @@
 # Purpose: jpeg-quantsmooth (optional JPEG decode enhancement, SIMD dispatch + OpenMP).
-# Inputs:  IMG2_ENABLE_JPEGQS, JPEG_INCLUDE_DIRS.
+# Inputs:  IMG2_ENABLE_JPEGQS, JPEG_INCLUDE_DIRS, vendor_libomp (cmake/vendor/Img2VendorOpenMP.cmake, if built).
 # Outputs: jpegqs* targets, JPEGQS_FOUND, JPEGQS_OPENMP, img2_feature(JPEGQS).
 
 # jpeg-quantsmooth (optional, enhances JPEG decoding quality)
@@ -72,25 +72,33 @@ if(IMG2_ENABLE_JPEGQS AND JPEG_FOUND)
 
 	# OpenMP: quantsmooth.h parallelizes its per-row loops under _OPENMP
 	# (upstream Makefile builds with -fopenmp). Output is deterministic.
-	find_package(OpenMP COMPONENTS C)
-	if(OpenMP_C_FOUND)
-		if(UNIX AND NOT APPLE)
-			# Flag form so the gcc driver picks static libgomp under -static
-			separate_arguments(_jpegqs_omp_flags UNIX_COMMAND "${OpenMP_C_FLAGS}")
-			foreach(_t jpegqs jpegqs_base jpegqs_sse2 jpegqs_avx2 jpegqs_avx512 jpegqs_dispatch)
-				if(TARGET ${_t})
-					target_compile_options(${_t} PRIVATE ${_jpegqs_omp_flags})
-				endif()
-			endforeach()
-			target_link_options(jpegqs INTERFACE ${_jpegqs_omp_flags})
-		else()
-			foreach(_t jpegqs jpegqs_base jpegqs_sse2 jpegqs_avx2 jpegqs_avx512 jpegqs_dispatch)
-				if(TARGET ${_t})
-					target_link_libraries(${_t} PRIVATE OpenMP::OpenMP_C)
-				endif()
-			endforeach()
-			target_link_libraries(jpegqs PUBLIC OpenMP::OpenMP_C)
+	# macOS + Clang 19: the vendored static libomp (cmake/vendor/Img2VendorOpenMP.cmake), else FindOpenMP
+	set(_jpegqs_omp_target "")
+	if(TARGET vendor_libomp)
+		set(_jpegqs_omp_target vendor_libomp)
+	else()
+		find_package(OpenMP COMPONENTS C)
+		if(OpenMP_C_FOUND AND NOT (UNIX AND NOT APPLE))
+			set(_jpegqs_omp_target OpenMP::OpenMP_C)
 		endif()
+	endif()
+	if(OpenMP_C_FOUND AND UNIX AND NOT APPLE)
+		# Flag form so the gcc driver picks static libgomp under -static
+		separate_arguments(_jpegqs_omp_flags UNIX_COMMAND "${OpenMP_C_FLAGS}")
+		foreach(_t jpegqs jpegqs_base jpegqs_sse2 jpegqs_avx2 jpegqs_avx512 jpegqs_dispatch)
+			if(TARGET ${_t})
+				target_compile_options(${_t} PRIVATE ${_jpegqs_omp_flags})
+			endif()
+		endforeach()
+		target_link_options(jpegqs INTERFACE ${_jpegqs_omp_flags})
+		set(JPEGQS_OPENMP "OpenMP")
+	elseif(_jpegqs_omp_target)
+		foreach(_t jpegqs jpegqs_base jpegqs_sse2 jpegqs_avx2 jpegqs_avx512 jpegqs_dispatch)
+			if(TARGET ${_t})
+				target_link_libraries(${_t} PRIVATE ${_jpegqs_omp_target})
+			endif()
+		endforeach()
+		target_link_libraries(jpegqs PUBLIC ${_jpegqs_omp_target})
 		set(JPEGQS_OPENMP "OpenMP")
 	else()
 		set(JPEGQS_OPENMP "no OpenMP")
@@ -106,9 +114,10 @@ if(IMG2_ENABLE_JPEGQS AND JPEG_FOUND)
 	endif()
 
 	# OpenMP on Linux reaches the fat archive's users as the -fopenmp link flag (IMG2_INTERFACE_LINK_OPTIONS,
-	# cmake/Img2FatArchive.cmake); elsewhere as the OpenMP::OpenMP_C target
+	# cmake/Img2FatArchive.cmake); the vendored libomp.a is merged into the fat archive (no system library);
+	# elsewhere as the OpenMP::OpenMP_C target
 	set(_jpegqs_system_libs "")
-	if(OpenMP_C_FOUND AND NOT (UNIX AND NOT APPLE))
+	if(_jpegqs_omp_target STREQUAL "OpenMP::OpenMP_C")
 		set(_jpegqs_system_libs OpenMP::OpenMP_C)
 	endif()
 	img2_feature(JPEGQS LIBS jpegqs INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/vendor/jpeg-quantsmooth

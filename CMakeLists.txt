@@ -44,6 +44,7 @@ include(Img2Features)
 img2_vendor_section_begin()   # vendors see the executable link flags (-static, stack size) as before
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorZlib.cmake")
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorJpeg.cmake")
+include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorOpenMP.cmake")   # macOS/Clang static libomp (jpegqs, LibRaw)
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorJpegqs.cmake")
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorPng.cmake")
 include("${PROJECT_SOURCE_DIR}/cmake/vendor/Img2VendorGif.cmake")

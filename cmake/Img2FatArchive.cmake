@@ -2,7 +2,7 @@
 #          interface (system libraries, link options) shared by the in-tree img2_bundled target and the
 #          installed img2Config.cmake.
 # Inputs:  IMG2_LINK_ORDER, IMG2_HAVE_<X>, IMG2_<X>_ARCHIVES, IMG2_TRAILING_ARCHIVES, IMG2_VENDORED_ARCHIVE_TARGETS,
-#          IMG2_SYSTEM_LINK_LIBS, IMG2_ALL_FEATURES, JPEGQS_OPENMP, RAW_OPENMP, OpenMP_<L>_FLAGS,
+#          IMG2_SYSTEM_LINK_LIBS, IMG2_ALL_FEATURES, JPEGQS_OPENMP, RAW_OPENMP, IMG2_OPENMP_VENDORED, OpenMP_<L>_FLAGS,
 #          IMG2_POSITION_INDEPENDENT_CODE, IMG2_FAT_ARCHIVE, STATIC_LIBCXX_LIBS/DYNAMIC_LIBCXX_LIBS, Threads::Threads.
 # Outputs: macro img2_add_fat_archive(); after the call ([R16] variable contract, docs/feature-implementation-plan.md):
 #          IMG2_VENDORED_ARCHIVES, IMG2_FAT_ARCHIVE_NAME, IMG2_FAT_ARCHIVE_FILE, IMG2_SYSTEM_LINK_LIBS (completed),
@@ -30,8 +30,12 @@ macro(img2_add_fat_archive)
 	endforeach()
 	list(APPEND IMG2_VENDORED_ARCHIVES ${IMG2_TRAILING_ARCHIVES})
 
-	# OpenMP (jpeg-quantsmooth, vendored LibRaw)
-	if(JPEGQS_OPENMP STREQUAL "OpenMP" OR RAW_OPENMP STREQUAL "OpenMP")
+	# OpenMP (jpeg-quantsmooth, vendored LibRaw): does the consumer need an OpenMP runtime of its own? Not with the
+	# vendored static libomp (macOS/Clang, cmake/vendor/Img2VendorOpenMP.cmake): libomp.a is merged into the fat
+	# archive, and a second runtime in the process would abort (OMP Error #15)
+	if(IMG2_OPENMP_VENDORED)
+		set(IMG2_NEED_OPENMP 0)
+	elseif(JPEGQS_OPENMP STREQUAL "OpenMP" OR RAW_OPENMP STREQUAL "OpenMP")
 		set(IMG2_NEED_OPENMP 1)
 	else()
 		set(IMG2_NEED_OPENMP 0)

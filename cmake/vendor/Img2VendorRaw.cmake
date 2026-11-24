@@ -1,5 +1,5 @@
 # Purpose: LibRaw (optional): vendored or host.
-# Inputs:  IMG2_ENABLE_RAW, IMG2_USE_SYSTEM_RAW, LCMS2_TARGET, JPEG/zlib results.
+# Inputs:  IMG2_ENABLE_RAW, IMG2_USE_SYSTEM_RAW, LCMS2_TARGET, JPEG/zlib results, vendor_libomp (if built).
 # Outputs: vendor_libraw, RAW_FOUND, RAW_LIBRARIES, RAW_INCLUDE_DIRS, RAW_LIB_TYPE, img2_feature(RAW).
 
 # RAW (optional)
@@ -41,16 +41,24 @@ if(IMG2_ENABLE_RAW AND NOT IMG2_USE_SYSTEM_RAW)
 	target_link_libraries(vendor_libraw PUBLIC Threads::Threads)
 
 	# OpenMP, as with the previous host libraw (-fopenmp)
-	find_package(OpenMP COMPONENTS CXX)
-	if(OpenMP_CXX_FOUND)
-		if(UNIX AND NOT APPLE)
-			# Flag form so the gcc driver picks static libgomp under -static
-			separate_arguments(_raw_omp_flags UNIX_COMMAND "${OpenMP_CXX_FLAGS}")
-			target_compile_options(vendor_libraw PRIVATE ${_raw_omp_flags})
-			target_link_options(vendor_libraw INTERFACE ${_raw_omp_flags})
-		else()
-			target_link_libraries(vendor_libraw PUBLIC OpenMP::OpenMP_CXX)
+	# macOS + Clang 19: the vendored static libomp (cmake/vendor/Img2VendorOpenMP.cmake), else FindOpenMP
+	set(_raw_omp_target "")
+	if(TARGET vendor_libomp)
+		set(_raw_omp_target vendor_libomp)
+	else()
+		find_package(OpenMP COMPONENTS CXX)
+		if(OpenMP_CXX_FOUND AND NOT (UNIX AND NOT APPLE))
+			set(_raw_omp_target OpenMP::OpenMP_CXX)
 		endif()
+	endif()
+	if(OpenMP_CXX_FOUND AND UNIX AND NOT APPLE)
+		# Flag form so the gcc driver picks static libgomp under -static
+		separate_arguments(_raw_omp_flags UNIX_COMMAND "${OpenMP_CXX_FLAGS}")
+		target_compile_options(vendor_libraw PRIVATE ${_raw_omp_flags})
+		target_link_options(vendor_libraw INTERFACE ${_raw_omp_flags})
+		set(RAW_OPENMP "OpenMP")
+	elseif(_raw_omp_target)
+		target_link_libraries(vendor_libraw PUBLIC ${_raw_omp_target})
 		set(RAW_OPENMP "OpenMP")
 	else()
 		set(RAW_OPENMP "no OpenMP")
@@ -61,9 +69,10 @@ if(IMG2_ENABLE_RAW AND NOT IMG2_USE_SYSTEM_RAW)
 	set(RAW_CUSTOM_LIBS vendor_libraw)
 	set(RAW_INCLUDE_DIRS ${LIBRAW_SRC_DIR})
 	set(RAW_LIB_TYPE "vendored LibRaw 0.22.3, ${RAW_OPENMP}; lcms2: ${LCMS2_LIB_TYPE}")
-	# OpenMP on Linux: -fopenmp link flag (IMG2_INTERFACE_LINK_OPTIONS); elsewhere the OpenMP::OpenMP_CXX target
+	# OpenMP on Linux: -fopenmp link flag (IMG2_INTERFACE_LINK_OPTIONS); the vendored libomp.a is merged into the
+	# fat archive (no system library); elsewhere the OpenMP::OpenMP_CXX target
 	set(_raw_system_libs "")
-	if(OpenMP_CXX_FOUND AND NOT (UNIX AND NOT APPLE))
+	if(_raw_omp_target STREQUAL "OpenMP::OpenMP_CXX")
 		set(_raw_system_libs OpenMP::OpenMP_CXX)
 	endif()
 	img2_feature(RAW LIBS ${RAW_LIBRARIES} INCLUDE_DIRS ${RAW_INCLUDE_DIRS}
@@ -97,14 +106,19 @@ elseif(IMG2_ENABLE_RAW)
 			endif()
 
 			# libraw on macOS (Homebrew) is compiled with OpenMP; add libomp
-			find_library(OMP_LIB NAMES omp libomp
-				PATHS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib
-				NO_DEFAULT_PATH)
-			if(OMP_LIB)
-				list(APPEND RAW_CUSTOM_LIBS ${OMP_LIB})
-				message(STATUS "  libomp found and added for libraw: ${OMP_LIB}")
+			if(TARGET vendor_libomp)
+				# One OpenMP runtime per process: the vendored libomp.a (fat archive) serves the host libraw too
+				message(STATUS "  host libraw: OpenMP from the vendored libomp (no second runtime)")
 			else()
-				message(WARNING "libomp not found; libraw may fail to link (OpenMP required)")
+				find_library(OMP_LIB NAMES omp libomp
+					PATHS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib
+					NO_DEFAULT_PATH)
+				if(OMP_LIB)
+					list(APPEND RAW_CUSTOM_LIBS ${OMP_LIB})
+					message(STATUS "  libomp found and added for libraw: ${OMP_LIB}")
+				else()
+					message(WARNING "libomp not found; libraw may fail to link (OpenMP required)")
+				endif()
 			endif()
 		endif()
 	endif()

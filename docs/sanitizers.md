@@ -58,7 +58,7 @@ Deviations from the normal build, sanitizer configuration only:
 | `-U_FORTIFY_SOURCE` | fortified calls go to glibc's `__*_chk` entry points, which the sanitizer runtimes do not intercept |
 | test timeouts x10 | instrumented codecs are several times slower |
 | `IMG2_WERROR=OFF` (`scripts/sanitize.sh`) | clang 17 warnings the project's GCC does not have (see docs/coverage.md) |
-| no OpenMP with clang (no libomp installed) | jpeg-quantsmooth and LibRaw run their loops single-threaded |
+| no OpenMP with clang (Linux: no libomp installed; macOS: the vendored static libomp is not built in sanitizer or fuzz builds, `cmake/vendor/Img2VendorOpenMP.cmake`) | jpeg-quantsmooth and LibRaw run their loops single-threaded |
 
 ## Tests that cannot run under the sanitizers
 

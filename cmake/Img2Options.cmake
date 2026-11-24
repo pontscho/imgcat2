@@ -1,7 +1,8 @@
 # Purpose: Build options of libimg2 / imgcat2 (codec switches, vendored vs host deps).
 # Inputs:  PROJECT_IS_TOP_LEVEL.
 # Outputs: IMG2_ENABLE_*, IMG2_USE_SYSTEM_*, IMG2_BUILD_TESTS, IMG2_BUILD_CLI, IMG2_WERROR,
-#          IMG2_POSITION_INDEPENDENT_CODE, IMG2_INSTALL, IMG2_FAT_ARCHIVE cache options, IMG2_SANITIZE cache string.
+#          IMG2_POSITION_INDEPENDENT_CODE, IMG2_INSTALL, IMG2_FAT_ARCHIVE cache options, IMG2_SANITIZE cache string
+#          (IMG2_USE_SYSTEM_* includes IMG2_USE_SYSTEM_OPENMP).
 
 # Build options
 option(IMG2_ENABLE_GIF "Enable GIF support (giflib)" ON)
@@ -36,3 +37,5 @@ option(IMG2_USE_SYSTEM_LCMS2 "Use host lcms2 instead of vendored Little-CMS" OFF
 option(IMG2_USE_SYSTEM_RAW "Use host libraw instead of vendored LibRaw" OFF)
 option(IMG2_USE_SYSTEM_HEIF "Use host libheif (+ codecs) instead of vendored libheif/libde265/kvazaar/aom/openjpeg" OFF)
 option(IMG2_USE_SYSTEM_JXL "Use host libjxl (+ highway/brotli) instead of vendored libjxl" OFF)
+# macOS + LLVM Clang 19 only (cmake/vendor/Img2VendorOpenMP.cmake); Linux always uses the compiler's -fopenmp runtime
+option(IMG2_USE_SYSTEM_OPENMP "macOS/Clang: use the host OpenMP runtime (FindOpenMP) instead of the vendored static libomp" OFF)
