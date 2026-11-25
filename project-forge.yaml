@@ -1,0 +1,157 @@
+# Build / test / clean descriptor for mcp-forge (libimg2 + imgcat2 + CTest suite).
+# Toolchain: LLVM 19 (build/CMakeCache.txt). Every configure passes BOTH CMAKE_C_COMPILER and
+# CMAKE_CXX_COMPILER, else the vendored libjxl configure fails.
+# Coverage and sanitizer flows go through scripts/coverage.sh and scripts/sanitize.sh (their own build trees).
+version: 1
+
+configuration:
+  settings:
+    timeout: 3600
+
+build:
+  configure:
+    description: "Configure build/ (RelWithDebInfo, LLVM 19 clang/clang++, all other options at their defaults)"
+    commands:
+      - |
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_C_COMPILER=/usr/local/opt/llvm@19/bin/clang \
+          -DCMAKE_CXX_COMPILER=/usr/local/opt/llvm@19/bin/clang++
+    filter:
+      grep: "CMake Error|CMake Warning|error|Configuring done|Generating done|Build files have been written"
+
+  default:
+    description: "Reconfigure + build everything in build/ (libimg2, imgcat2, test binaries)"
+    commands:
+      - |
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_C_COMPILER=/usr/local/opt/llvm@19/bin/clang \
+          -DCMAKE_CXX_COMPILER=/usr/local/opt/llvm@19/bin/clang++
+      - cmake --build build -j${ncpu}
+    filter:
+      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|\\*\\*\\*"
+    timeout: 5400
+
+  coverage-build:
+    description: "Configure + build build-cov/ with IMG2_COVERAGE=ON via scripts/coverage.sh --no-test --no-check"
+    commands:
+      - |
+        CC=/usr/local/opt/llvm@19/bin/clang CXX=/usr/local/opt/llvm@19/bin/clang++ \
+          LLVM_PROFDATA=/usr/local/opt/llvm@19/bin/llvm-profdata LLVM_COV=/usr/local/opt/llvm@19/bin/llvm-cov \
+          JOBS=${ncpu} bash scripts/coverage.sh --no-test --no-check
+    filter:
+      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|\\*\\*\\*|coverage.sh:"
+    timeout: 5400
+
+  asan-build:
+    description: "Configure + build build-asan/ with IMG2_SANITIZE=address,undefined via scripts/sanitize.sh asan --no-test"
+    commands:
+      - |
+        CC=/usr/local/opt/llvm@19/bin/clang CXX=/usr/local/opt/llvm@19/bin/clang++ \
+          ASAN_SYMBOLIZER_PATH=/usr/local/opt/llvm@19/bin/llvm-symbolizer \
+          JOBS=${ncpu} bash scripts/sanitize.sh asan --no-test
+    filter:
+      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|\\*\\*\\*|sanitize.sh:"
+    timeout: 5400
+
+test:
+  unit:
+    description: "ctest in build/ (default: everything except label 'expensive', as docs/libimg2.md); select with TEST_REGEX"
+    requires: [default]
+    commands:
+      - ctest --test-dir build -j${env.CTEST_JOBS} --output-on-failure -R "${env.TEST_REGEX}" -E "${env.TEST_EXCLUDE}" -LE "${env.TEST_LABEL_EXCLUDE}"
+    env_schema:
+      TEST_REGEX:
+        description: "ctest -R regex on test names (e.g. test_encoder_ppm or 'test_encoder|test_cli_fix')"
+        default: "."
+      TEST_EXCLUDE:
+        description: "ctest -E regex on test names to skip"
+        default: "^$"
+      TEST_LABEL_EXCLUDE:
+        description: "ctest -LE label regex (labels: unit, integration, lib, cli, guard, consumer, expensive, no-sanitize); must not be empty, use ^$ to exclude nothing"
+        default: "expensive"
+      CTEST_JOBS:
+        description: "ctest -j parallelism"
+        default: "8"
+    filter:
+      grep: "tests passed|tests failed|Failed|FAIL|\\*\\*\\*|Not Run|Timeout|Exception|SEGFAULT|Subprocess|error:|The following tests|No tests were found"
+    timeout: 3600
+
+  integration:
+    description: "Only the label 'integration' tests in build/"
+    requires: [default]
+    commands:
+      - ctest --test-dir build -j${env.CTEST_JOBS} --output-on-failure -L integration -R "${env.TEST_REGEX}"
+    env_schema:
+      TEST_REGEX:
+        description: "ctest -R regex on test names"
+        default: "."
+      CTEST_JOBS:
+        description: "ctest -j parallelism"
+        default: "8"
+    filter:
+      grep: "tests passed|tests failed|Failed|FAIL|\\*\\*\\*|Not Run|Timeout|Exception|SEGFAULT|Subprocess|error:|The following tests|No tests were found"
+
+  coverage:
+    description: "scripts/coverage.sh --no-build: ctest -LE 'guard|consumer' in build-cov/, llvm-cov reports, coverage_check.py vs docs/coverage-exclusions.txt"
+    requires: [coverage-build]
+    commands:
+      - |
+        CC=/usr/local/opt/llvm@19/bin/clang CXX=/usr/local/opt/llvm@19/bin/clang++ \
+          LLVM_PROFDATA=/usr/local/opt/llvm@19/bin/llvm-profdata LLVM_COV=/usr/local/opt/llvm@19/bin/llvm-cov \
+          CTEST_JOBS=${env.CTEST_JOBS} bash scripts/coverage.sh --no-build
+    env_schema:
+      CTEST_JOBS:
+        description: "ctest -j parallelism inside coverage.sh"
+        default: "8"
+    filter:
+      grep: "tests passed|tests failed|Failed|\\*\\*\\*|Timeout|^TOTAL|coverage.sh:|coverage_check|UNEXPLAINED|STALE|ANCHOR|MANIFEST"
+    timeout: 5400
+
+  coverage-emit-uncovered:
+    description: "coverage_check.py --emit-uncovered on the EXISTING build-cov/coverage exports (run 'coverage' first); prints manifest entries, exits 0"
+    commands:
+      - |
+        python3 -I scripts/coverage_check.py --root . --json build-cov/coverage/export.json \
+          --lcov build-cov/coverage/lcov.info --manifest docs/coverage-exclusions.txt --emit-uncovered
+
+  asan:
+    description: "scripts/sanitize.sh asan --no-build: ctest -LE 'guard|consumer|expensive|no-sanitize' in build-asan/ (no test selection)"
+    requires: [asan-build]
+    commands:
+      - |
+        CC=/usr/local/opt/llvm@19/bin/clang CXX=/usr/local/opt/llvm@19/bin/clang++ \
+          ASAN_SYMBOLIZER_PATH=/usr/local/opt/llvm@19/bin/llvm-symbolizer \
+          CTEST_JOBS=${env.CTEST_JOBS} bash scripts/sanitize.sh asan --no-build
+    env_schema:
+      CTEST_JOBS:
+        description: "ctest -j parallelism inside sanitize.sh"
+        default: "8"
+    filter:
+      grep: "tests passed|tests failed|Failed|\\*\\*\\*|Timeout|ERROR: AddressSanitizer|ERROR: LeakSanitizer|runtime error|SUMMARY:|sanitize.sh:"
+    timeout: 5400
+
+clean:
+  objects:
+    description: "cmake --build build --target clean (keeps the cache and the configured vendor trees)"
+    commands:
+      - cmake --build build --target clean
+
+  build-tree:
+    description: "Remove build/"
+    commands:
+      - rm -rf build
+
+  coverage-tree:
+    description: "Remove build-cov/"
+    commands:
+      - rm -rf build-cov
+
+  asan-tree:
+    description: "Remove build-asan/"
+    commands:
+      - rm -rf build-asan
+
+  all:
+    description: "Remove build/, build-cov/ and build-asan/"
+    commands:
+      - rm -rf build build-cov build-asan
