@@ -1,6 +1,15 @@
 # Build / test / clean descriptor for mcp-forge (libimg2 + imgcat2 + CTest suite).
-# Toolchain: LLVM 19 (build/CMakeCache.txt). Every configure passes BOTH CMAKE_C_COMPILER and
-# CMAKE_CXX_COMPILER, else the vendored libjxl configure fails.
+# Host-portable: this file holds no toolchain paths. Every host-specific value comes from the call:
+#   forge_call(..., params={"env": {"CC": "...", "CXX": "...", ...}})
+# ${env.X} is resolved ONLY from params.env, configuration.env and env_schema defaults, never from the
+# forge server's own process environment; params.env values are also exported to the commands.
+# Toolchain variables (declared in every target that uses them, all default to empty):
+#   CC / CXX       C and C++ compiler. Empty = do not pass, CMake keeps the cached compiler of an existing
+#                  tree (or picks its own on a fresh one); the scripts fall back to clang / clang++.
+#                  Set BOTH or NEITHER: a lone CC or CXX is refused (the vendored libjxl configure fails
+#                  with a mixed toolchain).
+#   LLVM_PROFDATA / LLVM_COV   coverage only; empty = scripts/coverage.sh picks llvm-profdata[-17] / llvm-cov[-17].
+#   ASAN_SYMBOLIZER_PATH       asan only; empty = scripts/sanitize.sh picks llvm-symbolizer[-17] from PATH.
 # Coverage and sanitizer flows go through scripts/coverage.sh and scripts/sanitize.sh (their own build trees).
 version: 1
 
@@ -10,47 +19,88 @@ configuration:
 
 build:
   configure:
-    description: "Configure build/ (RelWithDebInfo, LLVM 19 clang/clang++, all other options at their defaults)"
+    description: "Configure build/ (RelWithDebInfo, compilers from CC/CXX when both set, all other options at their defaults)"
     commands:
       - |
-        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-          -DCMAKE_C_COMPILER=/usr/local/opt/llvm@19/bin/clang \
-          -DCMAKE_CXX_COMPILER=/usr/local/opt/llvm@19/bin/clang++
+        cc="${env.CC}"; cxx="${env.CXX}"; set --
+        if [ -n "$cc$cxx" ] && { [ -z "$cc" ] || [ -z "$cxx" ]; }; then echo "forge: set both CC and CXX or neither (CC='$cc' CXX='$cxx')" >&2; exit 2; fi
+        if [ -n "$cc" ]; then set -- -DCMAKE_C_COMPILER="$cc" -DCMAKE_CXX_COMPILER="$cxx"; fi
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo "$@"
+    env_schema:
+      CC:
+        description: "C compiler for -DCMAKE_C_COMPILER; empty = not passed (cached / CMake default); needs CXX too"
+        default: ""
+      CXX:
+        description: "C++ compiler for -DCMAKE_CXX_COMPILER; empty = not passed (cached / CMake default); needs CC too"
+        default: ""
     filter:
-      grep: "CMake Error|CMake Warning|error|Configuring done|Generating done|Build files have been written"
+      grep: "CMake Error|CMake Warning|error|forge:|Configuring done|Generating done|Build files have been written"
 
   default:
-    description: "Reconfigure + build everything in build/ (libimg2, imgcat2, test binaries)"
+    description: "Reconfigure + build everything in build/ (libimg2, imgcat2, test binaries); compilers from CC/CXX when both set"
     commands:
       - |
-        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-          -DCMAKE_C_COMPILER=/usr/local/opt/llvm@19/bin/clang \
-          -DCMAKE_CXX_COMPILER=/usr/local/opt/llvm@19/bin/clang++
+        cc="${env.CC}"; cxx="${env.CXX}"; set --
+        if [ -n "$cc$cxx" ] && { [ -z "$cc" ] || [ -z "$cxx" ]; }; then echo "forge: set both CC and CXX or neither (CC='$cc' CXX='$cxx')" >&2; exit 2; fi
+        if [ -n "$cc" ]; then set -- -DCMAKE_C_COMPILER="$cc" -DCMAKE_CXX_COMPILER="$cxx"; fi
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo "$@"
       - cmake --build build -j${ncpu}
+    env_schema:
+      CC:
+        description: "C compiler for -DCMAKE_C_COMPILER; empty = not passed (cached / CMake default); needs CXX too"
+        default: ""
+      CXX:
+        description: "C++ compiler for -DCMAKE_CXX_COMPILER; empty = not passed (cached / CMake default); needs CC too"
+        default: ""
     filter:
-      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|\\*\\*\\*"
+      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|forge:|\\*\\*\\*"
     timeout: 5400
 
   coverage-build:
     description: "Configure + build build-cov/ with IMG2_COVERAGE=ON via scripts/coverage.sh --no-test --no-check"
     commands:
       - |
-        CC=/usr/local/opt/llvm@19/bin/clang CXX=/usr/local/opt/llvm@19/bin/clang++ \
-          LLVM_PROFDATA=/usr/local/opt/llvm@19/bin/llvm-profdata LLVM_COV=/usr/local/opt/llvm@19/bin/llvm-cov \
+        cc="${env.CC}"; cxx="${env.CXX}"
+        if [ -n "$cc$cxx" ] && { [ -z "$cc" ] || [ -z "$cxx" ]; }; then echo "forge: set both CC and CXX or neither (CC='$cc' CXX='$cxx')" >&2; exit 2; fi
+        CC="$cc" CXX="$cxx" LLVM_PROFDATA="${env.LLVM_PROFDATA}" LLVM_COV="${env.LLVM_COV}" \
           JOBS=${ncpu} bash scripts/coverage.sh --no-test --no-check
+    env_schema:
+      CC:
+        description: "clang driver for coverage.sh; empty = script default (clang); needs CXX too"
+        default: ""
+      CXX:
+        description: "clang++ driver for coverage.sh; empty = script default (clang++); needs CC too"
+        default: ""
+      LLVM_PROFDATA:
+        description: "llvm-profdata matching CC; empty = script default (llvm-profdata, llvm-profdata-17)"
+        default: ""
+      LLVM_COV:
+        description: "llvm-cov matching CC; empty = script default (llvm-cov, llvm-cov-17)"
+        default: ""
     filter:
-      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|\\*\\*\\*|coverage.sh:"
+      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|\\*\\*\\*|coverage.sh:|forge:"
     timeout: 5400
 
   asan-build:
     description: "Configure + build build-asan/ with IMG2_SANITIZE=address,undefined via scripts/sanitize.sh asan --no-test"
     commands:
       - |
-        CC=/usr/local/opt/llvm@19/bin/clang CXX=/usr/local/opt/llvm@19/bin/clang++ \
-          ASAN_SYMBOLIZER_PATH=/usr/local/opt/llvm@19/bin/llvm-symbolizer \
+        cc="${env.CC}"; cxx="${env.CXX}"
+        if [ -n "$cc$cxx" ] && { [ -z "$cc" ] || [ -z "$cxx" ]; }; then echo "forge: set both CC and CXX or neither (CC='$cc' CXX='$cxx')" >&2; exit 2; fi
+        CC="$cc" CXX="$cxx" ASAN_SYMBOLIZER_PATH="${env.ASAN_SYMBOLIZER_PATH}" \
           JOBS=${ncpu} bash scripts/sanitize.sh asan --no-test
+    env_schema:
+      CC:
+        description: "clang driver for sanitize.sh; empty = script default (clang); needs CXX too"
+        default: ""
+      CXX:
+        description: "clang++ driver for sanitize.sh; empty = script default (clang++); needs CC too"
+        default: ""
+      ASAN_SYMBOLIZER_PATH:
+        description: "llvm-symbolizer matching CC; empty = script default (llvm-symbolizer, llvm-symbolizer-17 from PATH)"
+        default: ""
     filter:
-      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|\\*\\*\\*|sanitize.sh:"
+      grep: "error:|warning:|undefined reference|Undefined symbols|ld:|CMake Error|FAILED|\\*\\*\\*|sanitize.sh:|forge:"
     timeout: 5400
 
 test:
@@ -72,6 +122,12 @@ test:
       CTEST_JOBS:
         description: "ctest -j parallelism"
         default: "8"
+      CC:
+        description: "forwarded to the auto-built 'default' target (see build.default)"
+        default: ""
+      CXX:
+        description: "forwarded to the auto-built 'default' target (see build.default)"
+        default: ""
     filter:
       grep: "tests passed|tests failed|Failed|FAIL|\\*\\*\\*|Not Run|Timeout|Exception|SEGFAULT|Subprocess|error:|The following tests|No tests were found"
     timeout: 3600
@@ -88,6 +144,12 @@ test:
       CTEST_JOBS:
         description: "ctest -j parallelism"
         default: "8"
+      CC:
+        description: "forwarded to the auto-built 'default' target (see build.default)"
+        default: ""
+      CXX:
+        description: "forwarded to the auto-built 'default' target (see build.default)"
+        default: ""
     filter:
       grep: "tests passed|tests failed|Failed|FAIL|\\*\\*\\*|Not Run|Timeout|Exception|SEGFAULT|Subprocess|error:|The following tests|No tests were found"
 
@@ -96,15 +158,28 @@ test:
     requires: [coverage-build]
     commands:
       - |
-        CC=/usr/local/opt/llvm@19/bin/clang CXX=/usr/local/opt/llvm@19/bin/clang++ \
-          LLVM_PROFDATA=/usr/local/opt/llvm@19/bin/llvm-profdata LLVM_COV=/usr/local/opt/llvm@19/bin/llvm-cov \
+        cc="${env.CC}"; cxx="${env.CXX}"
+        if [ -n "$cc$cxx" ] && { [ -z "$cc" ] || [ -z "$cxx" ]; }; then echo "forge: set both CC and CXX or neither (CC='$cc' CXX='$cxx')" >&2; exit 2; fi
+        CC="$cc" CXX="$cxx" LLVM_PROFDATA="${env.LLVM_PROFDATA}" LLVM_COV="${env.LLVM_COV}" \
           CTEST_JOBS=${env.CTEST_JOBS} bash scripts/coverage.sh --no-build
     env_schema:
       CTEST_JOBS:
         description: "ctest -j parallelism inside coverage.sh"
         default: "8"
+      CC:
+        description: "clang driver for coverage.sh; empty = script default (clang); needs CXX too"
+        default: ""
+      CXX:
+        description: "clang++ driver for coverage.sh; empty = script default (clang++); needs CC too"
+        default: ""
+      LLVM_PROFDATA:
+        description: "llvm-profdata matching CC; empty = script default (llvm-profdata, llvm-profdata-17)"
+        default: ""
+      LLVM_COV:
+        description: "llvm-cov matching CC; empty = script default (llvm-cov, llvm-cov-17)"
+        default: ""
     filter:
-      grep: "tests passed|tests failed|Failed|\\*\\*\\*|Timeout|^TOTAL|coverage.sh:|coverage_check|UNEXPLAINED|STALE|ANCHOR|MANIFEST"
+      grep: "tests passed|tests failed|Failed|\\*\\*\\*|Timeout|^TOTAL|coverage.sh:|forge:|coverage_check|UNEXPLAINED|STALE|ANCHOR|MANIFEST"
     timeout: 5400
 
   coverage-emit-uncovered:
@@ -119,15 +194,25 @@ test:
     requires: [asan-build]
     commands:
       - |
-        CC=/usr/local/opt/llvm@19/bin/clang CXX=/usr/local/opt/llvm@19/bin/clang++ \
-          ASAN_SYMBOLIZER_PATH=/usr/local/opt/llvm@19/bin/llvm-symbolizer \
+        cc="${env.CC}"; cxx="${env.CXX}"
+        if [ -n "$cc$cxx" ] && { [ -z "$cc" ] || [ -z "$cxx" ]; }; then echo "forge: set both CC and CXX or neither (CC='$cc' CXX='$cxx')" >&2; exit 2; fi
+        CC="$cc" CXX="$cxx" ASAN_SYMBOLIZER_PATH="${env.ASAN_SYMBOLIZER_PATH}" \
           CTEST_JOBS=${env.CTEST_JOBS} bash scripts/sanitize.sh asan --no-build
     env_schema:
       CTEST_JOBS:
         description: "ctest -j parallelism inside sanitize.sh"
         default: "8"
+      CC:
+        description: "clang driver for sanitize.sh; empty = script default (clang); needs CXX too"
+        default: ""
+      CXX:
+        description: "clang++ driver for sanitize.sh; empty = script default (clang++); needs CC too"
+        default: ""
+      ASAN_SYMBOLIZER_PATH:
+        description: "llvm-symbolizer matching CC; empty = script default (llvm-symbolizer, llvm-symbolizer-17 from PATH)"
+        default: ""
     filter:
-      grep: "tests passed|tests failed|Failed|\\*\\*\\*|Timeout|ERROR: AddressSanitizer|ERROR: LeakSanitizer|runtime error|SUMMARY:|sanitize.sh:"
+      grep: "tests passed|tests failed|Failed|\\*\\*\\*|Timeout|ERROR: AddressSanitizer|ERROR: LeakSanitizer|runtime error|SUMMARY:|sanitize.sh:|forge:"
     timeout: 5400
 
 clean:
