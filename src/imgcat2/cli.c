@@ -6,6 +6,7 @@
  * and help/version display functions.
  */
 
+#include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <stdio.h>
@@ -76,9 +77,11 @@ void print_usage(const char *program_name)
 	printf("      --threads <1-64>      Encoder threads (WebP, JXL, AVIF)\n");
 	printf("                            An option the format cannot use is ignored with a warning\n");
 	printf("      --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)\n");
+	printf("      --ppm                 Convert to PPM (binary P6, or P5 when every pixel is gray; uncompressed)\n");
+	printf("      --background RRGGBB   Colour alpha is composited onto (PPM; hex, optional '#'; default: 000000)\n");
 	printf("  -o, --output <file>       Output file (stdout if not specified; - = stdout, needs a format option)\n");
 	printf("                            Without a format option the extension chooses it, default quality:\n");
-	printf("                            .jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif\n");
+	printf("                            .jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif, .ppm/.pgm/.pnm\n");
 	printf("  -n, --frame <index>       Select frame for animated images (default: 0)\n");
 	printf("      --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)\n");
 	printf("                            png: lossless, transparency support\n");
@@ -303,6 +306,37 @@ static int parse_range_arg(const char *arg, const char *flag, int lo, int hi, in
 }
 
 /**
+ * @brief Parse a --background value: exactly 6 hex digits RRGGBB, optionally after one '#', nothing else
+ *
+ * Not strtoul(): it would accept a sign, leading white space and a 0x prefix.
+ *
+ * @param arg Option argument
+ * @param out Parsed colour 0xRRGGBB
+ * @return 0 on success, -1 on error (error printed to stderr)
+ */
+static int parse_background_arg(const char *arg, uint32_t *out)
+{
+	const char *hex = (arg[0] == '#') ? arg + 1 : arg;
+	bool ok = strlen(hex) == 6;
+	uint32_t v = 0;
+	for (size_t i = 0; ok && i < 6; i++) {
+		const unsigned char c = (unsigned char)hex[i];
+		if (!isxdigit(c)) {
+			ok = false;
+		} else {
+			v = (v << 4) | (uint32_t)(isdigit(c) ? c - '0' : tolower(c) - 'a' + 10);
+		}
+	}
+	if (!ok) {
+		char safe[CLI_SAFE_PATH_SIZE]; /* [P39] the argument with control characters escaped */
+		fprintf(stderr, "Error: --background must be RRGGBB hex (got '%s')\n", cli_safe_str(arg, safe, sizeof(safe)));
+		return -1;
+	}
+	*out = v;
+	return 0;
+}
+
+/**
  * @brief Parse command-line arguments
  *
  * Parses command-line arguments using getopt_long() and populates
@@ -358,6 +392,8 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 		{ "progressive",   no_argument,       0, 1009 },
 		{ "threads",       required_argument, 0, 1010 },
 		{ "keep-metadata", no_argument,       0, 1011 },
+		{ "ppm",           no_argument,       0, 1012 },
+		{ "background",    required_argument, 0, 1013 },
 		{ 0,		       0,		         0, 0    },
 	};
 
@@ -471,6 +507,18 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
 
 			case 1011: opts->enc_keep_metadata = true; break; /* --keep-metadata */
 
+			case 1012: /* --ppm */
+				opts->convert_mode = true;
+				opts->output_format = IMG2_FORMAT_PPM;
+				break;
+
+			case 1013: /* --background */
+				if (parse_background_arg(optarg, &opts->enc_background) < 0) {
+					return -1;
+				}
+				opts->enc_background_set = true;
+				break;
+
 			case 1003: /* --yuv */
 			{
 				char err[160];
@@ -534,7 +582,7 @@ int parse_arguments(int argc, char **argv, cli_options_t *opts)
  *
  * @param path Output file name
  *
- * @return IMG2_FORMAT_JPEG / PNG / WEBP / HEIF / JXL / AVIF, or IMG2_FORMAT_NONE (unknown or no extension)
+ * @return IMG2_FORMAT_JPEG / PNG / WEBP / HEIF / JXL / AVIF / PPM, or IMG2_FORMAT_NONE (unknown or no extension)
  */
 static img2_format_t format_from_extension(const char *path)
 {
@@ -550,6 +598,9 @@ static img2_format_t format_from_extension(const char *path)
 		{ "heif", IMG2_FORMAT_HEIF },
 		{ "jxl",  IMG2_FORMAT_JXL  },
 		{ "avif", IMG2_FORMAT_AVIF },
+		{ "ppm",  IMG2_FORMAT_PPM  },
+		{ "pgm",  IMG2_FORMAT_PPM  }, /* the PPM encoder writes P5 for a gray image */
+		{ "pnm",  IMG2_FORMAT_PPM  },
 	};
 	const char *base = strrchr(path, '/');
 	const char *dot = strrchr(base != NULL ? base + 1 : path, '.');
@@ -588,7 +639,7 @@ int validate_options(cli_options_t *opts)
 		if (strcmp(opts->output_file, "-") == 0) {
 			if (!opts->convert_mode) {
 				fprintf(stderr, "Error: -o - (stdout) needs a format option\n");
-				fprintf(stderr, "Use --jpeg, --png, --heif, --webp, --jxl or --avif\n");
+				fprintf(stderr, "Use --jpeg, --png, --heif, --webp, --jxl, --avif or --ppm\n");
 				return -1;
 			}
 			opts->output_file = NULL;
@@ -598,7 +649,7 @@ int validate_options(cli_options_t *opts)
 			if (!opts->convert_mode) {
 				if (ext_format == IMG2_FORMAT_NONE) {
 					fprintf(stderr, "Error: Cannot infer the output format from '%s'\n", cli_safe_str(opts->output_file, safe, sizeof(safe)));
-					fprintf(stderr, "Use a .jpg, .jpeg, .png, .webp, .heic, .heif, .jxl or .avif extension, or --jpeg, --png, --heif, --webp, --jxl or --avif\n");
+					fprintf(stderr, "Use a .jpg, .jpeg, .png, .webp, .heic, .heif, .jxl, .avif, .ppm, .pgm or .pnm extension, or --jpeg, --png, --heif, --webp, --jxl, --avif or --ppm\n");
 					return -1;
 				}
 				opts->convert_mode = true;
@@ -684,9 +735,9 @@ int validate_options(cli_options_t *opts)
 
 	/* Validate that the encoder options are only used with a conversion */
 	if (!opts->convert_mode) {
-		const char *flag = opts->enc_lossless ? "--lossless" : opts->enc_effort > 0 ? "--effort" : opts->enc_chroma != IMG2_CHROMA_DEFAULT ? "--chroma" : opts->enc_alpha_quality > 0 ? "--alpha-quality" : opts->enc_progressive ? "--progressive" : opts->enc_threads > 0 ? "--threads" : opts->enc_keep_metadata ? "--keep-metadata" : NULL;
+		const char *flag = opts->enc_lossless ? "--lossless" : opts->enc_effort > 0 ? "--effort" : opts->enc_chroma != IMG2_CHROMA_DEFAULT ? "--chroma" : opts->enc_alpha_quality > 0 ? "--alpha-quality" : opts->enc_progressive ? "--progressive" : opts->enc_threads > 0 ? "--threads" : opts->enc_keep_metadata ? "--keep-metadata" : opts->enc_background_set ? "--background" : NULL;
 		if (flag != NULL) {
-			fprintf(stderr, "Error: %s can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n", flag);
+			fprintf(stderr, "Error: %s can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n", flag);
 			return -1;
 		}
 	}
@@ -695,7 +746,7 @@ int validate_options(cli_options_t *opts)
 	if (opts->convert_mode) {
 		/* Require output format to be set */
 		if (opts->output_format == IMG2_FORMAT_NONE) {
-			fprintf(stderr, "Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n");
+			fprintf(stderr, "Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n");
 			return -1;
 		}
 

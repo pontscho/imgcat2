@@ -463,6 +463,9 @@ CTEST(alloc_fail, metadata_passthrough)
 		if (c.fmt == IMG2_FORMAT_HEIF) {
 			continue; /* vendored libheif's kvazaar plugin dereferences a failed kvz_config_alloc() */
 		}
+		if (c.fmt == IMG2_FORMAT_PPM) {
+			continue; /* no metadata container and a single allocation (encode_every_format covers its failure) */
+		}
 		ASSERT_TRUE(af_for_each_failure(op_encode_meta, &c, AF_MAX_RUNS) >= 2);
 		ASSERT_EQUAL(0, s_bad);
 		if (c.fmt == IMG2_FORMAT_AVIF) {

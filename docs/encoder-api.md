@@ -44,7 +44,8 @@ typedef enum img2_format {
 	IMG2_FORMAT_HEIF,
 	IMG2_FORMAT_WEBP,
 	IMG2_FORMAT_JXL,
-	IMG2_FORMAT_AVIF           /* new, appended: existing values unchanged */
+	IMG2_FORMAT_AVIF,          /* new, appended: existing values unchanged */
+	IMG2_FORMAT_PPM            /* appended later: native binary Netpbm (P6, or P5 when every pixel is gray) */
 } img2_format_t;
 ```
 
@@ -75,9 +76,10 @@ typedef struct img2_encode_opts {
 	bool progressive;       /* progressive / interlaced output */
 	int threads;            /* 0 = default, else 1..64 encoder threads */
 	unsigned metadata;      /* IMG2_META_* bits to write; 0 = none (default) */
+	uint32_t background;    /* 0xRRGGBB alpha is composited onto by encoders without alpha (PPM); 0 = black */
 } img2_encode_opts_t;
 
-#define IMG2_ENCODE_OPTS_INIT { -1, false, 0, IMG2_CHROMA_DEFAULT, 0, false, 0, 0u }
+#define IMG2_ENCODE_OPTS_INIT { -1, false, 0, IMG2_CHROMA_DEFAULT, 0, false, 0, 0u, 0u }
 ```
 
 Out-of-range values: `IMG2_E_ARG`. A valid option the chosen format cannot honour: the encode proceeds and one
@@ -85,16 +87,21 @@ Out-of-range values: `IMG2_E_ARG`. A valid option the chosen format cannot honou
 
 ### Per-format mapping
 
-| Option | JPEG | PNG | WebP | JXL | HEIF (kvazaar) | AVIF (aom) |
-|---|---|---|---|---|---|---|
-| quality | as today | zlib level q/10 | as today | as today | as today | aom `quality` |
-| lossless | warn | always lossless | `config.lossless` + `exact` (q=100 still selects it; decision 6) | `SetFrameLossless` (q>=95 still selects it) | warn (kvazaar lossless is 4:2:0 YCbCr, not RGB-lossless) | aom `lossless` + 4:4:4, identity matrix (verified bit-exact) |
-| effort 1..10 | >= 6: `optimize_coding` | zlib level e-1 when quality is default (decision 3), else warn (CLI: error, decision 5) | `method` = round((e-1)*6/9) | `EFFORT` = e | warn (no preset parameter) | aom `speed` = 10 - e (9..0, linear: decision 8) |
-| chroma | comp_info sampling factors | warn | 420 only: warn otherwise | warn (XYB) | 420 only: warn otherwise | aom `chroma` "420"/"422"/"444" |
-| alpha_quality | warn | warn | `alpha_quality` | extra channel distance from quality | warn | aom `alpha-quality` |
-| progressive | `jpeg_simple_progression` | Adam7 interlace | warn | lossy: `PROGRESSIVE_AC` = 1; lossless: warn (decision 7) | warn | warn |
-| threads | warn | warn | `thread_level` = threads > 1 | parallel runner (links `jxl_threads`) | warn (kvazaar auto) | aom `threads` |
-| metadata | APP1 Exif / XMP | eXIf / iTXt `XML:com.adobe.xmp` | VP8X EXIF / XMP chunks (needs libwebpmux) | container + `Exif` / `xml ` boxes | `heif_context_add_exif_metadata` / `_XMP_metadata` | same as HEIF |
+| Option | JPEG | PNG | WebP | JXL | HEIF (kvazaar) | AVIF (aom) | PPM (native) |
+|---|---|---|---|---|---|---|---|
+| quality | as today | zlib level q/10 | as today | as today | as today | aom `quality` | warn (uncompressed; registry default 0 is ignored) |
+| lossless | warn | always lossless | `config.lossless` + `exact` (q=100 still selects it; decision 6) | `SetFrameLossless` (q>=95 still selects it) | warn (kvazaar lossless is 4:2:0 YCbCr, not RGB-lossless) | aom `lossless` + 4:4:4, identity matrix (verified bit-exact) | always lossless (silent) |
+| effort 1..10 | >= 6: `optimize_coding` | zlib level e-1 when quality is default (decision 3), else warn (CLI: error, decision 5) | `method` = round((e-1)*6/9) | `EFFORT` = e | warn (no preset parameter) | aom `speed` = 10 - e (9..0, linear: decision 8) | warn |
+| chroma | comp_info sampling factors | warn | 420 only: warn otherwise | warn (XYB) | 420 only: warn otherwise | aom `chroma` "420"/"422"/"444" | warn |
+| alpha_quality | warn | warn | `alpha_quality` | extra channel distance from quality | warn | aom `alpha-quality` | warn |
+| progressive | `jpeg_simple_progression` | Adam7 interlace | warn | lossy: `PROGRESSIVE_AC` = 1; lossless: warn (decision 7) | warn | warn | warn |
+| threads | warn | warn | `thread_level` = threads > 1 | parallel runner (links `jxl_threads`) | warn (kvazaar auto) | aom `threads` | warn |
+| metadata | APP1 Exif / XMP | eXIf / iTXt `XML:com.adobe.xmp` | VP8X EXIF / XMP chunks (needs libwebpmux) | container + `Exif` / `xml ` boxes | `heif_context_add_exif_metadata` / `_XMP_metadata` | same as HEIF | warn (no metadata container) |
+| background 0..0xFFFFFF | warn if nonzero (alpha is stripped) | warn if nonzero (alpha is kept) | same as PNG | same as PNG | same as PNG | same as PNG | composite: `(c * a + bg * (255 - a) + 127) / 255` |
+
+The `background` WARN of the non-PPM formats is logged once by `img2_encoder_dispatch_opts()`, not by the encoders;
+`background = 0` (the default) adds no work and no WARN, so default output stays byte-identical. PPM writes P5 (one
+gray sample per pixel) when every composited pixel has R == G == B, otherwise P6; maxval 255, no comments.
 
 Defaults stay as today: JPEG optimize off, 4:2:0, baseline; WebP method 4; JXL effort 7; AVIF uses the libheif aom
 defaults (speed 6, 4:2:0, threads = hardware concurrency, tune auto = `iq` with the vendored aom 3.15) with quality
@@ -160,9 +167,12 @@ decoded, so they can be stale after scaling.
 | `--progressive` | `progressive = true` |
 | `--threads N` | 1..64 |
 | `--keep-metadata` | `metadata = IMG2_META_EXIF \| IMG2_META_XMP` |
+| `--ppm` | conversion to PPM / PGM (no argument; `-o x.ppm` / `.pgm` / `.pnm` infer it too) |
+| `--background RRGGBB` | `background = 0xRRGGBB` (exactly 6 hex digits, optional leading `#`) |
 
 All long-only. The option flags are valid only in conversion mode (error otherwise). Out of range: error, as for
-`--heif/--webp/--jxl` today. Error messages and help text list AVIF with the other formats.
+`--heif/--webp/--jxl` today. Error messages and help text list AVIF (and PPM) with the other formats.
+`--background 000000` on a non-PPM format does not warn (0 is the default).
 
 ## Phases
 

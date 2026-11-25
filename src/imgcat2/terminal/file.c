@@ -117,7 +117,7 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 
 	/* Check output format is specified */
 	if (opts->output_format == IMG2_FORMAT_NONE) {
-		fprintf(stderr, "Error: No output format specified (use --jpeg, --png, --heif, --webp, --jxl or --avif)\n");
+		fprintf(stderr, "Error: No output format specified (use --jpeg, --png, --heif, --webp, --jxl, --avif or --ppm)\n");
 		return -1;
 	}
 
@@ -168,6 +168,8 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 		quality = opts->jxl_quality;
 	} else if (opts->output_format == IMG2_FORMAT_AVIF) {
 		quality = opts->avif_quality;
+	} else if (opts->output_format == IMG2_FORMAT_PPM) {
+		quality = -1; /* uncompressed: an explicit quality would only log a warning */
 	}
 
 	/* Encode image */
@@ -185,6 +187,8 @@ int file_render(img2_image_t **frames, int frame_count, const cli_options_t *opt
 	eo.threads = opts->enc_threads;
 	/* --keep-metadata: the decoded raw EXIF / XMP (pipeline_decode oriented the pixels: Orientation is written as 1) */
 	eo.metadata = opts->enc_keep_metadata ? (IMG2_META_EXIF | IMG2_META_XMP) : 0u;
+	/* --background: the colour PPM composites alpha onto (0 = black, the default; other formats warn if nonzero) */
+	eo.background = opts->enc_background_set ? opts->enc_background : 0u;
 	if (img2_encode(&one, opts->output_format, &eo, &encoded_data, &encoded_size) != IMG2_OK) {
 		fprintf(stderr, "Error: Failed to encode image\n");
 		return -1;

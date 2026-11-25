@@ -33,6 +33,7 @@ img2_add_test(test_encoder_webp SOURCES unit/test_encoder_webp.c REQUIRES WEBP)
 img2_add_test(test_encoder_heif SOURCES unit/test_encoder_heif.c REQUIRES HEIF)
 img2_add_test(test_encoder_avif SOURCES unit/test_encoder_avif.c REQUIRES HEIF)
 img2_add_test(test_encoder_jxl SOURCES unit/test_encoder_jxl.c REQUIRES JXL)
+img2_add_test(test_encoder_ppm SOURCES unit/test_encoder_ppm.c)
 # S25: encoder options (docs/encoder-api.md phase 2); the per-format cases are compiled in per IMG2_HAVE_*
 img2_add_test(test_encode_options SOURCES unit/test_encode_options.c REQUIRES HEIF TIMEOUT 120)
 # Phase 3: metadata passthrough (raw EXIF / XMP, orientation field, writers, --keep-metadata)

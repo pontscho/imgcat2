@@ -172,7 +172,7 @@ CTEST(public_api, encode_format_checks)
 	ASSERT_NULL(buf);
 	ASSERT_EQUAL(0, len);
 
-	for (int f = IMG2_FORMAT_JPEG; f <= IMG2_FORMAT_AVIF; f++) {
+	for (int f = IMG2_FORMAT_JPEG; f <= IMG2_FORMAT_PPM; f++) {
 		if (!img2_can_encode((img2_format_t)f)) {
 			ASSERT_EQUAL(IMG2_E_UNSUPPORTED, img2_encode(&in, (img2_format_t)f, NULL, &buf, &len));
 			ASSERT_NULL(buf);

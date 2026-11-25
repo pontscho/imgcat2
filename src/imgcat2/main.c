@@ -153,6 +153,8 @@ int main(int argc, char **argv)
 		.enc_progressive = false,
 		.enc_threads = 0,
 		.enc_keep_metadata = false,
+		.enc_background_set = false,
+		.enc_background = 0,
 
 		.terminal = {
 			.rows = 0,

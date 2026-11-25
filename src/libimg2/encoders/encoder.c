@@ -42,6 +42,9 @@ static const img2_encoder_entry_t s_encoders[] = {
 #ifdef IMG2_HAVE_HEIF
 	{ { IMG2_FORMAT_AVIF, "AVIF (libheif/aom)", ".avif" }, img2_encode_avif_opts, 80, img2_encode_avif_available },
 #endif
+
+	/* native, always built; quality is ignored (uncompressed) */
+	{ { IMG2_FORMAT_PPM,  "PPM (native)",      ".ppm"  }, img2_encode_ppm_opts,  0,  NULL                        },
 };
 
 #define ENCODER_COUNT (sizeof(s_encoders) / sizeof(s_encoders[0]))
@@ -88,10 +91,29 @@ bool img2_can_encode(img2_format_t format)
 	return img2_encoder_find(format) != NULL;
 }
 
+/**
+ * @brief Short format label of the log lines ("JPEG", "PNG", "HEIF", "WebP", "JXL", "AVIF", "PPM")
+ *
+ * @param format Output format
+ * @return Static label, "UNKNOWN" for a value outside img2_format_t
+ */
+static const char *encoder_format_label(img2_format_t format)
+{
+	switch (format) {
+		case IMG2_FORMAT_JPEG: return "JPEG";
+		case IMG2_FORMAT_PNG: return "PNG";
+		case IMG2_FORMAT_HEIF: return "HEIF";
+		case IMG2_FORMAT_WEBP: return "WebP";
+		case IMG2_FORMAT_JXL: return "JXL";
+		case IMG2_FORMAT_AVIF: return "AVIF";
+		case IMG2_FORMAT_PPM: return "PPM";
+		default: return "UNKNOWN";
+	}
+}
+
 void img2_encoder_log_missing(img2_format_t format)
 {
-	const char *format_name = (format == IMG2_FORMAT_JPEG) ? "JPEG" : (format == IMG2_FORMAT_PNG) ? "PNG" : (format == IMG2_FORMAT_HEIF) ? "HEIF" : (format == IMG2_FORMAT_WEBP) ? "WebP" : (format == IMG2_FORMAT_JXL) ? "JXL" : (format == IMG2_FORMAT_AVIF) ? "AVIF" : "UNKNOWN";
-	img2_log(IMG2_LOG_ERROR, "Error: No encoder found for format: %s", format_name);
+	img2_log(IMG2_LOG_ERROR, "Error: No encoder found for format: %s", encoder_format_label(format));
 	img2_log(IMG2_LOG_ERROR, "Error: No encoder available for format");
 }
 
@@ -183,6 +205,11 @@ img2_status_t img2_encoder_dispatch_opts(const img2_image_t *img, img2_format_t 
 	if (encoder == NULL) {
 		img2_encoder_log_missing(format);
 		return IMG2_E_UNSUPPORTED;
+	}
+
+	/* background: only PPM composites alpha; one WARN for every other format (0 = the default, no WARN) */
+	if (opts != NULL && opts->background != 0 && format != IMG2_FORMAT_PPM) {
+		img2_encode_warn_ignored("background", encoder_format_label(format), format == IMG2_FORMAT_JPEG ? "alpha is stripped" : "alpha is kept");
 	}
 
 	/* Call encoder function */

@@ -21,7 +21,7 @@ A command-line tool that displays images and animated GIFs directly in terminal 
 - **Universal Compatibility** - Works with any modern terminal that supports true color and Unicode
 - **Cross-Platform** - Supports Linux, macOS, Windows, and BSD systems
 - **Multiple Image Formats** - PNG/APNG, JPEG, GIF (animated), BMP, TGA, HDR, PBM/PGM/PPM/PAM (Netpbm P1-P7, native), ICO, CUR, QOI, PSD (partial), WebP, HEIF/HEIC, AVIF, TIFF, camera RAW, JPEG XL, raw 8-bit YUV frames (`--yuv`) and SVG (nanosvg with `<text>` support, optional resvg). See [Supported Formats](#supported-formats)
-- **Image Conversion** - Convert images to JPEG, PNG, HEIF, WebP, JXL or AVIF with quality control and lossless mode support
+- **Image Conversion** - Convert images to JPEG, PNG, HEIF, WebP, JXL, AVIF or PPM/PGM (native) with quality control and lossless mode support
 - **Native Protocol Support** - Automatically uses the iTerm2 inline images protocol (iTerm2, WezTerm) or the Kitty graphics protocol (Kitty, Ghostty, Konsole) for higher quality when available
 - **Transparency Support** - Handles alpha channel with threshold-based rendering
 - **Terminal-Aware Resizing** - Automatically scales images to fit your terminal
@@ -455,9 +455,11 @@ Conversion Options:
       --threads <1-64>      Encoder threads (WebP, JXL, AVIF)
                             An option the format cannot use is ignored with a warning
       --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)
+      --ppm                 Convert to PPM (binary P6, or P5 when every pixel is gray; uncompressed)
+      --background RRGGBB   Colour alpha is composited onto (PPM; hex, optional '#'; default: 000000)
   -o, --output <file>       Output file (stdout if not specified; - = stdout, needs a format option)
                             Without a format option the extension chooses it, default quality:
-                            .jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif
+                            .jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif, .ppm/.pgm/.pnm
   -n, --frame <index>       Select frame for animated images (default: 0)
       --iterm2-format <png|jpeg>  Format for iTerm2 encoding (default: jpeg)
                             png: lossless, transparency support
@@ -652,6 +654,18 @@ imgcat2 --avif 99 image.jpg > output.avif
 imgcat2 --avif 80 --output output.avif image.png
 ```
 
+### PPM / PGM Conversion
+```bash
+# Binary PPM (P6); a gray image is written as PGM (P5) automatically
+imgcat2 --ppm image.png > output.ppm
+
+# The extension chooses it too (.ppm, .pgm, .pnm)
+imgcat2 -o output.ppm image.png
+
+# Transparent pixels are composited onto a background colour (default: black)
+imgcat2 --ppm --background ffffff --output output.ppm logo.png
+```
+
 ### Encoder Options
 ```bash
 # Progressive JPEG without chroma subsampling, optimised Huffman tables
@@ -702,6 +716,12 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
   - Quality 0-94 = lossy mode with distance-based quality
 - `--avif <quality>` - Convert to AVIF format (AV1 via libheif/aom; quality: 0-100, default: 80)
   - Lossy 4:2:0 by default (see `--lossless`, `--chroma`); higher quality = better image quality but larger file size
+- `--ppm` - Convert to binary Netpbm (no quality argument): P6 PPM, or P5 PGM when every output pixel is gray
+  (R == G == B); maxval 255, uncompressed, always lossless. A `.ppm` file can therefore hold P5 data for a gray image
+  (Netpbm readers accept it)
+- `--background RRGGBB` - Colour (exactly 6 hex digits, optional leading `#`) that PPM composites alpha onto (default
+  `000000`, black). Other formats keep (or, JPEG, strip) alpha and ignore it with one warning
+  (`encode: background has no effect for PNG (alpha is kept)`); `--background 000000` is the default and does not warn
 - `--lossless` - Lossless WebP, JXL or AVIF (PNG is always lossless; JPEG and HEIF warn and stay lossy)
 - `--effort <1-10>` - Encoder effort, 1 = fastest .. 10 = smallest: JPEG >= 6 optimises the Huffman tables, WebP
   method round((e-1)*6/9), JXL effort e, AVIF aom speed 10-e. Not with `--png N` (N already is the zlib level:
@@ -716,13 +736,13 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
   upright, so the EXIF Orientation tag is rewritten to 1 (if the block has one). Inputs without EXIF/XMP, or
   formats without them (GIF, BMP, ...), give no metadata and no warning. A JPEG APP1 segment holds at most
   65533 bytes: a larger EXIF block or XMP packet is skipped with a warning (no extended XMP)
-  - These options need a conversion (`--jpeg` ... `--avif`, or `-o <file>.<ext>`); out of range is an error. An
+  - These options need a conversion (`--jpeg` ... `--avif`, `--ppm`, or `-o <file>.<ext>`); out of range is an error. An
     option the chosen format cannot honour is ignored with one warning, e.g. `encode: chroma 444 has no effect for
     HEIF (always 4:2:0)`
 - `--output <file>` or `-o <file>` - Output file path (stdout if not specified). Without a format option the
   extension (case-insensitive) chooses the format with its default quality and turns on the conversion:
-  `.jpg`/`.jpeg`, `.png`, `.webp`, `.heic`/`.heif`, `.jxl`, `.avif` (`imgcat2 -w 480 -o out.png in.jpg`). Another
-  extension, or none, is an error (there is no PPM encoder). A format option wins over the extension, with a
+  `.jpg`/`.jpeg`, `.png`, `.webp`, `.heic`/`.heif`, `.jxl`, `.avif`, `.ppm`/`.pgm`/`.pnm` (`imgcat2 -w 480 -o out.png
+  in.jpg`). Another extension, or none, is an error. A format option wins over the extension, with a
   warning if the extension names another format. `-o -` writes to stdout and needs a format option
   (`imgcat2 --png 6 -o - in.jpg > out.png`). `--info` ignores `-o`
 - `--frame <index>` or `-n <index>` - Select specific frame from animated images (default: 0)
@@ -735,6 +755,8 @@ imgcat2 --jpeg 90 --frame 5 --output output.jpg animation.gif
 - **WebP** preserves transparency in lossless mode (quality 100) and offers excellent compression
 - **JXL** preserves transparency in lossless mode (quality >= 95) and provides modern, high-efficiency compression with HDR support
 - **AVIF** supports transparency; the default quality 80 gives about a third of the `--heif 80` file size at a lower PSNR; `--avif 99` matches the PSNR of `--heif 80` at a similar size
+- **PPM/PGM** has no alpha channel: transparency is composited onto `--background` (default black); quality, effort,
+  chroma, alpha quality, progressive, threads and `--keep-metadata` are ignored with a warning
 - Output to stdout by default (use `>` to redirect or `--output` flag)
 - Quality and compression affect both file size and processing time
 - Out-of-range JPEG quality and PNG level values are clamped with a warning; HEIF, WebP, JXL and AVIF quality outside 0-100 is an error
@@ -886,7 +908,7 @@ Example output:
 
 Each one can be left out with `-DIMG2_ENABLE_<X>=OFF` (`GIF`, `WEBP`, `HEIF`, `TIFF`, `RAW`, `JXL`). HEIF, AVIF,
 WebP and JXL output need the matching codec (HEIF and AVIF output: an HEVC / AV1 encoder in libheif, checked at
-run time); JPEG and PNG output are always available.
+run time); JPEG, PNG and PPM output are always available.
 
 **Note:** Run `imgcat2 --version` to see the decoders compiled into the binary.
 

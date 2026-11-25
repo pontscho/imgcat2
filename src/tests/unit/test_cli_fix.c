@@ -203,7 +203,7 @@ static int validate_captured(cli_options_t *opts, char **err)
 
 CTEST(cli_fix, convert_dimensions_not_terminal_bound)
 {
-	static const img2_format_t formats[] = { IMG2_FORMAT_JPEG, IMG2_FORMAT_PNG, IMG2_FORMAT_HEIF, IMG2_FORMAT_WEBP, IMG2_FORMAT_JXL, IMG2_FORMAT_AVIF };
+	static const img2_format_t formats[] = { IMG2_FORMAT_JPEG, IMG2_FORMAT_PNG, IMG2_FORMAT_HEIF, IMG2_FORMAT_WEBP, IMG2_FORMAT_JXL, IMG2_FORMAT_AVIF, IMG2_FORMAT_PPM };
 	cli_options_t opts;
 	char *err = NULL;
 	for (size_t i = 0; i < sizeof(formats) / sizeof(formats[0]); i++) {
@@ -258,7 +258,7 @@ CTEST(cli_fix, validate_messages)
 	opts.convert_mode = true;
 	opts.output_format = IMG2_FORMAT_NONE;
 	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
-	ASSERT_STR("Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n", err);
+	ASSERT_STR("Error: Conversion mode requires --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n", err);
 	free(err);
 
 	/* file_render() without a format: the same list */
@@ -272,7 +272,7 @@ CTEST(cli_fix, validate_messages)
 	err = cap_end(&c, &n);
 	img2_image_destroy(img);
 	ASSERT_EQUAL(-1, rc);
-	ASSERT_STR("Error: No output format specified (use --jpeg, --png, --heif, --webp, --jxl or --avif)\n", err);
+	ASSERT_STR("Error: No output format specified (use --jpeg, --png, --heif, --webp, --jxl, --avif or --ppm)\n", err);
 	free(err);
 }
 
@@ -337,6 +337,144 @@ CTEST(cli_fix, avif_option)
 	free(err);
 }
 
+/* ---- --ppm (no argument) and --background RRGGBB: long-only conversion options ---- */
+
+CTEST(cli_fix, ppm_option)
+{
+	cli_options_t opts;
+	char *out = NULL;
+	char *err = NULL;
+
+	opts_defaults(&opts);
+	char *argv1[] = { (char *)"imgcat2", (char *)"--ppm", (char *)"-o", (char *)"x.ppm", (char *)"in.png", NULL };
+	ASSERT_EQUAL(0, parse_captured(5, argv1, &opts, &out, &err));
+	ASSERT_TRUE(opts.convert_mode);
+	ASSERT_EQUAL(IMG2_FORMAT_PPM, opts.output_format);
+	ASSERT_FALSE(opts.enc_background_set);
+	ASSERT_STR("x.ppm", opts.output_file);
+	ASSERT_STR("in.png", opts.input_file);
+	free(out);
+	free(err);
+	ASSERT_EQUAL(0, validate_captured(&opts, &err));
+	ASSERT_STR("", err);
+	free(err);
+
+	/* --ppm takes no argument: the next word is the input file */
+	opts_defaults(&opts);
+	char *argv2[] = { (char *)"imgcat2", (char *)"--ppm", (char *)"in.png", NULL };
+	ASSERT_EQUAL(0, parse_captured(3, argv2, &opts, &out, &err));
+	ASSERT_STR("in.png", opts.input_file);
+	ASSERT_EQUAL(IMG2_FORMAT_PPM, opts.output_format);
+	free(out);
+	free(err);
+
+	/* --help lists both after --keep-metadata, and the Netpbm extensions */
+	opts_defaults(&opts);
+	char *argv3[] = { (char *)"imgcat2", (char *)"--help", NULL };
+	ASSERT_EQUAL(1, parse_captured(2, argv3, &opts, &out, &err));
+	ASSERT_NOT_NULL(strstr(out, "      --keep-metadata       Copy the input's EXIF and XMP into the output (Orientation = 1)\n"
+	                            "      --ppm                 Convert to PPM (binary P6, or P5 when every pixel is gray; uncompressed)\n"
+	                            "      --background RRGGBB   Colour alpha is composited onto (PPM; hex, optional '#'; default: 000000)\n"));
+	ASSERT_NOT_NULL(strstr(out, ".jpg/.jpeg, .png, .webp, .heic/.heif, .jxl, .avif, .ppm/.pgm/.pnm\n"));
+	free(out);
+	free(err);
+}
+
+CTEST(cli_fix, background_option)
+{
+	cli_options_t opts;
+	char *out = NULL;
+	char *err = NULL;
+
+	/* exactly 6 hex digits, optionally after one '#', either case */
+	static const struct {
+		const char *arg;
+		uint32_t value;
+	} good[] = {
+		{ "ffffff",  0xFFFFFFu },
+		{ "#FFFFFF", 0xFFFFFFu },
+		{ "a0B1c2",  0xA0B1C2u },
+		{ "#09afAF", 0x09AFAFu },
+		{ "000000",  0x000000u },
+	};
+	for (size_t i = 0; i < sizeof(good) / sizeof(good[0]); i++) {
+		opts_defaults(&opts);
+		char *argv1[] = { (char *)"imgcat2", (char *)"--ppm", (char *)"--background", (char *)good[i].arg, (char *)"in.png", NULL };
+		ASSERT_EQUAL(0, parse_captured(5, argv1, &opts, &out, &err));
+		ASSERT_STR("", err);
+		ASSERT_TRUE(opts.enc_background_set);
+		ASSERT_EQUAL_U(good[i].value, opts.enc_background);
+		free(out);
+		free(err);
+		ASSERT_EQUAL(0, validate_captured(&opts, &err));
+		ASSERT_STR("", err);
+		free(err);
+	}
+
+	/* anything else is a parse error naming the argument (strtoul would accept a sign, white space, 0x) */
+	static const char *const bad[] = { "fffff", "fffffff", "#fffff", "#fffffff", "gggggg", "", "#", "##ffffff", "0xffff", " fffff", "+fffff", "-fffff", "fffff " };
+	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+		opts_defaults(&opts);
+		char *argv2[] = { (char *)"imgcat2", (char *)"--ppm", (char *)"--background", (char *)bad[i], (char *)"in.png", NULL };
+		ASSERT_EQUAL(-1, parse_captured(5, argv2, &opts, &out, &err));
+		char expect[128];
+		snprintf(expect, sizeof(expect), "Error: --background must be RRGGBB hex (got '%s')\n", bad[i]);
+		ASSERT_STR(expect, err);
+		ASSERT_FALSE(opts.enc_background_set);
+		free(out);
+		free(err);
+	}
+
+	/* the echoed argument has its control characters escaped */
+	opts_defaults(&opts);
+	char *argv3[] = { (char *)"imgcat2", (char *)"--background", (char *)"\x1b[31m", (char *)"in.png", NULL };
+	ASSERT_EQUAL(-1, parse_captured(4, argv3, &opts, &out, &err));
+	ASSERT_NOT_NULL(strstr(err, "Error: --background must be RRGGBB hex (got '"));
+	ASSERT_NULL(strchr(err, '\x1b'));
+	free(out);
+	free(err);
+
+	/* --background without its argument: a usage error */
+	opts_defaults(&opts);
+	char *argv4[] = { (char *)"imgcat2", (char *)"--ppm", (char *)"--background", NULL };
+	ASSERT_EQUAL(-1, parse_captured(3, argv4, &opts, &out, &err));
+	ASSERT_NOT_NULL(strstr(err, "Try 'imgcat2 --help'"));
+	free(out);
+	free(err);
+}
+
+/* file_render() with --ppm --background: no quality warning, alpha composited onto the colour */
+CTEST(cli_fix, ppm_conversion_background)
+{
+	img2_image_t *img = NULL;
+	ASSERT_EQUAL(IMG2_OK, img2_image_create(2, 1, &img));
+	static const uint8_t k_px[8] = { 255, 0, 0, 128, 10, 20, 30, 0 };
+	memcpy(img->pixels, k_px, sizeof(k_px));
+	cli_options_t opts;
+	opts_defaults(&opts);
+	opts.convert_mode = true;
+	opts.output_format = IMG2_FORMAT_PPM;
+	opts.enc_background_set = true;
+	opts.enc_background = 0x0000FFu;
+	cap_t co;
+	cap_t ce;
+	cap_begin(&co, STDOUT_FILENO, "ppm_out");
+	cap_begin(&ce, STDERR_FILENO, "ppm_err");
+	int rc = file_render(&img, 1, &opts);
+	size_t n_err = 0;
+	size_t n_out = 0;
+	char *err = cap_end(&ce, &n_err);
+	char *out = cap_end(&co, &n_out);
+	img2_image_destroy(img);
+	ASSERT_EQUAL(0, rc);
+	ASSERT_STR("", err);
+	/* (255, 0, 0) at alpha 128 over (0, 0, 255): (128, 0, 127); alpha 0: the background */
+	static const uint8_t k_expect[] = { 'P', '6', '\n', '2', ' ', '1', '\n', '2', '5', '5', '\n', 128, 0, 127, 0, 0, 255 };
+	ASSERT_DATA(k_expect, sizeof(k_expect), (const uint8_t *)out, n_out);
+	free(out);
+	free(err);
+}
+
 /* ---- -o <file>.<ext> without a format option: the extension chooses the format, a format option wins ---- */
 
 CTEST(cli_fix, output_extension_format)
@@ -358,6 +496,9 @@ CTEST(cli_fix, output_extension_format)
 		{ "x.HEIF",       IMG2_FORMAT_HEIF },
 		{ "x.jxl",        IMG2_FORMAT_JXL  },
 		{ "x.avif",       IMG2_FORMAT_AVIF },
+		{ "x.ppm",        IMG2_FORMAT_PPM  },
+		{ "X.PGM",        IMG2_FORMAT_PPM  },
+		{ "x.pnm",        IMG2_FORMAT_PPM  },
 	};
 	for (size_t i = 0; i < sizeof(known) / sizeof(known[0]); i++) {
 		opts_defaults(&opts);
@@ -390,7 +531,7 @@ CTEST(cli_fix, output_extension_format)
 	ASSERT_EQUAL(480, opts.target_width);
 
 	/* unknown or no extension without a format option: an error naming the file */
-	static const char *const unknown[] = { "x.ppm", "noext", "dir.d/out", "x." };
+	static const char *const unknown[] = { "x.tga", "noext", "dir.d/out", "x." };
 	for (size_t i = 0; i < sizeof(unknown) / sizeof(unknown[0]); i++) {
 		opts_defaults(&opts);
 		char *argv3[] = { (char *)"imgcat2", (char *)"-o", (char *)unknown[i], (char *)"in.jpg", NULL };
@@ -401,7 +542,7 @@ CTEST(cli_fix, output_extension_format)
 		char expect[128];
 		snprintf(expect, sizeof(expect), "Error: Cannot infer the output format from '%s'\n", unknown[i]);
 		ASSERT_NOT_NULL(strstr(err, expect));
-		ASSERT_NOT_NULL(strstr(err, ".jpg, .jpeg, .png, .webp, .heic, .heif, .jxl or .avif"));
+		ASSERT_NOT_NULL(strstr(err, ".jpg, .jpeg, .png, .webp, .heic, .heif, .jxl, .avif, .ppm, .pgm or .pnm"));
 		free(err);
 	}
 
@@ -419,7 +560,7 @@ CTEST(cli_fix, output_extension_format)
 	ASSERT_EQUAL(80, opts.jpeg_quality);
 
 	opts_defaults(&opts);
-	char *argv5[] = { (char *)"imgcat2", (char *)"--png", (char *)"3", (char *)"-o", (char *)"x.ppm", (char *)"in.jpg", NULL };
+	char *argv5[] = { (char *)"imgcat2", (char *)"--png", (char *)"3", (char *)"-o", (char *)"x.tga", (char *)"in.jpg", NULL };
 	ASSERT_EQUAL(0, parse_captured(6, argv5, &opts, &out, &err));
 	free(out);
 	free(err);
@@ -442,7 +583,7 @@ CTEST(cli_fix, output_extension_format)
 
 	/* --info ignores -o: no conversion, no extension check */
 	opts_defaults(&opts);
-	char *argv7[] = { (char *)"imgcat2", (char *)"--info", (char *)"-o", (char *)"x.ppm", (char *)"in.jpg", NULL };
+	char *argv7[] = { (char *)"imgcat2", (char *)"--info", (char *)"-o", (char *)"x.tga", (char *)"in.jpg", NULL };
 	ASSERT_EQUAL(0, parse_captured(5, argv7, &opts, &out, &err));
 	free(out);
 	free(err);
@@ -472,7 +613,7 @@ CTEST(cli_fix, output_extension_format)
 	free(err);
 	ASSERT_EQUAL(-1, validate_captured(&opts, &err));
 	ASSERT_NOT_NULL(strstr(err, "Error: -o - (stdout) needs a format option\n"));
-	ASSERT_NOT_NULL(strstr(err, "--jpeg, --png, --heif, --webp, --jxl or --avif"));
+	ASSERT_NOT_NULL(strstr(err, "--jpeg, --png, --heif, --webp, --jxl, --avif or --ppm"));
 	free(err);
 
 	/* --info -o -: no conversion, no error */
@@ -608,12 +749,13 @@ CTEST(cli_fix, encoder_option_flags)
 CTEST(cli_fix, encoder_options_need_conversion)
 {
 	static const char *const flags[][3] = {
-		{ "--lossless", NULL, "Error: --lossless can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
-		{ "--effort", "3", "Error: --effort can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
-		{ "--chroma", "444", "Error: --chroma can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
-		{ "--alpha-quality", "50", "Error: --alpha-quality can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
-		{ "--progressive", NULL, "Error: --progressive can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
-		{ "--threads", "2", "Error: --threads can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif or -o <file>.<ext>\n" },
+		{ "--lossless", NULL, "Error: --lossless can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n" },
+		{ "--effort", "3", "Error: --effort can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n" },
+		{ "--chroma", "444", "Error: --chroma can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n" },
+		{ "--alpha-quality", "50", "Error: --alpha-quality can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n" },
+		{ "--progressive", NULL, "Error: --progressive can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n" },
+		{ "--threads", "2", "Error: --threads can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n" },
+		{ "--background", "ffffff", "Error: --background can only be used with --jpeg, --png, --heif, --webp, --jxl, --avif, --ppm or -o <file>.<ext>\n" },
 	};
 	cli_options_t opts;
 	char *out = NULL;

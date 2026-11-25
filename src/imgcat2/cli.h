@@ -63,6 +63,8 @@ typedef struct {
 	bool enc_progressive; /**< --progressive */
 	int enc_threads; /**< --threads 1..64 */
 	bool enc_keep_metadata; /**< --keep-metadata: metadata = IMG2_META_EXIF | IMG2_META_XMP */
+	bool enc_background_set; /**< --background given (enc_background is valid) */
+	uint32_t enc_background; /**< --background RRGGBB: 0xRRGGBB alpha is composited onto (PPM) */
 
 	/* Raw input options */
 	bool yuv_input; /**< true = input is raw YUV described by yuv (bypasses magic detection) */

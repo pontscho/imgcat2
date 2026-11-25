@@ -3,8 +3,8 @@
  * @brief Image encoder architecture and registry system
  *
  * Provides a unified encoder API with plugin-style architecture for
- * multiple image output formats. Supports JPEG, PNG, HEIF, WebP, JXL and AVIF
- * encoding with quality/compression control.
+ * multiple image output formats. Supports JPEG, PNG, HEIF, WebP, JXL, AVIF and
+ * PPM/PGM (native) encoding with quality/compression control.
  */
 
 #ifndef IMG2_INTERNAL_ENCODERS_ENCODER_H
@@ -40,6 +40,8 @@
  * @note For WebP: quality 0-100 (100 = lossless, 0-99 = lossy)
  * @note For JXL: quality 0-100 (>=95 = lossless, 0-94 = lossy)
  * @note For AVIF: quality 0-100 (aom quality, higher = better quality, larger file)
+ * @note For PPM: quality ignored (uncompressed P6, or P5 when every pixel is gray; alpha composited onto
+ *       opts->background)
  */
 typedef img2_status_t (*img2_encode_fn)(const img2_image_t *img, int native_quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 
@@ -118,12 +120,14 @@ img2_status_t img2_encode_webp(const img2_image_t *img, int quality, uint8_t **o
 img2_status_t img2_encode_heif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_jxl(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_avif(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
+img2_status_t img2_encode_ppm(const img2_image_t *img, int quality, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_jpeg_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_png_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_webp_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_heif_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_jxl_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 img2_status_t img2_encode_avif_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
+img2_status_t img2_encode_ppm_opts(const img2_image_t *img, int quality, const img2_encode_opts_t *opts, uint8_t **out_data, size_t *out_size);
 
 /* Runtime availability of the libheif codec plugin (encoder_heif.c): HEVC for HEIF, AV1 for AVIF */
 bool img2_encode_heif_available(void);

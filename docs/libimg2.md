@@ -2,7 +2,7 @@
 
 libimg2 is the image library behind `imgcat2`: a static C11 library that decodes PNG/APNG, JPEG, GIF, BMP,
 TGA, PSD, HDR, PNM, QOI, ICO/CUR, SVG, WebP, HEIF/AVIF, TIFF, camera RAW, JPEG XL and raw YUV into RGBA8888
-frames, scales them, applies EXIF orientation, and encodes JPEG, PNG, HEIF, WebP, JPEG XL and AVIF. Every codec
+frames, scales them, applies EXIF orientation, and encodes JPEG, PNG, HEIF, WebP, JPEG XL, AVIF and PPM/PGM. Every codec
 library is vendored (`vendor/`) and built from source, so one archive carries everything.
 
 - Target: `img2::img2` (alias of the static `img2` target for `add_subdirectory`/FetchContent; an imported
@@ -163,7 +163,7 @@ no build/source path leaked into an installed file, then build `src/tests/consum
 | `<img2/mime.h>` | `img2_mime_t` (append-only), `img2_detect_mime`, `img2_mime_name`, `img2_mime_string` |
 | `<img2/yuv.h>` | raw YUV formats, `img2_yuv_params_t`, `img2_yuv_parse_spec`, `img2_yuv_frame_size`, name helpers |
 | `<img2/decode.h>` | `img2_decode`, `img2_decode_opts_t` (+ `IMG2_DECODE_OPTS_INIT`), `img2_can_decode`, `img2_is_animated`, `img2_probe` (+ `img2_probe_info_t`), decoder table |
-| `<img2/encode.h>` | `img2_encode`, `img2_format_t`, `img2_encode_opts_t` (+ `IMG2_ENCODE_OPTS_INIT`), `img2_can_encode`, encoder table |
+| `<img2/encode.h>` | `img2_encode`, `img2_format_t` (JPEG, PNG, HEIF, WebP, JXL, AVIF, PPM), `img2_encode_opts_t` (+ `IMG2_ENCODE_OPTS_INIT`), `img2_can_encode`, encoder table |
 | `<img2/metadata.h>` | `struct img2_exif`, `struct img2_xmp`, init/clear, standalone JPEG/TIFF/XML parsers |
 | `<img2/font.h>` | interned font handles: `img2_font_load`, `img2_font_load_fallback`, data/family getters, `img2_font_foreach` |
 | `<img2/img2_config.h>` | generated: `IMG2_VERSION_*`, informative `IMG2_HAS_*` |
@@ -468,6 +468,7 @@ imgcat2 1.0 for byte-identical output):
 | WebP | 0..99 lossy, 100 lossless | 80 |
 | JPEG XL | 0..94 lossy (distance (100 - q) / 10), >= 95 lossless | 80 |
 | AVIF | aom quality 0..100, 4:2:0 (lossless only with `lossless`, below) | 80 (see [encoder-api.md](encoder-api.md#measurements)) |
+| PPM | none: uncompressed binary Netpbm, always lossless; a quality >= 0 logs a WARN | - |
 
 This deviates from the locked decision "100 = lossless where supported": PNG is always lossless, JPEG/HEIF are
 never lossless, AVIF only with the `lossless` option, and JPEG XL is already lossless from 95 (see below). Only
@@ -480,15 +481,21 @@ The other fields of `img2_encode_opts_t` use 0 / `false` for "format default", s
 earlier releases. (A positional initialiser such as `{ 90 }` still compiles, but `-Wextra` now warns about the
 missing fields; use `IMG2_ENCODE_OPTS_INIT` or designated initialisers.)
 
-| Field | Range (else `IMG2_E_ARG`) | JPEG | PNG | WebP | JPEG XL | HEIF (kvazaar) | AVIF (aom) |
-|---|---|---|---|---|---|---|---|
-| `lossless` | bool | warn | no-op (always lossless) | lossless mode (quality factor 70) with `exact`: the RGB under alpha 0 is kept | `JxlEncoderSetFrameLossless` | warn | aom lossless, 4:4:4, identity matrix: RGB and alpha bit-exact |
-| `effort` | 0, 1..10 | >= 6: optimised Huffman tables | zlib level e-1 if `quality` is -1, else warn (CLI: `--png N --effort` is an error) | `method` round((e-1)*6/9) (7 = default 4) | libjxl effort e (7 = default) | warn | aom speed 10-e (4 = default speed 6) |
-| `chroma` | `IMG2_CHROMA_*` | luma sampling factors (default 4:2:0) | warn | 4:2:0 only, else warn | warn | 4:2:0 only, else warn | aom `chroma` 420/422/444; lossless: 444 only, else warn |
-| `alpha_quality` | 0, 1..100 | warn | warn | `alpha_quality` (lossless: warn) | alpha distance, quality mapping (lossless: warn) | warn | aom `alpha-quality` (lossless: warn) |
-| `progressive` | bool | `jpeg_simple_progression` | Adam7 interlace | warn | lossy: `PROGRESSIVE_AC` (AC passes); lossless: warn | warn | warn |
-| `threads` | 0, 1..64 | warn | warn | `thread_level` 1 when > 1 | thread pool when >= 2 (output identical for every count) | warn | aom `threads` (1 gives other bytes than >= 2) |
-| `metadata` | `IMG2_META_*` bits | APP1 Exif / XMP (a segment over 65533 bytes: warn, skipped) | `eXIf` / iTXt `XML:com.adobe.xmp` | VP8X `EXIF` / `XMP ` chunks (libwebpmux) | container + `Exif` / `xml ` boxes | `heif_context_add_exif_metadata` / `_XMP_metadata` | same as HEIF |
+| Field | Range (else `IMG2_E_ARG`) | JPEG | PNG | WebP | JPEG XL | HEIF (kvazaar) | AVIF (aom) | PPM (native) |
+|---|---|---|---|---|---|---|---|---|
+| `lossless` | bool | warn | no-op (always lossless) | lossless mode (quality factor 70) with `exact`: the RGB under alpha 0 is kept | `JxlEncoderSetFrameLossless` | warn | aom lossless, 4:4:4, identity matrix: RGB and alpha bit-exact | no-op (always lossless) |
+| `effort` | 0, 1..10 | >= 6: optimised Huffman tables | zlib level e-1 if `quality` is -1, else warn (CLI: `--png N --effort` is an error) | `method` round((e-1)*6/9) (7 = default 4) | libjxl effort e (7 = default) | warn | aom speed 10-e (4 = default speed 6) | warn |
+| `chroma` | `IMG2_CHROMA_*` | luma sampling factors (default 4:2:0) | warn | 4:2:0 only, else warn | warn | 4:2:0 only, else warn | aom `chroma` 420/422/444; lossless: 444 only, else warn | warn |
+| `alpha_quality` | 0, 1..100 | warn | warn | `alpha_quality` (lossless: warn) | alpha distance, quality mapping (lossless: warn) | warn | aom `alpha-quality` (lossless: warn) | warn |
+| `progressive` | bool | `jpeg_simple_progression` | Adam7 interlace | warn | lossy: `PROGRESSIVE_AC` (AC passes); lossless: warn | warn | warn | warn |
+| `threads` | 0, 1..64 | warn | warn | `thread_level` 1 when > 1 | thread pool when >= 2 (output identical for every count) | warn | aom `threads` (1 gives other bytes than >= 2) | warn |
+| `metadata` | `IMG2_META_*` bits | APP1 Exif / XMP (a segment over 65533 bytes: warn, skipped) | `eXIf` / iTXt `XML:com.adobe.xmp` | VP8X `EXIF` / `XMP ` chunks (libwebpmux) | container + `Exif` / `xml ` boxes | `heif_context_add_exif_metadata` / `_XMP_metadata` | same as HEIF | warn (no metadata container) |
+| `background` | 0..0xFFFFFF (0xRRGGBB) | warn if nonzero (alpha is stripped) | warn if nonzero (alpha is kept) | same as PNG | same as PNG | same as PNG | same as PNG | the colour alpha is composited onto (0 = black) |
+
+PPM output is binary Netpbm with maxval 255: P5 (PGM, one sample per pixel) when every composited pixel has R == G == B,
+otherwise P6 (PPM). Every pixel is composited onto `background`: `out = (c * a + bg * (255 - a) + 127) / 255` per
+channel (alpha 255 keeps the colour exactly, alpha 0 gives the background exactly). The `background` WARN of the other
+formats comes from the dispatcher, once per encode; `background = 0` (the default, also an explicit 0) logs nothing.
 
 "warn": the option is valid but the format cannot honour it; the encode proceeds and logs one `IMG2_LOG_WARN`
 naming option and format, e.g. `encode: chroma 444 has no effect for WebP (always 4:2:0)`. Details and the

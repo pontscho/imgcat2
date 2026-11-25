@@ -94,6 +94,10 @@ img2_status_t img2_encode(const img2_frames_t *in, img2_format_t fmt, const img2
 			img2_log(IMG2_LOG_DEBUG, "img2_encode: unknown metadata bits 0x%x", opts->metadata);
 			return IMG2_E_ARG;
 		}
+		if (opts->background > 0xFFFFFFu) {
+			img2_log(IMG2_LOG_DEBUG, "img2_encode: background 0x%x is not 0xRRGGBB", (unsigned)opts->background);
+			return IMG2_E_ARG;
+		}
 	}
 	const img2_encoder_entry_t *entry = img2_encoder_find(fmt);
 	if (entry == NULL) {

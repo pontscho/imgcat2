@@ -183,6 +183,7 @@ CTEST(encode_options, init_equals_defaults)
 	ASSERT_FALSE(init.progressive);
 	ASSERT_EQUAL(0, init.threads);
 	ASSERT_EQUAL_U(0u, init.metadata);
+	ASSERT_EQUAL_U(0u, init.background);
 
 	/* zero-init with quality -1 is the same struct; { .quality = q } leaves every new field at its default */
 	img2_encode_opts_t zero;
@@ -191,7 +192,7 @@ CTEST(encode_options, init_equals_defaults)
 	ASSERT_EQUAL(0, memcmp(&init, &zero, sizeof(init)));
 	img2_encode_opts_t q = { .quality = 50 };
 	ASSERT_FALSE(q.lossless);
-	ASSERT_EQUAL(0, q.effort + q.alpha_quality + q.threads + (int)q.chroma + (int)q.metadata);
+	ASSERT_EQUAL(0, q.effort + q.alpha_quality + q.threads + (int)q.chroma + (int)q.metadata + (int)q.background);
 	ASSERT_FALSE(q.progressive);
 
 	/* NULL, IMG2_ENCODE_OPTS_INIT and the registry default quality give the same bytes for every format */
@@ -214,8 +215,8 @@ CTEST(encode_options, out_of_range_is_arg_error)
 	img2_image_t *img = make_image(8, 8, false);
 	uint8_t *buf = (uint8_t *)1;
 	size_t len = 1;
-	img2_encode_opts_t bad[11];
-	for (int i = 0; i < 11; i++) {
+	img2_encode_opts_t bad[13];
+	for (int i = 0; i < 13; i++) {
 		img2_encode_opts_t d = IMG2_ENCODE_OPTS_INIT;
 		bad[i] = d;
 	}
@@ -230,7 +231,9 @@ CTEST(encode_options, out_of_range_is_arg_error)
 	bad[8].metadata = 1u << 2;
 	bad[9].metadata = 0x80000000u | IMG2_META_EXIF;
 	bad[10].effort = 1000;
-	for (int i = 0; i < 11; i++) {
+	bad[11].background = 0x1000000u;
+	bad[12].background = 0xFFFFFFFFu;
+	for (int i = 0; i < 13; i++) {
 		ASSERT_EQUAL(IMG2_E_ARG, encode(img, IMG2_FORMAT_PNG, &bad[i], &buf, &len));
 		ASSERT_NULL(buf);
 		ASSERT_EQUAL(0, (int)len);
@@ -242,6 +245,7 @@ CTEST(encode_options, out_of_range_is_arg_error)
 	ok.alpha_quality = 100;
 	ok.chroma = IMG2_CHROMA_444;
 	ok.threads = 64;
+	ok.background = 0xFFFFFFu;
 	capture_begin();
 	ASSERT_EQUAL(IMG2_OK, encode(img, IMG2_FORMAT_JPEG, &ok, &buf, &len));
 	capture_end();
@@ -269,6 +273,45 @@ CTEST(encode_options, metadata_absent_is_silent)
 	ASSERT_DATA(a, la, b, lb);
 	img2_free(a);
 	img2_free(b);
+	img2_image_destroy(img);
+}
+
+/* background: only PPM composites alpha (test_encoder_ppm); every other format logs one WARN (from the dispatcher)
+ * and gives the default bytes; background 0 is the default: no WARN */
+CTEST(encode_options, background_warns_for_non_ppm)
+{
+	static const struct {
+		img2_format_t format;
+		const char *warn;
+	} k_rows[] = {
+		{ IMG2_FORMAT_JPEG, "encode: background has no effect for JPEG (alpha is stripped)" },
+		{ IMG2_FORMAT_PNG,  "encode: background has no effect for PNG (alpha is kept)"     },
+#ifdef IMG2_HAVE_WEBP
+		{ IMG2_FORMAT_WEBP, "encode: background has no effect for WebP (alpha is kept)"    },
+#endif
+#ifdef IMG2_HAVE_JXL
+		{ IMG2_FORMAT_JXL,  "encode: background has no effect for JXL (alpha is kept)"     },
+#endif
+		{ IMG2_FORMAT_HEIF, "encode: background has no effect for HEIF (alpha is kept)"    },
+		{ IMG2_FORMAT_AVIF, "encode: background has no effect for AVIF (alpha is kept)"    },
+	};
+	img2_image_t *img = make_image(16, 16, true);
+	for (size_t i = 0; i < sizeof(k_rows) / sizeof(k_rows[0]); i++) {
+		img2_encode_opts_t bg = IMG2_ENCODE_OPTS_INIT;
+		bg.background = 0xFFFFFFu;
+		capture_begin();
+		assert_same_bytes(img, k_rows[i].format, NULL, &bg);
+		capture_end();
+		ASSERT_EQUAL(1, s_warn_count);
+		assert_one_warn(k_rows[i].warn);
+
+		img2_encode_opts_t zero = IMG2_ENCODE_OPTS_INIT;
+		zero.background = 0u;
+		capture_begin();
+		assert_same_bytes(img, k_rows[i].format, NULL, &zero);
+		capture_end();
+		ASSERT_EQUAL(0, s_warn_count);
+	}
 	img2_image_destroy(img);
 }
 

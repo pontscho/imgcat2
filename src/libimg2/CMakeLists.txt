@@ -23,7 +23,7 @@ target_sources(img2 PRIVATE
 	core/image.c core/log.c core/log_jpeg.c core/status.c core/init.c core/api.c
 	decoders/decoder.c decoders/magic.c decoders/decoder_stb.c decoders/decoder_png.c decoders/decoder_jpeg.c
 	decoders/decoder_qoi.c decoders/decoder_ico.c decoders/decoder_pnm.c decoders/decoder_yuv.c decoders/decoder_nanosvg.c
-	encoders/encoder.c encoders/encoder_jpeg.c encoders/encoder_png.c
+	encoders/encoder.c encoders/encoder_jpeg.c encoders/encoder_png.c encoders/encoder_ppm.c
 	text/font_manager.c "${IMG2_GENERATED_DIR}/embedded_fonts.c"
 	metadata/xml_parser.c metadata/exif_reader.c metadata/meta_raw.c)   # always compiled: exif/xmp are part of the image model
 
